@@ -16,7 +16,7 @@ reverse-engineering notes in `docs/reverse/`, platform/design overviews in
 | [`limitations.md`](limitations.md) | Known limitations & constraints (environment, tooling, unknowns) |
 | [`worklog.md`](worklog.md) | Chronological log of work performed |
 | [`roadmap.md`](roadmap.md) | What's next, ordered |
-| [`legal.md`](legal.md) | Copyright analysis, licensing, and the commercial-use question |
+| [`legal.md`](legal.md) | Copyright & personal-use note (non-commercial study/preservation) |
 
 ## TL;DR of current state
 
@@ -27,5 +27,5 @@ reverse-engineering notes in `docs/reverse/`, platform/design overviews in
   UI by default. Playable vertical slice (maze, gravity, ladders, gold, water).
 - **Blocked on:** confirming the original level/sprite encoding (needs a GUI
   emulator, must be done on a local desktop).
-- **Open commercial/legal item:** see [`legal.md`](legal.md). The original
-  game's assets/levels are **not** shipped; only original work is.
+- **Scope:** personal, non-commercial study/preservation of the legacy; the
+  re-imagining in `src/` is original work. See [`legal.md`](legal.md).

@@ -1,0 +1,71 @@
+name: Build & deploy to GitHub Pages
+
+# Builds the C23 game to WebAssembly with Emscripten and publishes it to
+# GitHub Pages, so progress is playable in a browser (desktop + phone).
+#
+# One-time repo setup: Settings -> Pages -> Build and deployment ->
+# Source = "GitHub Actions". If this branch isn't the default branch, also allow
+# it under Settings -> Environments -> github-pages -> Deployment branches.
+
+on:
+  push:
+    branches:
+      - claude/klad-reverse-engineering-5sIe0
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+
+      - name: Build raylib (web target)
+        run: |
+          # Pin raylib to a release known-compatible with the emsdk above.
+          git clone --depth 1 --branch 5.0 https://github.com/raysan5/raylib
+          make -C raylib/src PLATFORM=PLATFORM_WEB -j"$(nproc)"
+
+      - name: Build game (WebAssembly)
+        run: |
+          mkdir -p _site/play
+          cd src
+          emcc -std=c2x main.c game.c -o "$GITHUB_WORKSPACE/_site/play/index.html" \
+            -I"$GITHUB_WORKSPACE/raylib/src" "$GITHUB_WORKSPACE/raylib/src/libraylib.web.a" \
+            -DPLATFORM_WEB -s USE_GLFW=3 -s ASYNCIFY -s ALLOW_MEMORY_GROWTH=1 \
+            --shell-file web/shell.html
+
+      - name: Assemble site (landing page + build)
+        run: cp -r pages/. _site/
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -71,11 +71,7 @@ python3 tools/extract_data.py assets/original/ex_klad3/KLAD3.BIN --width 176 \
 Output (`.bin` + `.png` per block) lands in `assets/original/extracted/`, which
 is **tracked** in this personal, non-commercial repo (see `design/legal.md`).
 
-## Caveat if this ever goes commercial
+## Note
 
-You asked to extract the original levels. Extracting them as **local study
-references** is fine. *Shipping* the original layouts in the public build is a
-separate decision: level designs carry their own copyright, independent of the
-code. Recommendation: use extracted layouts as reference to author our own
-("inspired by") levels, or decide explicitly to include them. Tracked as an
-open question, not assumed.
+The extracted data is kept for personal study and to inform the re-imagining's
+own level design. See `design/legal.md`.

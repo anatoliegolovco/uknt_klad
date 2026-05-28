@@ -41,11 +41,9 @@ Honest record of what is *not* solved or *cannot* be done in the current setup.
   found on a reachable mirror (`r-games.net` does not resolve here). Mechanics
   are identical, so this does not block the reimplementation.
 
-## Legal / commercial
+## Scope
 
-- **Personal, non-commercial project.** The original material (binaries,
-  extracted data, disassembly) is tracked in the repo for personal study/
-  preservation — the accepted-practice case (see `legal.md`, decision D7).
-- **This rests on staying non-commercial.** If the project is ever sold or
-  widely distributed, copyright reapplies and the shipped game must use only
-  original or licensed assets.
+- **Personal, non-commercial.** The original material (binaries, extracted
+  data, disassembly) is tracked in the repo for personal study and preservation
+  of the legacy (see `legal.md`, decision D7). The re-imagining in `src/` is
+  original work.

@@ -26,15 +26,13 @@ This repository has two halves:
 
 ## ⚠️ Legal / originality
 
-This is a **personal, non-commercial** preservation and study project of
-~35-year-old Soviet abandonware. On that basis the original material (binaries,
-extracted data, disassembly) **is tracked here** for personal study — the
-accepted-practice case. See [`design/legal.md`](design/legal.md).
+A **personal, non-commercial** project to understand and preserve a piece of
+legacy Soviet PDP-11 software. The original material (binaries, extracted data,
+disassembly) is tracked here as a personal study/preservation archive. See
+[`design/legal.md`](design/legal.md).
 
-- The reimplementation in `src/` is written from scratch (own code/art/levels/
-  name). See [`LICENSE`](LICENSE).
-- **This relies on staying non-commercial.** If it were ever sold or broadly
-  distributed, copyright reapplies and only original/licensed assets could ship.
+- The reimplementation in `src/` is original work (own code; planned own art and
+  levels), credited to its inspiration. See [`LICENSE`](LICENSE).
 
 ## Layout
 

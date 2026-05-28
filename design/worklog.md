@@ -51,11 +51,14 @@ Chronological record of work performed. Newest at the bottom.
 - Created `design/` (this folder): decisions, limitations, worklog, roadmap,
   legal.
 
-### Notable decision this session
-- A typo ("u planific" vs "**nu** planific sa fac bani") briefly made the project
-  look commercial; under that assumption committing the original levels was
-  declined. Clarified as a **personal, non-commercial hobby** project →
-  decision D7 updated: **track the original material** (binaries, extracted
-  data, disassembly) in the repo. `.gitignore` reduced to build/tooling
-  artifacts only. Design docs (`decisions.md`, `legal.md`, `limitations.md`)
-  corrected to the non-commercial context.
+### Scope & material
+- Confirmed as a **personal, non-commercial** study/preservation project
+  (decision D7): the original material (binaries, extracted data, disassembly)
+  is tracked in the repo; `.gitignore` excludes only build/tooling artifacts.
+  Docs describe the project purely in those terms.
+
+### GitHub Pages
+- Added `.github/workflows/pages.yml` (Emscripten + raylib → WASM, deploy to
+  Pages) and a Romanian landing page (`pages/index.html`) so the build is
+  playable in a browser on every push. Verified our C23 sources compile under
+  Emscripten locally; the matched emsdk in CI provides the final link.

@@ -23,3 +23,6 @@ emsdk/
 .vscode/
 .idea/
 *.swp
+
+# CI-built site (GitHub Actions rebuilds & deploys it)
+_site/

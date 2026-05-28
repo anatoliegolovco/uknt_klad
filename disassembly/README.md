@@ -15,10 +15,6 @@ personal, non-commercial preservation repo (see `design/legal.md`).
   The prose understanding they produce is also written up under
   `docs/reverse/`.
 
-## Note
-
-If this project ever became commercial or widely distributed, treat a full
-disassembly as a derivative of a copyrighted work and reconsider distributing
-it (and keep the reimplementation in `src/` clean-room — written from specs in
-`docs/reverse/`, not from these files). For personal study that constraint does
-not apply.
+These files exist for personal understanding of how the original works. The
+re-imagining in `src/` is written from our own notes and design, not copied
+from the disassembly.

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klad-Reimagined — progres</title>
+<style>
+  :root{ --bg:#10101a; --fg:#e6e6ee; --dim:#9a9ab0; --acc:#f0d23c; --ok:#6ec06e; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif;
+    -webkit-text-size-adjust:100%}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 20px 64px}
+  h1{font-size:30px;margin:.2em 0;letter-spacing:.5px}
+  h1 .sub{color:var(--dim);font-size:15px;font-weight:400;display:block;margin-top:6px}
+  .play{display:inline-block;margin:18px 0 8px;padding:14px 22px;border-radius:12px;
+    background:var(--acc);color:#1a1400;font-weight:700;text-decoration:none;
+    font-size:18px}
+  .play:active{transform:translateY(1px)}
+  .note{color:var(--dim);font-size:13px;margin-top:6px}
+  h2{margin-top:32px;font-size:18px;border-bottom:1px solid #2a2a3a;padding-bottom:6px}
+  ul{padding-left:0;list-style:none}
+  li{padding:4px 0}
+  li.done::before{content:"✓ ";color:var(--ok);font-weight:700}
+  li.todo::before{content:"• ";color:var(--dim)}
+  code{background:#1c1c2a;padding:1px 6px;border-radius:5px;font-size:13px}
+  a{color:var(--acc)}
+  footer{margin-top:40px;color:var(--dim);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Klad-Reimagined
+    <span class="sub">Reimplementare modernă (C23 → WebAssembly) a jocului sovietic КЛАД · proiect personal de hobby</span>
+  </h1>
+
+  <a class="play" href="./play/">▶ Joacă build-ul curent</a>
+  <div class="note">Dacă butonul dă 404, build-ul WASM încă rulează în GitHub Actions — revino în câteva minute. Merge pe desktop și pe telefon (taste / atingi marginile ecranului).</div>
+
+  <h2>Ce e gata</h2>
+  <ul>
+    <li class="done">Toolchain: disassembler PDP-11 propriu (<code>tools/pdp11dis.py</code>), extractor de date, scripturi</li>
+    <li class="done">Identificat blob-ul: build-ul <b>BK-0010</b> al КЛАД (framebuffer liniar la 040000)</li>
+    <li class="done">Documentație: arhitectură, memory map, registre I/O, date niveluri</li>
+    <li class="done">Engine C23 + raylib: build nativ + WebAssembly din aceeași sursă</li>
+    <li class="done">Slice jucabil: labirint, gravitație, scări, comori, apă = moarte</li>
+    <li class="done">Interfață în <b>română</b> (i18n), input tastatură + touch</li>
+    <li class="done">CI: build WASM + deploy automat pe GitHub Pages la fiecare push</li>
+  </ul>
+
+  <h2>Următorii pași</h2>
+  <ul>
+    <li class="todo">Confirmarea formatului nivelurilor (necesită emulator <code>bkbtl</code>, local)</li>
+    <li class="todo">Gardieni (AI patrulare), scor, ecrane title / nivel-terminat</li>
+    <li class="todo">Niveluri proprii, art 8×8 propriu, sunet</li>
+    <li class="todo">Font cu diacritice (ă/î/ș/ț)</li>
+  </ul>
+
+  <h2>Controale</h2>
+  <ul>
+    <li class="done"><b>Desktop:</b> săgeți / WASD = mișcare, Space = acțiune</li>
+    <li class="done"><b>Telefon:</b> atingi marginile ecranului (stânga/dreapta/sus/jos)</li>
+  </ul>
+
+  <footer>
+    Proiect personal, non-comercial, de studiu/preservare.
+    Cod &amp; detalii: vezi repo-ul (<code>src/</code>, <code>docs/</code>, <code>design/</code>).
+  </footer>
+</div>
+</body>
+</html>
