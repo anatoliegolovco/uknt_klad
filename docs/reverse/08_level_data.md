@@ -60,7 +60,7 @@ decisive experiment:
 ## Reproduce the extraction
 
 ```bash
-tools/fetch_original.sh           # blob -> assets/original/ (git-ignored)
+tools/fetch_original.sh           # blob -> assets/original/ (tracked)
 python3 tools/extract_data.py assets/original/ex_klad3/KLAD3.BIN \
         --montage /tmp/klad3_blocks.png
 # re-render at another width, e.g. 176px:
@@ -69,10 +69,9 @@ python3 tools/extract_data.py assets/original/ex_klad3/KLAD3.BIN --width 176 \
 ```
 
 Output (`.bin` + `.png` per block) lands in `assets/original/extracted/`, which
-is **git-ignored** — these are derivatives of the copyrighted binary and stay
-local (see the note in `00_overview.md` and the project's clean-room stance).
+is **tracked** in this personal, non-commercial repo (see `design/legal.md`).
 
-## Clean-room caveat on shipping extracted levels
+## Caveat if this ever goes commercial
 
 You asked to extract the original levels. Extracting them as **local study
 references** is fine. *Shipping* the original layouts in the public build is a

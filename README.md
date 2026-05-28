@@ -26,17 +26,20 @@ This repository has two halves:
 
 ## ⚠️ Legal / originality
 
-- The original game binary is **never committed** — it is git-ignored under
-  `assets/original/` (see [`.gitignore`](.gitignore)).
-- All disassembly notes describe *observed behaviour* for study and
-  interoperability only.
-- All shipped code, art, levels, and the name are original. See
-  [`LICENSE`](LICENSE).
+This is a **personal, non-commercial** preservation and study project of
+~35-year-old Soviet abandonware. On that basis the original material (binaries,
+extracted data, disassembly) **is tracked here** for personal study — the
+accepted-practice case. See [`design/legal.md`](design/legal.md).
+
+- The reimplementation in `src/` is written from scratch (own code/art/levels/
+  name). See [`LICENSE`](LICENSE).
+- **This relies on staying non-commercial.** If it were ever sold or broadly
+  distributed, copyright reapplies and only original/licensed assets could ship.
 
 ## Layout
 
 ```
-assets/original/   the original blob — LOCAL ONLY, git-ignored
+assets/original/   the original blob + extracted data (tracked; see design/legal.md)
 assets/new/        our own art/levels
 docs/              architecture, reverse-engineering notes, design
 disassembly/raw/   linear-sweep disassembly (tooling output)

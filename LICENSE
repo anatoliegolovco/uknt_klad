@@ -32,5 +32,7 @@ This project is a clean-room re-imagining inspired by the gameplay of КЛАД
 descends from "Rise Out From Dungeons" (ASCII Corp., 1983). No code, graphics,
 level layouts, or other assets from those works are copied or redistributed
 here. The disassembly and notes under docs/reverse/ and disassembly/ describe
-observed behaviour for interoperability/study purposes only; the original
-binary itself is git-ignored and never committed.
+observed behaviour for study purposes only. Original КЛАД material kept in this
+repo (under assets/original/, disassembly/) is retained for personal,
+non-commercial study/preservation and is NOT covered by the MIT license above;
+it remains the property of its respective rights holders. See design/legal.md.

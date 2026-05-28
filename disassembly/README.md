@@ -1,22 +1,24 @@
 # disassembly/
 
-Local study artifacts. **Not committed** (see `.gitignore`).
+Study artifacts derived from the original КЛАД binary. **Tracked** in this
+personal, non-commercial preservation repo (see `design/legal.md`).
 
 - `raw/` — linear-sweep output of `tools/pdp11dis.py` over the original blob.
-  A full disassembly is a mechanical transform of a copyrighted binary, so we
-  keep it local only. Regenerate any time with:
+  Regenerate any time with:
 
   ```bash
-  tools/fetch_original.sh   # pull the blob into assets/original/ (git-ignored)
+  tools/fetch_original.sh   # (re)fetch the blob into assets/original/
   tools/disasm.sh           # writes raw/*.asm here
   ```
 
 - `annotated/` — hand-symbolised, commented routines as we understand them.
-  The `.asm` files here are also git-ignored; the understanding they produce is
-  written up *in our own words* under `docs/reverse/` (which IS committed).
+  The prose understanding they produce is also written up under
+  `docs/reverse/`.
 
-## Clean-room note
+## Note
 
-Whoever writes the reimplementation in `src/` should work from the prose specs
-in `docs/reverse/`, **not** from these disassembly files — that separation is
-what keeps the reimplementation clean-room.
+If this project ever became commercial or widely distributed, treat a full
+disassembly as a derivative of a copyrighted work and reconsider distributing
+it (and keep the reimplementation in `src/` clean-room — written from specs in
+`docs/reverse/`, not from these files). For personal study that constraint does
+not apply.

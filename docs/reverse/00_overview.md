@@ -75,7 +75,7 @@ we work through them.
 ## Status of the task's checklist
 
 - [x] Find a working source for the blob (archive.pdp-11.org.ru)
-- [x] Download + integrity (SHA-256 recorded) into git-ignored `assets/original/`
+- [x] Download + integrity (SHA-256 recorded) into `assets/original/` (tracked)
 - [x] Identify format (BK raw `.BIN`, not `.dsk`) and platform (BK-0010)
 - [x] Toolchain: disassembler (custom), extractor scripts, unrar/7z
 - [ ] Confirm the game runs in an emulator — **GUI, do locally** (see TODO.md)

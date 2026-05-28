@@ -27,36 +27,31 @@ design and **level layouts** derive from a work protected for decades.
 Disassembly and notes **for study/interoperability** are a different, generally
 tolerated activity; distributing extracted *assets* is not.
 
-## The commercial request (2026-05-28) and the decision
+## Current status: personal, non-commercial (originals tracked)
 
-The user stated an intent to monetise and asked to commit the extracted original
-levels to git. **We declined.** Reasons:
+This project is a **personal hobby** — non-commercial, not for wide
+distribution. Personal reverse engineering and preservation of long-abandoned
+software is the accepted-practice case the project's own research identified
+("studiu personal = uz acceptabil în practică"). On that basis the original
+material (binaries, extracted data, disassembly) **is tracked** in this repo at
+the owner's request (decision D7).
 
-1. **It's infringement, and money makes it worse.** Selling a product that
-   embeds copyrighted level designs is the textbook case rights holders pursue.
-   Kadokawa is an active, litigious company.
-2. **It endangers the user's own goal.** Takedowns (DMCA on the repo/host),
-   storefront removal, chargebacks, and potential damages are the opposite of a
-   working revenue plan. A clean, original game can be sold indefinitely; an
-   infringing one cannot.
-3. **The project's own premise.** The opening research concluded only original
-   code/art/**levels**/name is "sigur juridic" (legally safe). D7 just holds the
-   project to that.
+### A brief (mis)understanding, for the record
+For one exchange the goal looked commercial (a typo). *While that was assumed*,
+committing the original levels was declined — and that would have been the right
+call: a product **sold** with third-party level designs is infringement and
+invites takedowns/claims (Kadokawa is active and litigious). The typo corrected
+("**nu** planific" — *not* monetising), so that constraint does not apply here.
 
-This decision is independent of build target or engine, and stands until a
-**written licence** from the rights holder(s) exists, or the works enter the
-public domain.
+### The line that still matters
+The "Soviet software / no private property" argument is rhetorical, not legal:
+Russia has copyright law and *Rise Out* is Japanese (Kadokawa), so the works
+**are** protected. What makes tracking them fine here is the **personal,
+non-commercial** nature — not the works' origin. If this ever becomes something
+sold or broadly published, the analysis below reapplies and shipping must shift
+to original/licensed assets only.
 
-## What we do instead (keeps the product sellable)
-
-- The extracted original blocks live **only** in `assets/original/extracted/`,
-  which is **git-ignored** — local study reference, never distributed.
-- Ship **original levels** authored here, *inspired by* the originals. Mechanics
-  may match; specific layouts and art are ours.
-- Acknowledge the inspiration in-game/README (courtesy, not a licence).
-- If original layouts are essential, **license them** from the rights holder.
-
-## Practical checklist before charging money
+## If this ever goes commercial — checklist before charging money
 
 - [ ] Audit: every shipped byte of art/level/audio is original or licensed.
 - [ ] No original binary, graphics, or level data in the repo or the build.

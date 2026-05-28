@@ -56,19 +56,29 @@ extracted data. Commit only original code, tools, and our own prose notes.
 **Consequences.** Public repo stays clean; everything regenerates locally from
 the blob via `tools/`.
 
-## D7 — Do NOT ship the original level/asset data; author original levels
-**Context.** The user stated an intent to commercialise and asked to commit the
-extracted original levels to git. The project's own opening research states that
-*Rise Out From Dungeons* (ASCII/Kadokawa) is under copyright until ~2053 and
-КЛАД (Crocodile/Baranov) is likewise protected, and that only original code,
-art, **levels**, and name are "legally safe."
-**Decision.** **Decline** to commit the original copyrighted level data. The
-extracted blocks remain a **local, git-ignored study reference** (see
-`legal.md`). The shipped game uses **original levels** ("inspired by"), or
-licensed content if a licence is obtained.
-**Consequences.** Keeps the project shippable/sellable without distributing
-third-party copyrighted assets and without exposing the author to infringement
-claims/takedowns. Authoring original levels is now a roadmap item. This decision
-stands regardless of build target and is independent of the engine choice.
-**Reversal condition.** A written licence from the rights holder(s), or the
-works entering the public domain.
+## D7 — Track the original КЛАД material in this (personal, non-commercial) repo
+**Context.** This was briefly thought to be a commercial project (a typo: "u
+planific" read as commercial; the user meant "**nu** planific sa fac bani" — *not*
+making money). It is a **personal, non-commercial hobby** preservation/study
+project of ~35-year-old Soviet abandonware, not intended for wide distribution.
+The opening research itself notes "disassembly pentru studiu personal = uz
+acceptabil în practică."
+**Earlier (commercial) stance, now superseded.** While the goal looked
+commercial, we declined to commit the copyrighted original levels — selling a
+product embedding third-party level designs is infringement and exposes the
+author to takedowns/claims. That reasoning was correct *for a commercial
+product*.
+**Decision (current context).** For personal, non-commercial study/preservation,
+**track the original material** (binaries, extracted data, disassembly) in the
+repo, as the user requested. This is the accepted-practice case for personal RE
+of abandonware.
+**Consequences.** The repo now contains the original `.BIN` images, extracted
+data blocks, and raw disassembly. `.gitignore` only excludes build/tooling
+artifacts.
+**Boundary that still holds.** This rests on the project staying
+**non-commercial and personal**. If it ever turns into a product sold or widely
+distributed, the copyright analysis in `legal.md` reapplies: ship only original/
+licensed assets. Note copyright still legally exists (Russia has copyright law;
+*Rise Out* is Japanese/Kadokawa) — the "Soviet/no private property" point is
+rhetorical, not a legal basis; what makes this fine is the personal,
+non-commercial nature, not the works' origin.

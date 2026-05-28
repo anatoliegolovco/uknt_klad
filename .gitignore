@@ -1,19 +1,6 @@
-# --- Original copyrighted game blob: NEVER commit ---
-assets/original/
-*.dsk
-*.rar
-*.bin
-*.BIN
-*.sav
-*.SAV
-*.bkimg
-
-# --- Derived from the copyrighted binary: keep LOCAL only ---
-# Full disassembly is a mechanical transform of the original (a derivative
-# work) and would also contaminate clean-room hygiene. It is regenerable from
-# the local blob via tools/disasm.sh. Our own prose notes live in docs/.
-disassembly/raw/
-disassembly/annotated/*.asm
+# Personal, non-commercial preservation/study repo: the original КЛАД material
+# (binaries, extracted data, disassembly) IS tracked on purpose. Only build and
+# tooling artifacts are ignored. See design/legal.md for the why.
 
 # --- Build artifacts ---
 build/

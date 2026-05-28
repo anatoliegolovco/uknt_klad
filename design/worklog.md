@@ -52,7 +52,10 @@ Chronological record of work performed. Newest at the bottom.
   legal.
 
 ### Notable decision this session
-- User stated commercial intent and asked to commit the extracted original
-  levels. **Declined** to commit copyrighted original assets (decision D7,
-  rationale in `legal.md`); extracted data stays local/git-ignored. Offered the
-  legal path: author original levels inspired by the originals, or license.
+- A typo ("u planific" vs "**nu** planific sa fac bani") briefly made the project
+  look commercial; under that assumption committing the original levels was
+  declined. Clarified as a **personal, non-commercial hobby** project →
+  decision D7 updated: **track the original material** (binaries, extracted
+  data, disassembly) in the repo. `.gitignore` reduced to build/tooling
+  artifacts only. Design docs (`decisions.md`, `legal.md`, `limitations.md`)
+  corrected to the non-commercial context.

@@ -43,6 +43,9 @@ Honest record of what is *not* solved or *cannot* be done in the current setup.
 
 ## Legal / commercial
 
-- **Original assets are off-limits for shipping.** See `legal.md` and decision
-  D7. The original levels/graphics are copyrighted; they are used only as local
-  reference. This bounds what can be in the sellable product to original work.
+- **Personal, non-commercial project.** The original material (binaries,
+  extracted data, disassembly) is tracked in the repo for personal study/
+  preservation — the accepted-practice case (see `legal.md`, decision D7).
+- **This rests on staying non-commercial.** If the project is ever sold or
+  widely distributed, copyright reapplies and the shipped game must use only
+  original or licensed assets.
