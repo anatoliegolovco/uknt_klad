@@ -7,7 +7,9 @@
 // run on native + web. Guards, treasure scoring and death come next.
 #include "raylib.h"
 #include "game.h"
+#include "i18n.h"
 #include <string.h>
+#include <stdio.h>
 
 // ---- our own palette (inspired by, not copied from, the BK/УКНЦ GRB look) ----
 static const Color PAL_BG    = {  16,  16,  24, 255 };
@@ -57,6 +59,8 @@ static float px, py;
 static const float SPEED = 60.0f;     // px/s
 static const float GRAV  = 220.0f;
 static float vy = 0;
+static int score = 0;
+static int level = 1;
 
 static Tile tile_at(int tx, int ty) {
     if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return T_WALL;
@@ -116,7 +120,7 @@ static void update(float dt, Input in) {
 
     // Collect gold under the player.
     int tx = (int)((px + TILE/2.0f)/TILE), ty = (int)((py + TILE/2.0f)/TILE);
-    if (tile_at(tx, ty) == T_GOLD) map[ty][tx] = T_EMPTY;
+    if (tile_at(tx, ty) == T_GOLD) { map[ty][tx] = T_EMPTY; score += 10; }
 
     // Water = death -> respawn for now.
     if (tile_at(tx, ty) == T_WATER) load_placeholder_level();
@@ -138,6 +142,11 @@ static void draw_scene(void) {
             if (draw) DrawRectangle(x*TILE, y*TILE, TILE, TILE, c);
         }
     DrawRectangle((int)px, (int)py, TILE, TILE, PAL_PLAYER);
+
+    // HUD (Romanian by default via i18n): "Scor 0   Nivel 1"
+    char hud[64];
+    snprintf(hud, sizeof hud, "%s %d   %s %d", T(STR_SCORE), score, T(STR_LEVEL), level);
+    DrawText(hud, 2, 1, 6, WHITE);
     EndTextureMode();
 
     // Upscale the fixed target to the window, nearest-neighbour, flipped Y.

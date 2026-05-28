@@ -75,6 +75,22 @@ src/
   web/shell.html  custom Emscripten HTML shell (responsive canvas)
 ```
 
+## Localisation
+
+UI text is localised via `src/i18n.h` — **Romanian is the default language**
+(`LANG_RO`), with English as a fallback column. Add a `StrId` key + a row in
+`STRINGS[]` to add a string. Strings are currently ASCII (no diacritics)
+because raylib's built-in font lacks `ă/î/ș/ț`; once we ship a custom font we
+restore the diacritics in one place (`i18n.h`).
+
+## Level data
+
+Per your request we extract levels from the original (see
+`docs/reverse/08_level_data.md`). The format isn't fully cracked yet (needs
+emulator correlation); `src/level.*` will load our level model, and once the
+original encoding is confirmed, a converter will translate extracted data into
+it. Note the clean-room caveat there about shipping original layouts publicly.
+
 ## Open design decisions (need your call)
 
 1. **Game name.** Working title only right now. Candidates: *Dungeon Climber*,
