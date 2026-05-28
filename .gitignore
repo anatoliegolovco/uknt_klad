@@ -1,0 +1,38 @@
+# --- Original copyrighted game blob: NEVER commit ---
+assets/original/
+*.dsk
+*.rar
+*.bin
+*.BIN
+*.sav
+*.SAV
+*.bkimg
+
+# --- Derived from the copyrighted binary: keep LOCAL only ---
+# Full disassembly is a mechanical transform of the original (a derivative
+# work) and would also contaminate clean-room hygiene. It is regenerable from
+# the local blob via tools/disasm.sh. Our own prose notes live in docs/.
+disassembly/raw/
+disassembly/annotated/*.asm
+
+# --- Build artifacts ---
+build/
+*.o
+*.wasm
+*.html.mem
+src/web/*.js
+src/web/*.wasm
+src/web/*.data
+target/
+
+# --- Tooling / misc ---
+__pycache__/
+*.pyc
+.venv/
+emsdk/
+*.log
+
+# --- Editor ---
+.vscode/
+.idea/
+*.swp
