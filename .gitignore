@@ -26,3 +26,7 @@ emsdk/
 
 # CI-built site (GitHub Actions rebuilds & deploys it)
 _site/
+
+# The published WASM build IS tracked (served by GitHub Pages from /play).
+!/play/
+!/play/**

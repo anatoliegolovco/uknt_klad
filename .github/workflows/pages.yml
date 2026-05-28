@@ -1,17 +1,14 @@
 name: Build & deploy to GitHub Pages
 
-# Builds the C23 game to WebAssembly with Emscripten and publishes it to
-# GitHub Pages, so progress is playable in a browser (desktop + phone).
+# OPTIONAL. The default way this repo publishes Pages is "Deploy from a branch"
+# with the prebuilt site committed at the repo root (index.html + /play). This
+# workflow is an alternative that rebuilds the WASM from source on demand.
 #
-# One-time repo setup: Settings -> Pages -> Build and deployment ->
-# Source = "GitHub Actions". If this branch isn't the default branch, also allow
-# it under Settings -> Environments -> github-pages -> Deployment branches.
+# To use it instead: Settings -> Pages -> Source = "GitHub Actions", then run
+# this workflow manually (Actions tab -> Run workflow). It is manual-only so it
+# never conflicts with the branch-based deployment.
 
 on:
-  push:
-    branches:
-      - claude/klad-reverse-engineering-5sIe0
-      - main
   workflow_dispatch:
 
 permissions:
@@ -50,7 +47,7 @@ jobs:
             --shell-file web/shell.html
 
       - name: Assemble site (landing page + build)
-        run: cp -r pages/. _site/
+        run: cp index.html .nojekyll _site/
 
       - uses: actions/configure-pages@v5
         with:
