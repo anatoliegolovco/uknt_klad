@@ -11,13 +11,10 @@
 #include <string.h>
 #include <stdio.h>
 
-// ---- our own palette (inspired by, not copied from, the BK/УКНЦ GRB look) ----
-static const Color PAL_BG    = {  16,  16,  24, 255 };
-static const Color PAL_WALL  = { 120,  96,  64, 255 };
-static const Color PAL_LADDER= { 200, 180,  90, 255 };
-static const Color PAL_WATER = {  40, 120, 220, 255 };
-static const Color PAL_GOLD  = { 240, 210,  60, 255 };
-static const Color PAL_PLAYER= { 230,  70,  70, 255 };
+// ---- palette: match the original КЛАД (Crocodile 1991) BK look --------------
+// White diamond-mesh bricks on pure black, yellow ladders, green treasure,
+// cyan player + cyan water. Authored from screen reference (our own bitmaps).
+static const Color PAL_BG    = {   0,   0,   0, 255 };
 
 // Tile kinds.
 typedef enum { T_EMPTY=0, T_WALL, T_LADDER, T_WATER, T_GOLD } Tile;
@@ -26,28 +23,28 @@ typedef enum { T_EMPTY=0, T_WALL, T_LADDER, T_WATER, T_GOLD } Tile;
 // H=ladder ~=water $=gold. One screenful: COLS x ROWS = 32 x 24.
 static const char *LEVEL[ROWS] = {
 "................................",
-"................................",
-"....$.................$.........",
-"...###...............###........",
-"......H.........................",
-"......H.....######..............",
-"......H.........................",
-"...####.........H...........$...",
-".........$......H..........###..",
-"........###.....H...............",
-"................####............",
-"....H...........................",
-"....H.......$...................",
-"....H......###..................",
-"....H...........................",
-"...####.................H.......",
-"........................H.......",
-".....$..................H.......",
-"....###.........~~~~~~~~~~~......",
-"................~~~~~~~~~~~......",
-"#####################...########",
 "################################",
-"................................",
+"#..............................#",
+"#..$................$..........#",
+"#.###H####H##....###H##H######.#",
+"#....H....H.........H..H.......#",
+"#....H$...H.....$...H..H.......#",
+"#.###H###.H..#######H..H######.#",
+"#....H....H.........H..H.......#",
+"#....H.$..H.........H.$H.......#",
+"#...#H####H####....#H##H##H###.#",
+"#....H..............H..H..H....#",
+"#...$H............$.H..H..H....#",
+"#.###H##H##....#####H##H..H....#",
+"#....H..H..............H..H....#",
+"#....H..H$.............H.$H....#",
+"#....H##H########....##H##H###.#",
+"#....H..H.................H....#",
+"#....H..H...........$.....H....#",
+"#.###H##H####....#########H#...#",
+"#..............................#",
+"#............~~~~~~~~~~~.......#",
+"################################",
 "................................",
 };
 
@@ -132,38 +129,33 @@ static void update(float dt, Input in) {
 enum { TI_WALL, TI_LADDER, TI_WATER, TI_GOLD, TI_PLAYER, TI_COUNT };
 
 static const char TILE_ART[TI_COUNT][8][9] = {
-  { // brick wall (running bond)
-    "hrrrRrrr","rrrrRrrr","rrrrRrrr","RRRRRRRR",
-    "rRrrrrrr","rRrrrrrh","rRrrrrrr","RRRRRRRR" },
-  { // ladder (transparent gaps)
-    " L    L "," L    L "," LLLLLL "," L    L ",
-    " L    L "," LLLLLL "," L    L "," L    L " },
-  { // water (wavy surface + ripples)
-    "ffwwffww","wwwwwwww","wdwwwwdw","wwwwwwww",
-    "wwwwdwww","wwwwwwww","dwwwwwww","wwwwwwww" },
-  { // gold gem
-    "   gg   ","  gyyg  "," gyyyyg ","gyyyyyyg",
-    "oyyyyyyo"," oyyyyo ","  oggo  ","   oo   " },
-  { // player (little digger)
-    "  kkkk  "," ssssss "," s ss s ","  pppp  ",
-    " pppppp "," p pp p ","  pp pp "," kk  kk " },
+  { // brick wall: white diamond mesh (an X per cell tiles into a net)
+    "W......W",".W....W.","..W..W..","...WW...",
+    "...WW...","..W..W..",".W....W.","W......W" },
+  { // ladder: yellow double rail + rungs
+    " Y    Y "," Y    Y "," YYYYYY "," Y    Y ",
+    " Y    Y "," YYYYYY "," Y    Y "," Y    Y " },
+  { // water: solid cyan with a lighter surface line
+    "aaaaaaaa","AAAAAAAA","AAAAAAAA","AAAAAAAA",
+    "AAAAAAAA","AAAAAAAA","AAAAAAAA","AAAAAAAA" },
+  { // treasure: green bar/ingot sitting on the platform
+    "        ","        ","        "," GGGGGG ",
+    " GggggG "," GGGGGG ","        ","        " },
+  { // player: cyan figure
+    "  CCCC  "," CCCCCC "," C CC C ","  CCCC  ",
+    " CCCCCC "," C cc C ","  C  C  "," cc  cc " },
 };
 
 static Color tile_legend(char c) {
     switch (c) {
-        case 'r': return (Color){150, 95, 60,255};   // brick body
-        case 'R': return (Color){ 70, 45, 30,255};   // mortar
-        case 'h': return (Color){185,130, 85,255};   // brick highlight
-        case 'L': return (Color){205,175, 95,255};   // ladder
-        case 'w': return (Color){ 40,110,210,255};   // water
-        case 'f': return (Color){130,185,250,255};   // foam
-        case 'd': return (Color){ 25, 75,175,255};   // deep water
-        case 'g': return (Color){235,200, 55,255};   // gold
-        case 'y': return (Color){255,240,150,255};   // gold bright
-        case 'o': return (Color){175,135, 20,255};   // gold dark
-        case 'p': return (Color){220, 60, 60,255};   // player body
-        case 's': return (Color){240,200,160,255};   // skin
-        case 'k': return (Color){110, 25, 25,255};   // dark
+        case 'W': return (Color){240,240,240,255};   // white brick mesh
+        case 'Y': return (Color){235,225, 40,255};   // ladder yellow
+        case 'A': return (Color){ 35,195,215,255};   // water cyan
+        case 'a': return (Color){150,235,245,255};   // water surface
+        case 'G': return (Color){ 45,210, 60,255};   // treasure green
+        case 'g': return (Color){ 20,150, 40,255};   // treasure dark
+        case 'C': return (Color){110,215,235,255};   // player cyan
+        case 'c': return (Color){ 55,150,180,255};   // player dark
         default:  return (Color){0,0,0,0};           // ' ' transparent
     }
 }
