@@ -126,22 +126,84 @@ static void update(float dt, Input in) {
     if (tile_at(tx, ty) == T_WATER) load_placeholder_level();
 }
 
+// ---- pixel-art tiles (8x8), BK/КЛАД retro style ------------------------------
+// Each tile is 8 rows of 8 chars; the legend maps chars -> colours, ' ' = clear.
+// Indices: 0 wall(brick) 1 ladder 2 water 3 gold(gem) 4 player.
+enum { TI_WALL, TI_LADDER, TI_WATER, TI_GOLD, TI_PLAYER, TI_COUNT };
+
+static const char TILE_ART[TI_COUNT][8][9] = {
+  { // brick wall (running bond)
+    "hrrrRrrr","rrrrRrrr","rrrrRrrr","RRRRRRRR",
+    "rRrrrrrr","rRrrrrrh","rRrrrrrr","RRRRRRRR" },
+  { // ladder (transparent gaps)
+    " L    L "," L    L "," LLLLLL "," L    L ",
+    " L    L "," LLLLLL "," L    L "," L    L " },
+  { // water (wavy surface + ripples)
+    "ffwwffww","wwwwwwww","wdwwwwdw","wwwwwwww",
+    "wwwwdwww","wwwwwwww","dwwwwwww","wwwwwwww" },
+  { // gold gem
+    "   gg   ","  gyyg  "," gyyyyg ","gyyyyyyg",
+    "oyyyyyyo"," oyyyyo ","  oggo  ","   oo   " },
+  { // player (little digger)
+    "  kkkk  "," ssssss "," s ss s ","  pppp  ",
+    " pppppp "," p pp p ","  pp pp "," kk  kk " },
+};
+
+static Color tile_legend(char c) {
+    switch (c) {
+        case 'r': return (Color){150, 95, 60,255};   // brick body
+        case 'R': return (Color){ 70, 45, 30,255};   // mortar
+        case 'h': return (Color){185,130, 85,255};   // brick highlight
+        case 'L': return (Color){205,175, 95,255};   // ladder
+        case 'w': return (Color){ 40,110,210,255};   // water
+        case 'f': return (Color){130,185,250,255};   // foam
+        case 'd': return (Color){ 25, 75,175,255};   // deep water
+        case 'g': return (Color){235,200, 55,255};   // gold
+        case 'y': return (Color){255,240,150,255};   // gold bright
+        case 'o': return (Color){175,135, 20,255};   // gold dark
+        case 'p': return (Color){220, 60, 60,255};   // player body
+        case 's': return (Color){240,200,160,255};   // skin
+        case 'k': return (Color){110, 25, 25,255};   // dark
+        default:  return (Color){0,0,0,0};           // ' ' transparent
+    }
+}
+
+static Texture2D tileset;  // TI_COUNT tiles laid out horizontally, 8px each
+
+static void build_tileset(void) {
+    Image img = GenImageColor(8 * TI_COUNT, 8, (Color){0,0,0,0});
+    for (int t = 0; t < TI_COUNT; t++)
+        for (int y = 0; y < 8; y++)
+            for (int x = 0; x < 8; x++) {
+                Color c = tile_legend(TILE_ART[t][y][x]);
+                if (c.a) ImageDrawPixel(&img, t * 8 + x, y, c);
+            }
+    tileset = LoadTextureFromImage(img);
+    SetTextureFilter(tileset, TEXTURE_FILTER_POINT);
+    UnloadImage(img);
+}
+
+static void draw_tile(int idx, int x, int y) {
+    DrawTextureRec(tileset, (Rectangle){(float)idx * 8, 0, 8, 8},
+                   (Vector2){(float)x, (float)y}, WHITE);
+}
+
 static void draw_scene(void) {
     BeginTextureMode(target);
     ClearBackground(PAL_BG);
     for (int y = 0; y < ROWS; y++)
         for (int x = 0; x < COLS; x++) {
-            Color c; bool draw = true;
+            int idx;
             switch (map[y][x]) {
-                case T_WALL:   c = PAL_WALL;   break;
-                case T_LADDER: c = PAL_LADDER; break;
-                case T_WATER:  c = PAL_WATER;  break;
-                case T_GOLD:   c = PAL_GOLD;   break;
-                default: draw = false; c = PAL_BG; break;
+                case T_WALL:   idx = TI_WALL;   break;
+                case T_LADDER: idx = TI_LADDER; break;
+                case T_WATER:  idx = TI_WATER;  break;
+                case T_GOLD:   idx = TI_GOLD;   break;
+                default: continue;   // empty: leave background
             }
-            if (draw) DrawRectangle(x*TILE, y*TILE, TILE, TILE, c);
+            draw_tile(idx, x * TILE, y * TILE);
         }
-    DrawRectangle((int)px, (int)py, TILE, TILE, PAL_PLAYER);
+    draw_tile(TI_PLAYER, (int)px, (int)py);
 
     // HUD (Romanian by default via i18n): "Scor 0   Nivel 1"
     char hud[64];
@@ -163,6 +225,7 @@ static void draw_scene(void) {
 void game_init(void) {
     target = LoadRenderTexture(VW, VH);
     SetTextureFilter(target.texture, TEXTURE_FILTER_POINT); // crisp pixels
+    build_tileset();
     load_placeholder_level();
 }
 
@@ -173,5 +236,6 @@ void game_frame(float dt) {
 }
 
 void game_shutdown(void) {
+    UnloadTexture(tileset);
     UnloadRenderTexture(target);
 }
