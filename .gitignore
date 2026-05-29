@@ -30,3 +30,4 @@ _site/
 # The published WASM build IS tracked (served by GitHub Pages from /play).
 !/play/
 !/play/**
+klad-web.zip
