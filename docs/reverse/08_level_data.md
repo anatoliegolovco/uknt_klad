@@ -29,12 +29,43 @@ KLAD3.
 **Caveats / open items**
 - KLAD3 is the **Баранов** line; its tiles differ from the **Crocodile 1991**
   screenshot (green/white blocks, not Crocodile's white diamond-mesh).
-- KLAD/KLAD2/KLAD4 use the **same blit engine** (`MOV (R2)+,46000(R1)`) but have
-  **no `0540` level table** — they store levels differently; their tile banks
-  aren't pinned yet (the disassembler misframes their index math).
 - Exact **palette** (which of black/cyan/green/white/yellow each 2-bit value
   maps to) depends on the runtime palette register; shapes are exact, hues are
   a reasonable guess in `extract_tiles.py:PALETTE`.
+
+## ⏳ Crocodile set (KLAD / KLAD2 / KLAD4 / klad10) — packed, in progress
+
+These builds do **not** store graphics as plain bitmaps. Evidence:
+- Uniformly high entropy (5.7–6.9 bits/byte) with **no** low-entropy data
+  region — unlike KLAD3, which has a clear ~4.5-bit tile/level region.
+- The entry (`01000`) is a **decompressor stub**: `MOV PC,R4 / ADD #236,R4`
+  (source), `MOV #100000,R3` (dest), then a bit-stream loop.
+
+Unpacking is **two-stage** (traced with `tools/bk_emu.py`, a small PDP-11
+interpreter):
+1. **Stage 0** (`01000`): a bit-stream/delta decoder. Control bits stream
+   *downward* from `01242` via `ROL (R0)`; literal bytes stream *upward* via
+   `(R4)+`. Unpacks a loader to `~076710`, then `JMP (R3)`.
+   *Verified correct* — the emulated output at `076710` disassembles into clean
+   PDP-11 code.
+2. **Stage 1** (`076710`): a **backward LZ** decompressor. Reads a control byte
+   `MOVB -(R0),R1`, indexes a codeword table at `077400` (`MOV 77400(R1),R1`),
+   and emits literal pairs / RLE word-runs / delta words *downward* into `-(R4)`
+   until `R4==R0`, then `JMP R0` (= the unpacked main program's entry).
+
+Status: the emulator runs both stages but stage 1 finishes with **R0 odd**
+(`03373`), i.e. a one-byte drift in executing the backward LZ, which corrupts
+the unpacked image (so tiles aren't yet recoverable from the dump). Remaining
+work to pin the Crocodile tiles:
+1. Make the stage-1 LZ byte-exact (fix the emulator off-by-one, or re-implement
+   the LZ in Python from the verified post-stage-0 snapshot), giving an even
+   entry and a clean unpacked program.
+2. The unpacked menu loop waits on an **interrupt-updated memory flag** (no I/O
+   polling observed), so reaching a *drawn* level needs the 50 Hz timer /
+   keyboard interrupt simulated — or just locate the now-plain tile bank in the
+   corrected dump and extract it as for KLAD3.
+
+Alternative fallback: run the binary in a full BK-0010 emulator and screenshot.
 
 ---
 
