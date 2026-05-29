@@ -1,5 +1,45 @@
 # 08 — Level / graphics data (КЛАД, KLAD3.BIN)
 
+## ✅ SOLVED (blit-routine trace) — format fully recovered
+
+Tracing the tile renderer cracked the whole thing. The blit subroutine at
+`005106` copies **8 words** (one 8×8 tile, 2bpp) from source `(R2)+` into the
+screen at `46000(R1)`, advancing R1 by `#100` (one scanline) per row. The caller
+at `005010` reads a map byte, isolates each **nibble as a tile index** (`BIC
+#177760` → low nibble; `BIC #177417` → high nibble), and forms the source as
+**`#017450 + index*16`**.
+
+Recovered format:
+
+| thing            | value |
+|------------------|-------|
+| tile bank        | octal **`017450`**, 16 tiles, **16 bytes each = 8×8 @ 2bpp** |
+| pixel order      | row = 1 little-endian word; pixel *p* = bits `(2p,2p+1)`, LSB = left |
+| map → tile       | nibble index (low nibble = left cell, high nibble = right cell) |
+| level table      | octal **`010406`** — 20 records × 10 words; field 0 steps `0540` |
+| level maps       | `022100, 022640, …` one **352-byte** block each = **32×22 tiles** packed 2/byte |
+| playfield base   | screen `046000` (= `040000` + 6 tile-rows) |
+
+`tools/extract_tiles.py` dumps the 16 tiles and all 20 levels (raw `.bin` +
+rendered `.png`) to `assets/original/extracted/klad3/`. Level 0 renders as a
+coherent maze (border, ladders, water pools, treasure, guards) — confirming the
+decode. **No emulator was needed**; the earlier caveat below is superseded for
+KLAD3.
+
+**Caveats / open items**
+- KLAD3 is the **Баранов** line; its tiles differ from the **Crocodile 1991**
+  screenshot (green/white blocks, not Crocodile's white diamond-mesh).
+- KLAD/KLAD2/KLAD4 use the **same blit engine** (`MOV (R2)+,46000(R1)`) but have
+  **no `0540` level table** — they store levels differently; their tile banks
+  aren't pinned yet (the disassembler misframes their index math).
+- Exact **palette** (which of black/cyan/green/white/yellow each 2-bit value
+  maps to) depends on the runtime palette register; shapes are exact, hues are
+  a reasonable guess in `extract_tiles.py:PALETTE`.
+
+---
+
+## (historical) earlier static-analysis notes
+
 Goal: locate the original level data so it can be extracted (your request).
 Status: **structural location found; semantics not yet confirmed.** Honest
 state below — confirming what the bytes *mean* needs the emulator.
