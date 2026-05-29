@@ -33,7 +33,24 @@ KLAD3.
   maps to) depends on the runtime palette register; shapes are exact, hues are
   a reasonable guess in `extract_tiles.py:PALETTE`.
 
-## ⏳ Crocodile set (KLAD / KLAD2 / KLAD4 / klad10) — packed, in progress
+## ✅ Crocodile set (KLAD …) — SOLVED by running the real CPU
+
+`tools/extract_crocodile.sh` recovers the graphics pixel-exact: it clones the
+**bk-emulator** (Eric Edwards' PDP-11 core + Leonid Broukhis' BK port), builds a
+headless harness (`tools/bk_unpack_harness.c`) around just its **CPU core**
+(flat RAM, no SDL/ROM/devices), and runs `KLAD.BIN` from `01000`. The real CPU
+unpacks both stages correctly, and — skipping the MONITOR `EMT`s — the program
+draws its screen, which `tools/render_crocodile.py` dumps:
+`assets/original/extracted/crocodile/title_screen.png` shows the **КЛАД** title
+with the authentic **green diamond-mesh walls**, ladders and water from the
+reference; `sprites.png` shows the player/enemy animation tiles (region
+`020400–022400`, 8×8 @ 2bpp).
+
+Note: my own quick Python emulator (`tools/bk_emu.py`) had a one-byte drift in
+the backward-LZ, which is why it produced an odd entry; the vetted bk-emulator
+core is correct and is what the pipeline uses.
+
+### How it's packed (for reference)
 
 These builds do **not** store graphics as plain bitmaps. Evidence:
 - Uniformly high entropy (5.7–6.9 bits/byte) with **no** low-entropy data
@@ -53,19 +70,6 @@ interpreter):
    and emits literal pairs / RLE word-runs / delta words *downward* into `-(R4)`
    until `R4==R0`, then `JMP R0` (= the unpacked main program's entry).
 
-Status: the emulator runs both stages but stage 1 finishes with **R0 odd**
-(`03373`), i.e. a one-byte drift in executing the backward LZ, which corrupts
-the unpacked image (so tiles aren't yet recoverable from the dump). Remaining
-work to pin the Crocodile tiles:
-1. Make the stage-1 LZ byte-exact (fix the emulator off-by-one, or re-implement
-   the LZ in Python from the verified post-stage-0 snapshot), giving an even
-   entry and a clean unpacked program.
-2. The unpacked menu loop waits on an **interrupt-updated memory flag** (no I/O
-   polling observed), so reaching a *drawn* level needs the 50 Hz timer /
-   keyboard interrupt simulated — or just locate the now-plain tile bank in the
-   corrected dump and extract it as for KLAD3.
-
-Alternative fallback: run the binary in a full BK-0010 emulator and screenshot.
 
 ---
 
