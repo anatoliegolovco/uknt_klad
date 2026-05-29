@@ -42,6 +42,34 @@ Conclusions (ranked):
    words) and `010320`/`010340` (sequences of `MOV …,014420/014430/014440`,
    suggesting three parallel buffers/streams).
 
+## Confirmed: stored bitmaps DO decode directly (credits screen) ✅
+
+Direct 1-bpp rendering (LSB-first) of `KLAD3.BIN` at the screen width (256 px /
+32 bytes) reads cleanly for **pre-composed bitmap regions**:
+
+- A **credits screen at octal `013740`** renders as legible text + a stylised
+  "КЛАД" logo: *"ул. Шевченко д.32/108, г.Николаев, тел. 37*82*52, Баранов Д."*
+  This **identifies KLAD3 as the Баранов (Николаев) authorship line** and proves
+  the decoder/bit-order are correct.
+
+So the extraction method is sound — for **stored bitmaps**. What it does *not*
+recover is the **gameplay tile set**, because those are not stored as a plain
+bitmap bank:
+
+- 8×8 de-interleaved contact sheets of the whole image are code-noise; no clean
+  tile bank stands out (tried 8×8, 16×16, multiple offsets).
+- The `010406` 352-byte blocks render as *structured but encoded* data (~40
+  distinct byte values/block — too many for 1-byte-per-tile).
+- Disassembly shows drawing routed through a **screen-address table** (the run
+  of `040000`-range words at `020300`–`021100` is such a table) plus an encoded
+  source — not a straight sprite blit. Wall textures (the diamond mesh) are most
+  plausibly a **procedural fill pattern**, so there is no stored "wall sprite".
+
+**Bottom line:** pixel-exact tiles require seeing them *rendered* and tracing the
+bytes back (emulator VRAM dump, below), or fully reversing the encoded
+draw routine. Until then the re-imagining reproduces tiles from screen
+reference (see `src/game.c` tile bank), which already matches the original look.
+
 ## How to confirm (emulator-assisted — do locally) 🖥️
 
 Static analysis cannot tell sprite-bank from level-bank with certainty. The
