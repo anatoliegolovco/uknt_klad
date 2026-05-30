@@ -1,4 +1,44 @@
-# Ce vrea userul — obiective reverse-engineering КЛАД (УКНЦ 1987 Баранов)
+# Ce vrea userul — obiective КЛАД (УКНЦ 1987 Баранов)
+
+**Acest fișier este sursa de adevăr.** Dacă ești tentat să spui că "totul e gata și totul e bine", revino AICI și verifică fiecare punct față de ce există în repo.
+
+---
+
+## ⚠ REGULI ABSOLUTE — citește înainte de orice altceva
+
+### 1. Ce SE PĂSTREAZĂ (nu se modifică, nu se șterge)
+- `disassembly/annotated/uknc_klad_1987.asm` — codul ASM adnotat și comentat
+- `disassembly/annotated/crocodile_klad.asm` — referință BK-0010
+- `disassembly/raw/` — dezasamblări brute
+- `docs/reverse/` — toată documentația de reverse engineering
+- `assets/original/` — binarele originale și extracțiile din ele
+- `tools/` — scripturile de extracție Python
+
+### 2. Ce NU SE FOLOSEȘTE (arhivat, interzis)
+- Orice cod C scris anterior se află în arhivele ZIP din `/home/anatolie/ai/`
+- `src/` este gol și se construiește de la zero
+- `build/` nu există — se creează doar la compilare
+
+### 3. Cum se scrie codul nou — OBLIGATORIU
+- **Sursa unică de adevăr: `disassembly/annotated/uknc_klad_1987.asm`**
+- Fiecare funcție C se scrie DUPĂ ce se citește rutina ASM corespunzătoare
+- Nu se ghicește. Nu se inferează din memoria LLM. Nu se inventează.
+- Se citește instrucțiune cu instrucțiune din ASM, se înțelege CE face, se scrie C23 idiomatic echivalent
+- Fiecare funcție C are comentariu cu adresa ASM sursă (ex: `// PLAYER_STATE_CHECK 012570`)
+
+### 4. Target platforme — AMBELE obligatorii
+- **Linux native** — compilat cu `cc -std=c23`, rulează direct pe Ubuntu
+- **WebAssembly** — compilat cu `emcc`, rulează în browser fără plugin
+- Singurul `#ifdef PLATFORM_WEB` permis: în `main.c` pentru `emscripten_set_main_loop`
+- Librărie grafică: **raylib** (suportă ambele platforme din aceeași sursă C)
+
+### 5. Stil cod — C23 idiomatic pentru arhitectură modernă
+- Standard: `-std=c23` (sau `-std=c2x`)
+- Fără globale inutile — structuri de stare explicite
+- Comentariile explică DE CE (motivul din ASM), nu CE face codul
+- Nicio valoare hardcodată fără referință la adresa ASM de unde provine
+
+---
 
 **Acest fișier este sursa de adevăr.** Dacă ești tentat să spui că "totul e gata și totul e bine", revino AICI și verifică fiecare punct față de ce există în repo.
 
