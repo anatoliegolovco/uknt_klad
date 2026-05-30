@@ -16,7 +16,7 @@ Versiunea țintă: **Crocodile КЛАД** (`assets/original/ex_klad/KLAD.BIN`)
 - Fiecare byte din fișier are o etichetă (cod / date / nivel / gfx / padding / necunoscut)
 - Range-urile se unesc — nu trebuie să fie byte cu byte, dar nici găuri
 
-**Status:** ❌ Neînceput
+**Status:** ✅ COMPLET — `docs/reverse/BYTE_MAP.md` creat cu toate range-urile din KLAD.BIN + RAM-ul decomprimat
 
 ---
 
