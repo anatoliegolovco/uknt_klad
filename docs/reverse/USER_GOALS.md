@@ -56,7 +56,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Condiția de victorie / trecere la nivel următor
 - Logica inamicilor — cum se mișcă
 
-**Status:** ❌ Neînceput
+**Status:** ✅ COMPLET — `docs/reverse/MECHANICS.md` scris. Acoperă: game loop (GAME_TICK sequence), tastatură (polling non-blocking via KBD_READ), player state machine (11 states), collision map build (8 flag bits per tile, prag=8), mișcare + gravitație, apă, coliziune inamic, aur (+10 pct), moarte (PLAYER_DEATH → lives--), victorie (LEVEL_COMPLETE, stride=352), AI chase (greedy, throttled la 256 frames).
 
 ---
 
