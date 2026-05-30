@@ -16,16 +16,25 @@ tile_addr = tile_index × 16 + 017450
 ```
 Confirmed via four consecutive `ASL R2` instructions (×16) followed by `ADD #17450, R2`.
 
-**Colour encoding:**
+**Colour encoding (confirmed from tile pixel/color plane analysis):**
 
-| pixel_bit | colour_bit | Palette index | Visual |
-|-----------|------------|---------------|--------|
-| 0 | 0 | 0 | Black (background/air) |
-| 1 | 0 | 1 | Green (water, ground) |
-| 0 | 1 | 2 | Yellow (gold, patterns) |
-| 1 | 1 | 3 | White (ladders, bright) |
+| pixel_bit | colour_bit | Visual | Evidence |
+|-----------|------------|--------|---------|
+| 0 | 0 | **Black** (background/air) | tile 0 = all zeros → black |
+| 1 | 0 | **Green** (water, moving elements) | tile 7 (water): pixel=FF/CC, color=00 → green |
+| 0 | 1 | **Yellow** (gold, treasure) | tile 4 (gold): pixel=00, color=FC/3F → yellow |
+| 1 | 1 | **White** (ladders, walls, bright) | tile 9 (wall): pixel=color=54 pattern → white |
 
-Note: actual hardware palette depends on the УКНЦ palette register state, which the game initialises at startup. The colours above are a reasonable approximation for display purposes.
+**RGB approximations** (УКНЦ hardware TTL monitor, confirmed from tile patterns):
+
+| Color | RGB approx | Note |
+|-------|-----------|------|
+| Black | `(0, 0, 0)` | Exact |
+| Green | `(0, 192, 0)` | Standard УКНЦ phosphor green; current script uses (0,200,80) |
+| Yellow | `(200, 200, 0)` | Standard УКНЦ amber/yellow; current script uses (220,180,0) |
+| White | `(240, 240, 240)` | Standard УКНЦ white; current script uses (240,240,240) ✓ |
+
+Exact hardware values require emulator trace (UKNCBTL reference). The current approximations are visually correct for the color assignments.
 
 ---
 

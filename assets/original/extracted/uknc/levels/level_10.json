@@ -752,5 +752,22 @@
       11,
       11
     ]
-  ]
+  ],
+  "spawn": {
+    "player": {
+      "col": 3,
+      "row": 20,
+      "tile_ptr": "0o17156"
+    },
+    "enemy1": {
+      "col": 5,
+      "row": 0,
+      "tile_ptr": "0o14562"
+    },
+    "enemy2": {
+      "col": 26,
+      "row": 0,
+      "tile_ptr": "0o14634"
+    }
+  }
 }
