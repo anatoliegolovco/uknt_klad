@@ -36,14 +36,17 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 - Convertor BIN→WAV creat (`/tmp/bkbin2wav.py`) pentru referință viitoare  
 - bk0010 (fără -01) este BROKEN în MAME 0.264; varianta funcțională = `bk001001`
 
-`[2026-05-30 14:30 UTC] IN_PROGRESS` — Obiectiv 2: assembler adnotat — prima trecere completă  
-- Creat `disassembly/annotated/crocodile_klad.asm` — ~25 rutine adnotate
-- Creat `docs/reverse/ROUTINES.md` — index complet cu adrese, descrieri, variabile globale
-- Entry points identificate: 004000 (cold start), 004674 (game loop), 005106/014302 (tile blit)
-- Game loop: keyboard via @#177714 (shift-reg, 11 biți), tabelă acțiuni la 012342
-- Level renderer: 004776 (22 rânduri × 16 bytes, 2 tiles/byte, tile bank 017450)
-- Rămân de adnotat: 007432 (mișcare), 012442 (load level), 013524 (tranziție), 006204 (entități complet)
-- **Next:** Obiectiv 4 (niveluri) — tabela la 001230, 10 niveluri × 352 bytes
+`[2026-05-30 14:30 UTC] IN_PROGRESS` — Obiectiv 2: assembler adnotat — prima trecere (25 rutine)
+
+`[2026-05-30 17:00 UTC] DONE` — Obiectiv 2: **COMPLET** — 35/35 rutine adnotate
+- `disassembly/annotated/crocodile_klad.asm` — 1393 linii, toate rutinele acoperite
+- `docs/reverse/ROUTINES.md` — index complet 35 rutine, toate variabilele globale, tile values, key table
+- Descoperiri noi: ENTITY_HANDLER (006204) = sound engine (toggle @#177716 bit 7 = speaker)
+- Structura completă: 3 inamici independenți cu throttle-uri separate (17360/17366/17372/17376)
+- PLAYER_TILE_PTR (014422) = pointer în working buffer @#14550 (nu poziție directă)
+- COLLISION_MAP_BUILD (013524) = unpack + 8 tipuri de flag-uri coliziune per tile
+- Tabele taste complete: meniu (001732) + gameplay (012342) cu toate mapările
+- **Next:** Obiectiv 1 (BYTE_MAP) sau Obiectiv 3 (MECHANICS)
 
 `[2026-05-30 13:00 UTC] DONE` — Identificat corect versiunea Crocodile  
 - `ex_klad/KLAD.BIN` = Crocodile 1991 (packed, load=0732, entropy=7.42)  

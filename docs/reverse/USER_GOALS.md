@@ -33,7 +33,7 @@ Versiunea țintă: **Crocodile КЛАД** (`assets/original/ex_klad/KLAD.BIN`)
 - Fiecare rutină are minim un comentariu de o linie care explică CE face
 - Rutinele necunoscute sunt marcate `; UNKNOWN` cu ce știm despre ele (ce adrese accesează)
 
-**Status:** ❌ Neînceput (avem doar linear sweep brut în `disassembly/raw/KLAD.asm`)
+**Status:** ✅ COMPLET — 35/35 rutine adnotate în `disassembly/annotated/crocodile_klad.asm` + index complet în `docs/reverse/ROUTINES.md`
 
 ---
 
@@ -121,8 +121,8 @@ Versiunea țintă: **Crocodile КЛАД** (`assets/original/ex_klad/KLAD.BIN`)
 | Sprites PNG (brut) | ✅ | `assets/original/extracted/crocodile/sprites.png` |
 | gfx_region.bin | ✅ | `assets/original/extracted/crocodile/gfx_region.bin` |
 | BYTE_MAP.md | ❌ | Neînceput |
-| Assembler adnotat | ❌ | Neînceput |
-| ROUTINES.md | ❌ | Neînceput |
+| Assembler adnotat | ✅ | `disassembly/annotated/crocodile_klad.asm` — 35/35 rutine |
+| ROUTINES.md | ✅ | `docs/reverse/ROUTINES.md` — index complet + variabile globale |
 | MECHANICS.md | ❌ | Neînceput |
 | Niveluri extrase | ❌ | Parțial în 08_level_data.md |
 | Tile-uri individuale | ❌ | Neînceput |
