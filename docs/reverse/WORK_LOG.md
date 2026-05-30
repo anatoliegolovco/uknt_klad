@@ -55,6 +55,34 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 - KLAD3.BIN = necomprimat, load=01000, entropy=5.66 (versiunea Баранов neambalată)  
 - **Next:** Obiectiv 2 — disassembly adnotat din entry 01000 (depacker) → joc
 
+## 2026-05-30 (sesiunea УКНЦ search)
+
+`[2026-05-30 17:30 UTC] DONE` — Găsite și extrase ambele versiuni УКНЦ ale jocului КЛАД
+
+**Sursă 1 — versiunea Баранов 1987 (ORIGINAL):**
+- Fișier: `KLAD.SAV` (17408 bytes = 34 blocuri RT-11)
+- Sursa disk: `hobot.pdp-11.ru/ukdwk_archive/ukncbtlwebcomplekt/FODOS_GAMES/disk_10_fix.dsk`
+- Confirmat prin string-uri în KOI8-R în binar: `"Николаев 1987"`, `"Баранов"`, `"Д.Г."`
+- Text intro complet: `"КЛАД"`, instrucțiuni în rusă, speed selector `1,2,3,4`
+- Salvat la: `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`
+
+**Sursă 2 — versiunea Crocodile Software 1991:**
+- Fișier: `MKLAD.GAM` (19968 bytes = 39 blocuri RT-11)
+- Sursa disk: `hobot.pdp-11.ru/ukdwk_archive/ukncbtlwebcomplekt/UKNCgames_NEW/newgames.dsk`
+- Confirmat prin string ASCII: `"@ 1991 CROCODILE SOFTWARE"`
+- Conține 18 level names (transliterate rusă): podzemelxe, zmea, nachalo, uhvati, lestnica, etc.
+- Salvat la: `assets/original/extracted/uknc/MKLAD_1991_Crocodile.GAM`
+
+**Disk images complete:**
+- `assets/original/extracted/uknc/fodos_games.dsk` (800K — sursa KLAD_1987)
+- `assets/original/extracted/uknc/newgames.dsk` (800K — sursa MKLAD_1991)
+
+**Metodă de căutare:**
+- Yandex.ru → hobot.pdp-11.ru → galerie jocuri УКНЦ
+- Parser RT-11 custom (Python) cu status 0x8400/0x0400 pentru permanent files
+- Brute-force RAD50 search în 134 imagini de dischetă
+- Confirmat din tis.kz (arhiva Novosibirsk = soft educațional, fără jocuri КЛАД)
+
 ## Template pentru intrări viitoare
 
 ```
