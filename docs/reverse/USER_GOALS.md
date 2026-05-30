@@ -110,7 +110,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Sprite-urile corespunzătoare fiecărui frame (cu referință la GFX_MAP)
 - Idem pentru inamici dacă sunt animați
 
-**Status:** ❌ Neînceput
+**Status:** ✅ COMPLET — `docs/reverse/ANIMATIONS.md` scris. Acoperă: throttle player (5 ticks/frame, ANIM_THROTTLE_PLAYER), state machine (state 021=climb, 023=walk, range 021-024), enemy anim (8→9 ticks horizontal, 5→6 ticks vertical), TBL_ANIM_FRAMES (pixel offsets), sprite bank 031300 (208 frames, word-pointer blit). Timing exact pentru Hz real necesită trace emulator.
 
 ---
 
