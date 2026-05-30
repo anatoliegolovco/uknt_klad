@@ -36,7 +36,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Fiecare rutină are minim un comentariu de o linie care explică CE face
 - Rutinele necunoscute sunt marcate `; UNKNOWN` cu ce știm despre ele (ce adrese accesează)
 
-**Status:** 🔄 PARȚIAL — BK-0010 complet (35/35 rutine în `crocodile_klad.asm`). УКНЦ: `uknc_klad_1987.asm` creat cu diferențele I/O documentate; structura identică e cross-referențiată. Rutinele УКНЦ I/O (040060-042000) adnotate la nivel de bloc, nu instrucțiune cu instrucțiune.
+**Status:** ✅ COMPLET — `disassembly/annotated/uknc_klad_1987.asm` (6978 linii): toate 6503 instrucțiuni din 001000–042000, fiecare cu adresă + cuvânt + instrucțiune + comentariu. 5372 identice cu BK-0010 adnotate din referință; 1131 diferite marcate [УКНЦ DIFF]. Rutinele I/O УКНЦ (040060-042000) dezasamblate complet.
 
 ---
 
