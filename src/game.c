@@ -1,91 +1,77 @@
-// game.c — КЛАД reimplementation (C23 + raylib).
-// Mechanics derived from УКНЦ КЛАД 1987 (Баранов) via disassembly.
-// Tile and sprite graphics decoded pixel-perfect from KLAD_1987_Baranov.SAV.
-// No original code is reproduced; graphics are reverse-engineered pixel data.
+// game.c — КЛАД reimplementare C23 + raylib.
+// Obiectiv strategic: rulează pe Ubuntu (native) ȘI în browser (WebAssembly).
+// Logica derivată strict din disassembly/annotated/uknc_klad_1987.asm.
+// Grafică pixel-perfect din KLAD_1987_Baranov.SAV via gfx_data.h.
 #include "raylib.h"
 #include "game.h"
 #include "i18n.h"
+#include "uknc_defs.h"
+#include "game_entity.h"
+#include "game_map.h"
+#include "game_player.h"
+#include "game_enemy.h"
 #include "levels_data.h"
 #include "gfx_data.h"
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
-// ---- УКНЦ 2bpp palette (exact from binary decoder) ----
-// Index 0=black, 1=green(water), 2=yellow(gold), 3=white(walls/ladders/sprites)
+// ── paleta УКНЦ 2bpp (PAL_* constants din uknc_defs.h) ──────────────────────
 static const Color UKNC_COL[4] = {
-    {  0,   0,   0, 255},   // 0 black
-    {  0, 192,   0, 255},   // 1 green
-    {210, 200,   0, 255},   // 2 yellow
-    {236, 236, 236, 255},   // 3 white
+    {  0,   0,   0, 255},  // PAL_BLACK
+    {  0, 192,   0, 255},  // PAL_GREEN  (apă)
+    {210, 200,   0, 255},  // PAL_YELLOW (aur)
+    {236, 236, 236, 255},  // PAL_WHITE  (pereți, scări, sprite-uri)
 };
-#define C_BG    UKNC_COL[0]
-#define C_WHITE UKNC_COL[3]
-#define C_YELLOW UKNC_COL[2]
+#define C_BLACK  UKNC_COL[PAL_BLACK]
+#define C_WHITE  UKNC_COL[PAL_WHITE]
+#define C_YELLOW UKNC_COL[PAL_YELLOW]
 
-// ---- tile types (game logic) ----
-typedef enum { T_EMPTY=0, T_WALL, T_LADDER, T_WATER, T_GOLD, T_EXIT } Tile;
-
-static Tile orig_to_tile(uint8_t idx) {
-    switch (idx) {
-        case 1: case 8:                    return T_LADDER;
-        case 2:                            return T_EXIT;
-        case 4: case 5: case 6:           return T_GOLD;
-        case 7: case 14:                   return T_WATER;
-        case 9: case 10: case 11:
-        case 12: case 13:                  return T_WALL;
-        default:                           return T_EMPTY;
-    }
-}
-
-// ---- tileset texture ----
-// Layout (each slot = 8px wide, 8px tall, in a single horizontal strip):
-//   Slots  0-15  = map tiles (TILE_GFX[0..15]) — original tile indices
-//   Slots 16-19  = player walk frames (SPRITE_GFX[0..3])
-//   Slot   20    = player climb frame (SPRITE_GFX[8])
-//   Slot   21    = player death frame (SPRITE_GFX[12])
-//   Slots 22-25  = enemy walk frames  (SPRITE_GFX[16..19])
-// TILE_SLOT_* macros address each slot.
+// ── tileset texture ──────────────────────────────────────────────────────────
+// Slot-uri în strip orizontal (fiecare = 8px lățime, 8px înălțime):
+//   0-15  : tile-uri hartă (TILE_GFX[0..15]) — original tile indices
+//  16-19  : player walk frames  (SPRITE_GFX[0..3])
+//   20    : player climb frame  (SPRITE_GFX[8])
+//   21    : player death frame  (SPRITE_GFX[12])
+//  22-25  : enemy walk frames   (SPRITE_GFX[16..19])
 enum {
-    TILE_SLOT_MAP    = 0,    // slots 0-15: map tiles indexed by orig index
-    TILE_SLOT_PLW    = 16,   // slots 16-19: player walk (4 frames)
-    TILE_SLOT_PLC    = 20,   // slot 20: player climb
-    TILE_SLOT_PLD    = 21,   // slot 21: player death
-    TILE_SLOT_ENW    = 22,   // slots 22-25: enemy walk (4 frames)
-    TILE_SLOT_COUNT  = 26,
+    TS_MAP   = 0,   // 0-15: tile-uri hartă
+    TS_PLW   = 16,  // 16-19: player walk (4 frame-uri, PLAYER_WALK_FRAMES)
+    TS_PLC   = 20,  // player climb
+    TS_PLD   = 21,  // player death
+    TS_ENW   = 22,  // 22-25: enemy walk (4 frame-uri)
+    TS_COUNT = 26,
 };
 
-// Sprite frame indices into SPRITE_GFX[] to put in each slot:
-static const int SPRITE_SLOT_SRC[TILE_SLOT_COUNT - 16] = {
-    0, 1, 2, 3,   // player walk 0-3   → slots 16-19
-    8,            // player climb       → slot 20
-    12,           // player death       → slot 21
-    16, 17, 18, 19, // enemy walk 0-3  → slots 22-25
+// SPRITE_GFX frame index pentru fiecare slot sprite
+static const int SPRITE_SLOT_SRC[] = {
+    0, 1, 2, 3,        // player walk  → slots 16-19
+    PLAYER_CLIMB_FRAME, // player climb → slot 20
+    PLAYER_DEATH_FRAME, // player death → slot 21
+    16, 17, 18, 19,    // enemy walk   → slots 22-25
 };
 
 static Texture2D tileset;
 
 static void build_tileset(void) {
-    Image img = GenImageColor(8 * TILE_SLOT_COUNT, 8, (Color){0,0,0,0});
+    Image img = GenImageColor(TILE_W * TS_COUNT, TILE_H, (Color){0,0,0,0});
 
-    // Map tiles from TILE_GFX (pixel-perfect from binary)
+    // Tile-uri hartă: TILE_GFX[0..15] pixel-perfect din binar
     for (int t = 0; t < 16; t++)
-        for (int r = 0; r < 8; r++)
-            for (int c = 0; c < 8; c++) {
+        for (int r = 0; r < TILE_H; r++)
+            for (int c = 0; c < TILE_W; c++) {
                 uint8_t pal = TILE_GFX[t][r][c];
-                if (pal > 0)
-                    ImageDrawPixel(&img, t * 8 + c, r, UKNC_COL[pal]);
+                if (pal) ImageDrawPixel(&img, t * TILE_W + c, r, UKNC_COL[pal]);
             }
 
-    // Sprite frames from SPRITE_GFX (pixel-perfect from binary)
-    int n_spr = (int)(sizeof(SPRITE_SLOT_SRC) / sizeof(SPRITE_SLOT_SRC[0]));
-    for (int s = 0; s < n_spr; s++) {
-        int src_frame = SPRITE_SLOT_SRC[s];
+    // Sprite-uri: SPRITE_GFX frames din binar
+    int n = (int)(sizeof(SPRITE_SLOT_SRC)/sizeof(SPRITE_SLOT_SRC[0]));
+    for (int s = 0; s < n; s++) {
+        int fr = SPRITE_SLOT_SRC[s];
         int slot = 16 + s;
-        for (int r = 0; r < 8; r++)
-            for (int c = 0; c < 8; c++) {
-                uint8_t pal = SPRITE_GFX[src_frame][r][c];
-                if (pal > 0)
-                    ImageDrawPixel(&img, slot * 8 + c, r, UKNC_COL[pal]);
+        for (int r = 0; r < TILE_H; r++)
+            for (int c = 0; c < TILE_W; c++) {
+                uint8_t pal = SPRITE_GFX[fr][r][c];
+                if (pal) ImageDrawPixel(&img, slot * TILE_W + c, r, UKNC_COL[pal]);
             }
     }
 
@@ -96,93 +82,26 @@ static void build_tileset(void) {
 
 static void draw_slot(int slot, int x, int y) {
     DrawTextureRec(tileset,
-                   (Rectangle){(float)(slot * 8), 0, 8, 8},
-                   (Vector2){(float)x, (float)y}, WHITE);
+        (Rectangle){(float)(slot * TILE_W), 0, (float)TILE_W, (float)TILE_H},
+        (Vector2){(float)x, (float)y}, WHITE);
 }
 
-// ---- render target ----
+// ── render target ─────────────────────────────────────────────────────────────
 static RenderTexture2D target;
 
-// ---- map ----
-static Tile     map[LEVEL_ROWS][COLS];      // game logic types
-static uint8_t  raw_map[LEVEL_ROWS][COLS];  // original tile indices for rendering
-static int gold_remaining;
+// ── stare joc ────────────────────────────────────────────────────────────────
+#define MAX_ENEMIES 2   // jocul original are 2 inamici activi per nivel
 
-static Tile tile_at(int tx, int ty) {
-    if (tx < 0 || tx >= COLS || ty < 0 || ty >= LEVEL_ROWS) return T_WALL;
-    return map[ty][tx];
-}
-static bool solid(int tx, int ty) { return tile_at(tx, ty) == T_WALL; }
+static GameVars  gv;
+static Player    player;
+static Entity    enemies[MAX_ENEMIES];
+static float     enemy_cd[MAX_ENEMIES];
+static float     enemy_anim_t[MAX_ENEMIES];
+static float     player_anim_t;
+static int       player_anim_frame;
 
-// ---- player ----
-static float px, py, vy;
-static const float SPEED = 64.0f;
-static const float GRAV  = 320.0f;
-
-static bool on_ladder(void) {
-    int cx  = (int)((px + TILE * 0.5f) / TILE);
-    int ty1 = (int)(py / TILE);
-    int ty2 = (int)((py + TILE - 1) / TILE);
-    return tile_at(cx, ty1) == T_LADDER || tile_at(cx, ty2) == T_LADDER;
-}
-
-// ---- enemies ----
-#define MAX_ENEMIES 2
-typedef struct { int tx, ty; bool active; float cd; float anim_t; } Enemy;
-static Enemy enemies[MAX_ENEMIES];
-static const float ENEMY_CD = 0.42f;
-
-// ---- animation ----
-static float player_anim_t;
-static bool  player_climbing;
-static bool  player_dead;
-
-static int player_walk_slot(void) {
-    int f = (int)(player_anim_t / 0.15f) % 4;
-    return TILE_SLOT_PLW + f;
-}
-static int enemy_walk_slot(float t) {
-    int f = (int)(t / 0.18f) % 4;
-    return TILE_SLOT_ENW + f;
-}
-
-// ---- game state ----
-typedef enum { GS_PLAYING, GS_DEAD, GS_LEVEL_WIN, GS_GAME_OVER, GS_ALL_WIN } GameState;
-static GameState gstate;
-static float state_timer;
-static int score, lives, cur_level;
-
-// ---- level load ----
-static void load_level(int lvl) {
-    gold_remaining = 0;
-    for (int r = 0; r < LEVEL_ROWS; r++)
-        for (int c = 0; c < COLS; c++) {
-            uint8_t idx = LEVEL_TILES[lvl][r][c];
-            raw_map[r][c] = idx;
-            Tile t = orig_to_tile(idx);
-            map[r][c] = t;
-            if (t == T_GOLD) gold_remaining++;
-        }
-    // Player spawn
-    px = LEVEL_SPAWNS[lvl][0][0] * (float)TILE;
-    py = LEVEL_SPAWNS[lvl][0][1] * (float)TILE;
-    vy = 0;
-    player_anim_t = 0;
-    player_climbing = false;
-    player_dead = false;
-    // Enemy spawns
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        int8_t ec = LEVEL_SPAWNS[lvl][i + 1][0];
-        int8_t er = LEVEL_SPAWNS[lvl][i + 1][1];
-        enemies[i].active = (ec >= 0);
-        enemies[i].tx = ec;
-        enemies[i].ty = er;
-        enemies[i].cd = ENEMY_CD * (float)(i + 1);
-        enemies[i].anim_t = (float)i * 0.3f;
-    }
-}
-
-// ---- input ----
+// ── input ────────────────────────────────────────────────────────────────────
+// Sursa: FN_KBD_GAME_POLL (004674) — taste meniu + gameplay УКНЦ
 static Input read_input(void) {
     Input in = {0};
     in.left   = IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A);
@@ -190,227 +109,267 @@ static Input read_input(void) {
     in.up     = IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W);
     in.down   = IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S);
     in.action = IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER);
+    // Touch (1/3 ecran stânga = stânga, dreapta = dreapta, sus = sus, jos = jos)
     if (GetTouchPointCount() > 0) {
         Vector2 t = GetTouchPosition(0);
         float w = (float)GetScreenWidth(), h = (float)GetScreenHeight();
-        if (t.x < w / 3)       in.left  = true;
-        else if (t.x > 2*w/3)  in.right = true;
-        if (t.y < h / 4)       in.up    = true;
-        else if (t.y > 3*h/4)  in.down  = true;
+        if (t.x < w/3)       in.left  = true;
+        else if (t.x > 2*w/3) in.right = true;
+        if (t.y < h/4)       in.up    = true;
+        else if (t.y > 3*h/4) in.down  = true;
     }
     return in;
 }
 
-// ---- player update ----
+// ── încărcare nivel ───────────────────────────────────────────────────────────
+// Sursa: LEVEL_COMPLETE (001034) + COLLISION_MAP_BUILD (013524)
+static void load_level(int lvl) {
+    map_load(lvl);   // încarcă raw_tile + map_tile + gold_count
+
+    // Spawn player — din LEVEL_SPAWNS (gen_levels_c.py din entity records ASM)
+    int8_t pc = LEVEL_SPAWNS[lvl][0][0];
+    int8_t pr = LEVEL_SPAWNS[lvl][0][1];
+    player.ent.active = true;
+    player.ent.col    = pc;
+    player.ent.row    = pr;
+    player.px         = pc * (float)TILE_W;
+    player.py         = pr * (float)TILE_H;
+    player.vy         = 0;
+    player.on_ladder  = false;
+    player.dead       = false;
+    player.anim_ctr   = 0;
+
+    // Spawn inamici
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        int8_t ec = LEVEL_SPAWNS[lvl][i+1][0];
+        int8_t er = LEVEL_SPAWNS[lvl][i+1][1];
+        enemy_init(&enemies[i], ec, er);
+        enemy_cd[i]     = ENEMY_TICK_INTERVAL * (float)(i + 1);
+        enemy_anim_t[i] = (float)i * 0.2f;
+    }
+    player_anim_t     = 0;
+    player_anim_frame = 0;
+}
+
+// ── update player ─────────────────────────────────────────────────────────────
+// Sursa: PLAYER_MOVE_STEP (012740) + PLAYER_STATE_CHECK (012570)
 static void update_player(float dt, Input in) {
     bool moving = in.left || in.right;
 
-    // Horizontal
-    float nx = px + (in.right - in.left) * SPEED * dt;
-    int chk_x = (int)((nx + (in.right ? TILE - 1 : 0)) / TILE);
-    int mid_y  = (int)((py + TILE * 0.5f) / TILE);
-    if (!solid(chk_x, mid_y)) px = nx;
+    // Mișcare orizontală cu coliziune WALL
+    float nx = player.px + (float)(in.right - in.left) * PLAYER_SPEED_PX * dt;
+    int   ck  = (int)((nx + (in.right ? TILE_W - 1 : 0)) / TILE_W);
+    int   my  = (int)((player.py + TILE_H * 0.5f) / TILE_H);
+    if (!map_solid(ck, my)) player.px = nx;
 
-    // Vertical: ladder vs gravity
-    player_climbing = on_ladder();
-    if (player_climbing) {
-        vy = 0;
-        py += (in.down - in.up) * SPEED * dt;
+    // Gravitație / scară — derivat din PLAYER_MOVE_STEP
+    player.on_ladder = player_on_ladder(player.px, player.py);
+    if (player.on_ladder) {
+        player.vy = 0;
+        player.py += (float)(in.down - in.up) * PLAYER_SPEED_PX * dt;
     } else {
-        vy += GRAV * dt;
-        float ny = py + vy * dt;
-        int ftx = (int)((px + TILE * 0.5f) / TILE);
-        int fty = (int)((ny + TILE) / TILE);
-        if (solid(ftx, fty)) { vy = 0; ny = (float)(fty * TILE) - TILE; }
-        py = ny;
+        player.vy += PLAYER_GRAV_PX * dt;
+        float ny  = player.py + player.vy * dt;
+        int   ftx = (int)((player.px + TILE_W * 0.5f) / TILE_W);
+        int   fty = (int)((ny + TILE_H) / TILE_H);
+        if (map_solid(ftx, fty)) { player.vy = 0; ny = (float)(fty * TILE_H) - TILE_H; }
+        player.py = ny;
     }
-    if (py < 0) { py = 0; vy = 0; }
-    if (py > (LEVEL_ROWS - 1) * (float)TILE) py = (LEVEL_ROWS - 1) * (float)TILE;
+    // Clamp la limita nivelului
+    if (player.py < 0) { player.py = 0; player.vy = 0; }
+    if (player.py > (MAP_ROWS - 1) * (float)TILE_H)
+        player.py = (MAP_ROWS - 1) * (float)TILE_H;
 
-    // Animation counter
-    if (moving || (player_climbing && (in.up || in.down)))
+    // Animație player (ANIM_THROTTLE_PLAYER: la fiecare PLAYER_ANIM_TICKS frame-uri)
+    if (moving || (player.on_ladder && (in.up || in.down))) {
         player_anim_t += dt;
+        player_anim_frame = (int)(player_anim_t / (dt < 0.001f ? 0.15f : 0.15f)) % PLAYER_WALK_FRAMES;
+    }
 
-    // Tile interactions at player centre
-    int tx = (int)((px + TILE * 0.5f) / TILE);
-    int ty = (int)((py + TILE * 0.5f) / TILE);
-    Tile ct = tile_at(tx, ty);
-    if (ct == T_GOLD) {
-        map[ty][tx] = T_EMPTY;
-        raw_map[ty][tx] = 0;
-        gold_remaining--;
-        score += 10;
-    }
-    if (ct == T_WATER) {
-        lives--;
-        gstate = (lives <= 0) ? GS_GAME_OVER : GS_DEAD;
-        state_timer = 1.5f;
-        player_dead = true;
-    }
-    if (ct == T_EXIT) {
-        if (cur_level >= 9) { gstate = GS_ALL_WIN; }
-        else { gstate = GS_LEVEL_WIN; state_timer = 1.2f; }
+    // PLAYER_STATE_CHECK — verifică tile curent
+    int col, row;
+    player_center_tile(player.px, player.py, &col, &row);
+    PlayerStateResult psr = player_state_check(col, row);
+
+    switch (psr) {
+        case PSR_COLLECT_GOLD:
+            map_collect_gold(col, row);   // CLRB (R3) → tile → EMPTY
+            gv.score += SCORE_PER_GOLD;   // ADD #12, @#017440 (octal 12 = dec 10)
+            break;
+        case PSR_BONUS_LIFE:
+            map_collect_gold(col, row);
+            gv.lives++;                   // BONUS_LIFE_ADD (003746)
+            break;
+        case PSR_LEVEL_WIN:
+            // CMPB #6,(R3) → LEVEL_COMPLETE (001034)
+            map_collect_gold(col, row);
+            // cade prin → PSR_EXIT_REACHED logic
+            // fall-through intentional
+            gv.state = GS_LEVEL_WIN; gv.state_timer = 1.2f;
+            break;
+        case PSR_EXIT_REACHED:
+            if (gv.level >= NUM_LEVELS - 1) gv.state = GS_ALL_WIN;
+            else { gv.state = GS_LEVEL_WIN; gv.state_timer = 1.2f; }
+            break;
+        case PSR_WATER_DEATH:
+        case PSR_ENEMY_HIT:
+            gv.lives--;
+            player.dead = true;
+            gv.state = (gv.lives <= 0) ? GS_GAME_OVER : GS_DEAD;
+            gv.state_timer = 1.5f;
+            break;
+        case PSR_NONE:
+            break;
     }
 }
 
-// ---- enemy update ----
-static void enemy_gravity(Enemy *e) {
-    while (e->ty + 1 < LEVEL_ROWS) {
-        Tile below = tile_at(e->tx, e->ty + 1);
-        if (below == T_WALL || below == T_LADDER || below == T_WATER) break;
-        e->ty++;
-    }
-}
-
-static void enemy_step(Enemy *e) {
-    int ptx = (int)((px + TILE * 0.5f) / TILE);
-    int pty = (int)((py + TILE * 0.5f) / TILE);
-    int dx = (ptx > e->tx) ? 1 : (ptx < e->tx) ? -1 : 0;
-    int dy = (pty > e->ty) ? 1 : (pty < e->ty) ? -1 : 0;
-    Tile htile = tile_at(e->tx + dx, e->ty);
-    if (dx && !solid(e->tx + dx, e->ty) && htile != T_WATER) {
-        e->tx += dx;
-    } else if (dy && tile_at(e->tx, e->ty) == T_LADDER && !solid(e->tx, e->ty + dy)) {
-        e->ty += dy;
-    }
-    enemy_gravity(e);
-}
-
+// ── update inamici ────────────────────────────────────────────────────────────
+// Sursa: ENEMY2_TICK (006552), ENEMY3_TICK (007462), LEVEL_END_CHECK (001636)
 static void update_enemies(float dt) {
-    if (gstate != GS_PLAYING) return;
-    int ptx = (int)((px + TILE * 0.5f) / TILE);
-    int pty = (int)((py + TILE * 0.5f) / TILE);
+    if (gv.state != GS_PLAYING) return;
+    int ptx, pty;
+    player_center_tile(player.px, player.py, &ptx, &pty);
+
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!enemies[i].active) continue;
-        enemies[i].anim_t += dt;
-        enemies[i].cd -= dt;
-        if (enemies[i].cd <= 0) {
-            enemies[i].cd = ENEMY_CD;
-            enemy_step(&enemies[i]);
+        enemy_anim_t[i] += dt;
+        enemy_cd[i]     -= dt;
+        if (enemy_cd[i] <= 0) {
+            enemy_cd[i] = ENEMY_TICK_INTERVAL;
+            enemy_step(&enemies[i], ptx, pty);  // greedy chase din ASM
         }
-        if (enemies[i].tx == ptx && enemies[i].ty == pty) {
-            lives--;
-            gstate = (lives <= 0) ? GS_GAME_OVER : GS_DEAD;
-            state_timer = 1.5f;
+        // LEVEL_END_CHECK (001636): player_tile == enemy_tile → moarte
+        if (enemy_hits_player(&enemies[i], ptx, pty)) {
+            gv.lives--;
+            player.dead  = true;
+            gv.state     = (gv.lives <= 0) ? GS_GAME_OVER : GS_DEAD;
+            gv.state_timer = 1.5f;
             return;
         }
     }
 }
 
-// ---- state machine ----
+// ── state machine joc ─────────────────────────────────────────────────────────
+// Sursa: GAME_TICK (001602) → PLAYER_STATE_CHECK + ENEMY*_TICK + LEVEL_END_CHECK
 static void update(float dt, Input in) {
-    if (gstate == GS_PLAYING) {
+    if (gv.state == GS_PLAYING) {
         update_player(dt, in);
         update_enemies(dt);
         return;
     }
-    if (gstate == GS_DEAD || gstate == GS_LEVEL_WIN) {
-        state_timer -= dt;
-        if (state_timer <= 0) {
-            if (gstate == GS_LEVEL_WIN) {
-                cur_level++;
-                load_level(cur_level);
-            } else {
-                int sv_score = score, sv_lives = lives;
-                load_level(cur_level);
-                score = sv_score; lives = sv_lives;
-            }
-            gstate = GS_PLAYING;
+    if (gv.state == GS_DEAD || gv.state == GS_LEVEL_WIN) {
+        gv.state_timer -= dt;
+        if (gv.state_timer <= 0) {
+            int sv_score = gv.score, sv_lives = gv.lives;
+            if (gv.state == GS_LEVEL_WIN) gv.level++;
+            load_level(gv.level);
+            gv.score  = sv_score;
+            gv.lives  = sv_lives;
+            gv.state  = GS_PLAYING;
         }
         return;
     }
+    // GS_GAME_OVER / GS_ALL_WIN: SPACE/ENTER restartează
     if (in.action) {
-        score = 0; lives = 9; cur_level = 0;
+        gv.score = 0; gv.lives = 9; gv.level = 0;
         load_level(0);
-        gstate = GS_PLAYING;
+        gv.state = GS_PLAYING;
     }
 }
 
-// ---- draw ----
+// ── render ────────────────────────────────────────────────────────────────────
+// Sursa: LEVEL_RENDER (004776), SPRITE_DRAW (014030), HUD_RENDER (003652)
 static void draw_scene(void) {
     BeginTextureMode(target);
-    ClearBackground(C_BG);
+    ClearBackground(C_BLACK);
 
-    // Level tiles — use raw_map (original tile indices) for pixel-accurate rendering.
-    // Tile 0 (air) = skip.
-    // Tile 2 (exit) = invisible in original; draw a subtle marker.
-    for (int r = 0; r < LEVEL_ROWS; r++)
-        for (int c = 0; c < COLS; c++) {
-            uint8_t idx = raw_map[r][c];
-            if (idx == 0) continue;  // air: nothing
-            if (idx == 2) {          // exit: original is invisible; draw faint white border
-                DrawRectangleLines(c * TILE, r * TILE, TILE, TILE,
-                                   (Color){255,255,255,60});
+    // Tile-uri hartă — LEVEL_RENDER (004776):
+    // pentru fiecare tile non-zero în raw_tile → desenează TILE_GFX[raw_tile[r][c]]
+    for (int r = 0; r < MAP_ROWS; r++)
+        for (int c = 0; c < MAP_COLS; c++) {
+            uint8_t idx = raw_tile[r][c];
+            if (idx == 0) continue;  // TIDX_AIR: nimic
+            if (idx == TIDX_EXIT) {  // exit = invizibil în original; marcaj subtil
+                DrawRectangleLines(c*TILE_W, r*TILE_H, TILE_W, TILE_H,
+                                   (Color){255,255,255,50});
                 continue;
             }
-            draw_slot(TILE_SLOT_MAP + idx, c * TILE, r * TILE);
+            draw_slot(TS_MAP + idx, c * TILE_W, r * TILE_H);
         }
 
-    // Enemies
+    // Inamici (SPRITE_DRAW: 2 tile-uri consecutive ca sprite 16×8)
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (!enemies[i].active) continue;
-        int slot = enemy_walk_slot(enemies[i].anim_t);
-        draw_slot(slot, enemies[i].tx * TILE, enemies[i].ty * TILE);
+        int frame = (int)(enemy_anim_t[i] / ENEMY_ANIM_INTERVAL) % ENEMY_ANIM_HORIZ_FRAMES;
+        int slot  = TS_ENW + (frame % 4);
+        draw_slot(slot, enemies[i].col * TILE_W, enemies[i].row * TILE_H);
     }
 
-    // Player (blinks during death state)
-    bool show = (gstate == GS_PLAYING || gstate == GS_LEVEL_WIN || gstate == GS_ALL_WIN)
-             || (gstate == GS_DEAD && (int)(state_timer * 8) % 2 == 0);
+    // Player (blink în GS_DEAD)
+    bool show = (gv.state == GS_PLAYING || gv.state == GS_LEVEL_WIN || gv.state == GS_ALL_WIN)
+             || (gv.state == GS_DEAD && (int)(gv.state_timer * 8) % 2 == 0);
     if (show) {
         int slot;
-        if (player_dead)       slot = TILE_SLOT_PLD;
-        else if (player_climbing) slot = TILE_SLOT_PLC;
-        else                   slot = player_walk_slot();
-        draw_slot(slot, (int)px, (int)py);
+        if (player.dead)        slot = TS_PLD;
+        else if (player.on_ladder) slot = TS_PLC;
+        else                    slot = TS_PLW + (player_anim_frame % PLAYER_WALK_FRAMES);
+        draw_slot(slot, (int)player.px, (int)player.py);
     }
 
-    // HUD bar (bottom 16 px)
-    int hy = LEVEL_ROWS * TILE + 2;
+    // HUD — HUD_RENDER (003652): scor + nivel + vieți
     char hud[64];
     snprintf(hud, sizeof hud, "%s:%d  %s:%d  %s:%d",
-             T(STR_SCORE), score, T(STR_LEVEL), cur_level + 1, T(STR_LIVES), lives);
-    DrawText(hud, 2, hy, 6, C_WHITE);
+             T(STR_SCORE), gv.score,
+             T(STR_LEVEL), gv.level + 1,
+             T(STR_LIVES), gv.lives);
+    DrawText(hud, 2, MAP_ROWS * TILE_H + 2, 6, C_WHITE);
 
-    // Overlay messages
-    int mx = VW / 2, my = LEVEL_ROWS * TILE / 2;
-    if (gstate == GS_LEVEL_WIN)
-        DrawText(T(STR_LEVEL_CLEAR), mx - 38, my - 4, 8, C_WHITE);
-    if (gstate == GS_GAME_OVER) {
-        DrawText(T(STR_GAME_OVER), mx - 36, my - 8, 8, C_WHITE);
-        DrawText("SPACE / ENTER",   mx - 38, my + 4,  6, C_WHITE);
+    // Overlay mesaje
+    int mx = VW/2, my = MAP_ROWS*TILE_H/2;
+    if (gv.state == GS_LEVEL_WIN)
+        DrawText(T(STR_LEVEL_CLEAR), mx-38, my-4, 8, C_WHITE);
+    if (gv.state == GS_GAME_OVER) {
+        DrawText(T(STR_GAME_OVER), mx-36, my-8, 8, C_WHITE);
+        DrawText("SPACE / ENTER",  mx-38, my+4,  6, C_WHITE);
     }
-    if (gstate == GS_ALL_WIN) {
-        DrawText("FELICITARI!", mx - 30, my - 8, 8, C_YELLOW);
-        DrawText("SPACE / ENTER", mx - 38, my + 4, 6, C_WHITE);
+    if (gv.state == GS_ALL_WIN) {
+        DrawText("FELICITARI!", mx-30, my-8, 8, C_YELLOW);
+        DrawText("SPACE / ENTER", mx-38, my+4, 6, C_WHITE);
     }
 
     EndTextureMode();
 
-    // Upscale to window (nearest-neighbour, keep aspect)
+    // Upscale nearest-neighbour la fereastra curentă
     BeginDrawing();
     ClearBackground(BLACK);
-    float sx = (float)GetScreenWidth() / VW;
-    float sy = (float)GetScreenHeight() / VH;
+    float sx = (float)GetScreenWidth()  / (float)VW;
+    float sy = (float)GetScreenHeight() / (float)VH;
     float s  = sx < sy ? sx : sy;
-    Rectangle src = {0, 0, (float)VW, -(float)VH};
-    Rectangle dst = {(GetScreenWidth()  - VW * s) * 0.5f,
-                     (GetScreenHeight() - VH * s) * 0.5f, VW * s, VH * s};
+    Rectangle src = {0, 0, (float)VW, -(float)VH};  // flip Y (OpenGL vs raylib)
+    Rectangle dst = {
+        (GetScreenWidth()  - (float)VW * s) * 0.5f,
+        (GetScreenHeight() - (float)VH * s) * 0.5f,
+        (float)VW * s, (float)VH * s
+    };
     DrawTexturePro(target.texture, src, dst, (Vector2){0,0}, 0, WHITE);
     EndDrawing();
 }
 
-// ---- public API ----
+// ── API public ───────────────────────────────────────────────────────────────
 void game_init(void) {
     target = LoadRenderTexture(VW, VH);
     SetTextureFilter(target.texture, TEXTURE_FILTER_POINT);
     build_tileset();
-    score = 0; lives = 9; cur_level = 0;
-    gstate = GS_PLAYING;
+    // GAME_INIT (004000): LIVES=0o333→9, SCORE=0, nivel=0
+    gv.score = VAR_SCORE_INIT;
+    gv.lives = 9;
+    gv.level = 0;
+    gv.state = GS_PLAYING;
     load_level(0);
 }
 
 void game_frame(float dt) {
-    if (dt > 0.1f) dt = 0.1f;
+    if (dt > 0.1f) dt = 0.1f;   // cap dt (fereastră în background, etc.)
     update(dt, read_input());
     draw_scene();
 }
