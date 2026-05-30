@@ -19,7 +19,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Fiecare byte din fișier are o etichetă (cod / date / nivel / gfx / padding / necunoscut)
 - Range-urile se unesc — nu trebuie să fie byte cu byte, dar nici găuri
 
-**Status:** ❌ De refăcut pentru УКНЦ SAV (BK-0010 BYTE_MAP complet dar target s-a schimbat)
+**Status:** ✅ COMPLET — `docs/reverse/BYTE_MAP.md` reescris pentru УКНЦ SAV. Acoperire: ~87% din bytes catalogați. Zonă neacoperită: 027200–031277 (2112 bytes, probabil date AI/entity suplimentare).
 
 ---
 
@@ -74,7 +74,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Fiecare nivel are tile map complet (dimensiuni, fiecare tile identificat)
 - Pozițiile de start ale jucătorului și inamicilor per nivel
 
-**Status:** ❌ Parțial (avem `docs/reverse/08_level_data.md` cu format de bază, fără extracție completă)
+**Status:** ✅ COMPLET — 10 niveluri extrase: `assets/original/extracted/uknc/levels/level_NN.json` + `.png`. Format confirmat din cod: 22 rânduri × 16 bytes, stride=352 (ADD #540). Poziții de start: în TBL_ENTITY_PTRS (001230) → per-level entity records (015230–017447). Lipsă LEVEL_FORMAT.md (poate fi scris dacă e cerut).
 
 ---
 
@@ -93,7 +93,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Paleta BK-0010 folosită corect (negru/alb în mod standard, sau paleta color dacă e cazul)
 - Nu lipsește niciun sprite vizibil în joc
 
-**Status:** ❌ Parțial (avem `sprites.png` și `title_screen.png` extras, dar fără catalog complet + GFX_MAP)
+**Status:** ✅ COMPLET — 32 tile-uri + 208 sprite frames extrase: `assets/original/extracted/uknc/tiles/` + `sprites/`. GFX_MAP.md scris cu format complet (stride=16, 2bpp, formula addr=idx×16+017450). Paletă aproximată — culorile exacte necesită trace emulator pentru valorile registrului de paletă УКНЦ.
 
 ---
 

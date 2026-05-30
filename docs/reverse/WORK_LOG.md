@@ -112,3 +112,18 @@ La fiecare crash, citește în ordine:
 2. `docs/reverse/WORK_LOG.md` — ultima intrare spune unde s-a oprit
 3. `git log --oneline -5` — confirmă ce s-a commis
 4. Statusurile din tabelul din USER_GOALS.md — ce e ❌ = de făcut
+
+## 2026-05-30 (sesiunea extracție grafică УКНЦ)
+
+`[2026-05-30 UTC] DONE` — Obiectiv 5 + 1 + 4: extracție completă tile-uri, sprite-uri, niveluri  
+- **Descoperire critică**: tile stride = 16 bytes (nu 8 cum era etichetat) — confirmat din cod: 4× ASL R2 (=×16) + ADD #17450  
+- **Tile format**: 8 pixel-plane + 8 colour-plane, 8×8px 2bpp, (pixel_bit,colour_bit) → 4 culori  
+- **Level stride**: 352 bytes = 22×16, confirmat din LEVEL_COMPLETE: `ADD #540, @#CUR_MAP_ADDR`  
+- Corectate 9 adrese de nivel greșite în uknc_klad_1987.asm (aveau stride ~368 în loc de 352)  
+- Corectate labels tile-uri individuale în asm (stride 8→16)  
+- Artefacte: `tiles/` (32 PNG + tileset.png), `sprites/` (208 PNG + spritesheet.png), `levels/` (10 JSON + 10 PNG)  
+- Docs: `GFX_MAP.md` + `BYTE_MAP.md` (УКНЦ, ~87% coverage)  
+- Script: `tools/extract_uknc_gfx.py`  
+- Commit: `6db6aaf`  
+- **Next:** Obiectiv 3 (MECHANICS.md) sau Obiectiv 6 (ANIMATIONS.md)
+
