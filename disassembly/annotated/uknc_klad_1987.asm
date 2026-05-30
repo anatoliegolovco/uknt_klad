@@ -12,6 +12,166 @@
 ; Hardware: KM1801VM2 PDP-11, УКНЦ video port @#176640, kbd @#040546.
 ; =============================================================================
 
+; =============================================================================
+; SYMBOL TABLE — toate adresele semnificative cu denumiri sintetice
+; Format: NUME = adresă-octală   ; tip: scurtă descriere
+;
+; CONVENȚIE DENUMIRI:
+;   FN_*     = funcție (rutină de cod)
+;   DAT_*    = bloc de date statice
+;   VAR_*    = variabilă globală (RAM, modificată la runtime)
+;   REG_*    = registru hardware I/O
+;   TBL_*    = tabelă (lookup table, pointer table)
+;   BUF_*    = buffer (zonă RAM de lucru)
+; =============================================================================
+
+; --- Funcții principale (game logic) ---
+FN_RESTART              = 001000   ; cold restart trampoline → FN_GAME_INIT
+FN_GAME_OVER_SOFT       = 001004   ; reinit parțial după game over
+FN_PLAYER_DEATH         = 001016   ; moarte jucător → FN_LEVEL_RESET
+FN_BONUS_LIFE           = 001024   ; acordă viață bonus
+FN_LEVEL_COMPLETE       = 001034   ; nivel terminat, avansează pointer
+FN_KEY_DIFFICULTY       = 001142   ; taste 1-4 → setează VAR_SPEED
+FN_DELAY_SPIN           = 001306   ; busy-wait (burn cycles)
+FN_GAME_LOOP            = 001344   ; entry per-frame → FN_KBD_GAME_POLL
+FN_GAME_LOOP_MENU       = 001354   ; poll keyboard meniu
+FN_ACT_DISPATCH         = 001436   ; dispatch acțiune tastatură
+FN_GAME_TICK            = 001602   ; update per-frame: inamici + coliziune
+
+FN_TITLE_SEQ            = 002072   ; title screen: randare + text + wait
+FN_TITLE_WAIT           = 002264   ; blocat pe Enter (EMT 006)
+FN_DIFF_SELECT          = 003234   ; selectare dificultate 1-4
+FN_GAME_OVER_WAIT       = 003274   ; afișaj game over, wait Enter
+FN_LIVES_DISPLAY        = 003372   ; redesenează contorul de vieți
+FN_GAME_LEVEL_LOOP      = 003576   ; outer render loop: tile + sunet
+FN_HUD_RENDER           = 003652   ; scor + vieți pe ecran
+FN_BONUS_LIFE_ADD       = 003746   ; +1 viață (la colectare token)
+FN_SCORE_ADD            = 003764   ; +10 scor (la colectare aur)
+
+FN_GAME_INIT            = 004000   ; cold start: LIVES=333, SCORE=0
+FN_NUM_RENDER           = 004210   ; număr zecimal → ecran
+FN_DEATH_TRIGGER        = 004640   ; setează flag moarte pe tile
+FN_KBD_GAME_POLL        = 004674   ; poll keyboard gameplay
+
+FN_LEVEL_RENDER         = 004776   ; randează tile map 22×16 din R4
+FN_LEVEL_RENDER_R4      = 005002   ; idem, apelat din FN_GAME_LEVEL_LOOP
+FN_TILE_BLIT_FWD        = 005106   ; blit 8×8 tile → ecran (forward)
+FN_HW_INIT              = 005754   ; init hardware УКНЦ + JMP TITLE_SEQ
+FN_PLAYER_SPRITE_INIT   = 006054   ; HUD + desenează sprite player
+
+FN_ENTITY_HANDLER       = 006204   ; motor sunet: toggle @REG_SYSREG bit7
+FN_ENTITY_STATE_INIT    = 006444   ; resetează contoare animație
+FN_WATER_COLLISION      = 006462   ; detectează tile letal (stare=15)
+FN_ENEMY2_TICK          = 006552   ; state machine inamic 2
+FN_ENEMY2_MOVE_UP       = 007136   ; mișcare sus inamic 2
+FN_SPRITE_ANIM_C        = 007202   ; throttle 8-frame inamic 2 (dreapta)
+FN_SPRITE_ANIM_D        = 007242   ; throttle 5-frame inamic 2 (jos)
+FN_ENTITY1_RESTORE      = 007306   ; erase + restore sprite inamic 1
+FN_ENEMY1_TICK          = 007376   ; throttle animație inamic 1
+FN_ANIM_THROTTLE_PLAYER = 007432   ; throttle animație player
+FN_ENEMY3_TICK          = 007462   ; state machine inamic 3
+FN_ENEMY3_MOVE_UP       = 010036   ; mișcare sus inamic 3
+FN_SPRITE_ANIM_A        = 010102   ; throttle 8-frame inamic 3 (dreapta)
+FN_SPRITE_ANIM_B        = 010142   ; throttle 5-frame inamic 3 (jos)
+FN_LEVEL_RESET          = 010206   ; reset complet nivel la moarte
+
+FN_VSYNC_WAIT           = 012326   ; wait vsync [УКНЦ: apelează FN_VSYNC_LOOP]
+FN_LEVEL_RENDER_FULL    = 012442   ; randează BUF_TILE_WORK → ecran
+FN_TILE_BLIT_SUB        = 012530   ; blit 8×8 tile (varianta 2)
+FN_PLAYER_STATE_CHECK   = 012570   ; state machine tile player
+FN_ENEMY_RESPAWN        = 012716   ; setează inamic activ + flaguri
+FN_PLAYER_MOVE_STEP     = 012740   ; pas mișcare player cu coliziune
+
+FN_COLLISION_MAP_BUILD  = 013524   ; unpack level data + flaguri coliziune
+FN_SPRITE_DRAW          = 014030   ; desenează sprite 2-tile din entity record
+FN_TILE_BLIT_REV        = 014302   ; blit tile indexat din R2
+
+; --- Funcții I/O УКНЦ (040060–042000) ---
+FN_DISP_SCANLINE_WRITE  = 040060   ; scrie scanline word la @REG_VID_PIXEL
+FN_KBD_READ             = 040660   ; citește codul tastei din @REG_KBD_STATUS
+FN_KBD_POLL             = 041020   ; wrapper: KBD_READ + test bit ready
+FN_DISP_COL_BLIT        = 041040   ; blit coloană tile via port video
+FN_EMT_TEXT             = 041100   ; handler EMT 020 pentru text УКНЦ
+FN_DISP_SETUP           = 041140   ; inițializare display
+FN_DISP_MODE_CHECK      = 041200   ; verificare mod culoare
+FN_VSYNC_LOOP           = 041400   ; vsync software (~40×64 iterații)
+FN_DISP_PIXEL_PORT      = 041460   ; scrie la @REG_VID_COLOR (176642)
+FN_DISP_LINE_ADV        = 041500   ; avansează linia display
+FN_DISP_ROW_WRITE       = 041600   ; scrie rând la @REG_VID_ROW (176676)
+FN_DISP_SYNC_BIT        = 041620   ; toggle bit sync @REG_SYSREG
+FN_DISP_WRITE_COL       = 041740   ; entry principal scriere coloană
+
+; --- Tabele de date (statice, în imaginea SAV) ---
+TBL_LEVEL_PTRS          = 001230   ; 10 pointeri la hărțile de nivel (2 bytes each)
+TBL_KEY_CODES           = 001732   ; coduri taste meniu УКНЦ (12 intrări)
+TBL_SOUND_A             = 006134   ; secvență note set A (3 note × 2 words)
+TBL_SOUND_B             = 006156   ; secvență note set B (4 note × 2 words)
+TBL_KEY_ACTIONS         = 012342   ; coduri acțiuni per bit/taste (12 intrări)
+TBL_ANIM_FRAMES         = 020270   ; tabela sprite animation (entity × dir × frame)
+TBL_LEVEL_MAP_1         = 022100   ; nivel 1: 22 rânduri × 16 bytes (2 tiles/byte)
+TBL_LEVEL_MAP_2         = 022660   ; nivel 2
+TBL_LEVEL_MAP_3         = 023240   ; nivel 3
+TBL_LEVEL_MAP_4         = 024000   ; nivel 4
+TBL_LEVEL_MAP_5         = 024560   ; nivel 5
+TBL_LEVEL_MAP_6         = 025140   ; nivel 6
+TBL_LEVEL_MAP_7         = 025720   ; nivel 7
+TBL_LEVEL_MAP_8         = 026300   ; nivel 8
+TBL_LEVEL_MAP_9         = 026660   ; nivel 9
+TBL_LEVEL_MAP_10        = 027240   ; nivel 10
+DAT_TILE_PIXELS         = 017450   ; 16 tiles × 16 bytes pixel data (8×8px @ 1bpp)
+DAT_TILE_0_BG           = 017450   ; tile 0: background (gol)
+DAT_TILE_1_WALL         = 017460   ; tile 1: perete
+DAT_TILE_2_LADDER       = 017470   ; tile 2: scară
+DAT_TILE_3_WATER        = 017500   ; tile 3: apă (letal)
+DAT_TILE_4_GOLD         = 017510   ; tile 4: aur (colectabil)
+DAT_TILE_5_LIFE         = 017520   ; tile 5: viață bonus
+DAT_TILE_6_EXIT         = 017530   ; tile 6: ieșire nivel
+DAT_TEXT_STRINGS        = 002330   ; șiruri text titlu + meniu (KOI8-R)
+
+; --- Variabile globale (RAM, modificate la runtime) ---
+VAR_CUR_MAP_ADDR        = 001300   ; adresa start hartă nivel curent
+VAR_CUR_LEVEL_PTR       = 001302   ; pointer curent în TBL_LEVEL_PTRS
+VAR_LEVEL_TBL_PTR       = 001304   ; entry curent în tabela niveluri
+VAR_SPEED               = 001312   ; viteza jocului (400/1000/2000/4000)
+VAR_SOUND_TIMING        = 005146   ; timing inter-notă (calculat de FN_ENTITY_HANDLER)
+VAR_PLAYER_STATE        = 014420   ; cuvânt stare player
+VAR_PLAYER_TILE_PTR     = 014422   ; pointer tile player în BUF_TILE_WORK
+VAR_PLAYER_X            = 014424   ; coloana screen player (bytes)
+VAR_ENEMY1_STATE        = 014430   ; stare inamic 1
+VAR_ENEMY1_TILE_PTR     = 014432   ; pointer tile inamic 1
+VAR_ENEMY1_Y            = 014436   ; offset Y ecran inamic 1
+VAR_ENEMY2_STATE        = 014440   ; stare inamic 2
+VAR_ENEMY2_TILE_PTR     = 014442   ; pointer tile inamic 2
+VAR_ENEMY2_Y            = 014446   ; offset Y ecran inamic 2
+VAR_ENEMY3_TICK_CTR     = 017360   ; contor throttle inamic 3
+VAR_ENEMY3_ANIM_A       = 017362   ; contor animație 8-frame inamic 3
+VAR_ENEMY3_ANIM_B       = 017364   ; contor animație 5-frame inamic 3
+VAR_ENEMY2_ANIM_A       = 017366   ; contor animație 8-frame inamic 2
+VAR_ENEMY2_ANIM_B       = 017370   ; contor animație 5-frame inamic 2
+VAR_ENEMY1_TICK_CTR     = 017372   ; contor throttle inamic 1
+VAR_PLAYER_ANIM_CTR     = 017374   ; contor throttle animație player
+VAR_ENEMY2_TICK_CTR     = 017376   ; contor throttle inamic 2
+VAR_GAME_STATE          = 017430   ; stare globală joc (init=010404)
+VAR_LIVES               = 017436   ; vieți rămase (init=0o333)
+VAR_SCORE               = 017440   ; scor acumulat
+
+; --- Buffere RAM (workspace) ---
+BUF_TILE_WORK           = 014550   ; tile buffer de lucru: 22×32 cuvinte cu flaguri coliziune
+BUF_SPRITE_PLAYER       = 021640   ; workspace sprite player
+BUF_SPRITE_ENEMY        = 021760   ; workspace sprite inamic
+
+; --- Registre hardware I/O ---
+REG_KBD_DATA            = 177662   ; date tastatură (BK-0010 meniu — nefolosit în УКНЦ)
+REG_SCROLL              = 177664   ; scroll register ecran
+REG_KBD_STATUS          = 040546   ; status tastatură УКНЦ (bit7=gata, bits6-0=cod tastă)
+REG_KBD_CTRL            = 040712   ; controller tastatură УКНЦ (FN_KBD_READ)
+REG_VID_PIXEL           = 176640   ; port pixel video УКНЦ (word write = scanline)
+REG_VID_COLOR           = 176642   ; port culoare/paletă УКНЦ
+REG_VID_ROW             = 176676   ; registru rând/linie УКНЦ
+REG_SYSREG              = 177716   ; system register (bit6=vsync gate, bit7=speaker)
+
+; =============================================================================
+
         .ORG    001000
 
 ; =============================================================================
