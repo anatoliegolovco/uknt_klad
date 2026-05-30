@@ -16,7 +16,7 @@ SRC     := main.c game.c
 OUT     := ../build
 
 # ---------- native ----------
-$(OUT)/klad: $(SRC) game.h
+$(OUT)/klad: $(SRC) game.h i18n.h levels_data.h
 	@mkdir -p $(OUT)
 	$(CC) $(CSTD) $(WARN) $(SRC) -o $@ $(shell pkg-config --cflags --libs raylib 2>/dev/null || echo -lraylib -lGL -lm -lpthread -ldl -lrt -lX11)
 

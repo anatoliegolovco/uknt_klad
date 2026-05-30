@@ -6,7 +6,8 @@
 #include <stdbool.h>
 
 // Fixed low-res render target (echoes the BK framebuffer feel). 8x8 tiles.
-enum { VW = 256, VH = 192, TILE = 8, COLS = VW / TILE, ROWS = VH / TILE };
+enum { VW = 256, VH = 192, TILE = 8, COLS = VW / TILE, ROWS = VH / TILE,
+       LEVEL_ROWS = 22 };   // original УКНЦ level height; LEVEL_COLS = COLS
 
 // Abstract input actions — keyboard and touch both map onto these.
 typedef struct {
