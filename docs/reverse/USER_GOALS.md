@@ -1,14 +1,17 @@
-# Ce vrea userul — obiective reverse-engineering Crocodile КЛАД
+# Ce vrea userul — obiective reverse-engineering КЛАД (УКНЦ 1987 Баранов)
 
 **Acest fișier este sursa de adevăr.** Dacă ești tentat să spui că "totul e gata și totul e bine", revino AICI și verifică fiecare punct față de ce există în repo.
 
-Versiunea țintă: **Crocodile КЛАД** (`assets/original/ex_klad/KLAD.BIN`)
+**⚠ TARGET ACTUAL: `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (УКНЦ МС-0511)**  
+**Pivot de la:** `assets/original/ex_klad/KLAD.BIN` (BK-0010 Crocodile) — acel work rămâne ca referință, cod 83% identic.
+
+Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`)
 
 ---
 
 ## Obiectiv 1 — Hartă completă a octeților (byte map)
 
-**Ce se vrea:** Un fișier care documentează FIECARE range de bytes din `KLAD.BIN` — ce e cod, ce e date, ce e nivel, ce e grafică, ce e necunoscut.
+**Ce se vrea:** Un fișier care documentează FIECARE range de bytes din `KLAD_1987_Baranov.SAV` — ce e cod, ce e date, ce e nivel, ce e grafică, ce e necunoscut.
 
 **Fișier de output:** `docs/reverse/BYTE_MAP.md`
 
@@ -16,7 +19,7 @@ Versiunea țintă: **Crocodile КЛАД** (`assets/original/ex_klad/KLAD.BIN`)
 - Fiecare byte din fișier are o etichetă (cod / date / nivel / gfx / padding / necunoscut)
 - Range-urile se unesc — nu trebuie să fie byte cu byte, dar nici găuri
 
-**Status:** ✅ COMPLET — `docs/reverse/BYTE_MAP.md` creat cu toate range-urile din KLAD.BIN + RAM-ul decomprimat
+**Status:** ❌ De refăcut pentru УКНЦ SAV (BK-0010 BYTE_MAP complet dar target s-a schimbat)
 
 ---
 
@@ -33,7 +36,7 @@ Versiunea țintă: **Crocodile КЛАД** (`assets/original/ex_klad/KLAD.BIN`)
 - Fiecare rutină are minim un comentariu de o linie care explică CE face
 - Rutinele necunoscute sunt marcate `; UNKNOWN` cu ce știm despre ele (ce adrese accesează)
 
-**Status:** ✅ COMPLET — 35/35 rutine adnotate în `disassembly/annotated/crocodile_klad.asm` + index complet în `docs/reverse/ROUTINES.md`
+**Status:** 🔄 PARȚIAL — BK-0010 complet (35/35 rutine în `crocodile_klad.asm`). УКНЦ: `uknc_klad_1987.asm` creat cu diferențele I/O documentate; structura identică e cross-referențiată. Rutinele УКНЦ I/O (040060-042000) adnotate la nivel de bloc, nu instrucțiune cu instrucțiune.
 
 ---
 

@@ -38,7 +38,7 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 
 `[2026-05-30 14:30 UTC] IN_PROGRESS` — Obiectiv 2: assembler adnotat — prima trecere (25 rutine)
 
-`[2026-05-30 17:00 UTC] DONE` — Obiectiv 2: **COMPLET** — 35/35 rutine adnotate
+`[2026-05-30 17:00 UTC] DONE` — Obiectiv 2 BK-0010: **COMPLET** — 35/35 rutine adnotate
 - `disassembly/annotated/crocodile_klad.asm` — 1393 linii, toate rutinele acoperite
 - `docs/reverse/ROUTINES.md` — index complet 35 rutine, toate variabilele globale, tile values, key table
 - Descoperiri noi: ENTITY_HANDLER (006204) = sound engine (toggle @#177716 bit 7 = speaker)
@@ -82,6 +82,17 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 - Parser RT-11 custom (Python) cu status 0x8400/0x0400 pentru permanent files
 - Brute-force RAD50 search în 134 imagini de dischetă
 - Confirmat din tis.kz (arhiva Novosibirsk = soft educațional, fără jocuri КЛАД)
+
+## 2026-05-30 (pivot УКНЦ)
+
+`[2026-05-30 18:00 UTC] DONE` — Pivot target: BK-0010 → УКНЦ МС-0511
+- Găsite ambele versiuni УКНЦ: KLAD_1987_Baranov.SAV + MKLAD_1991_Crocodile.GAM
+- Analiză binară: УКНЦ 1987 e 83% identic cu BK-0010 (7080/8448 cuvinte)
+- BK-0010 Crocodile = repack LZ al aceluiași cod УКНЦ 1987
+- Diferențele: keyboard (@#040546 nu @#177714), video (port @#176640 nu FB direct), vsync (041400 nu EMT 016)
+- Creat `disassembly/annotated/_uknc1987_raw.asm` (6505 linii) + `uknc_klad_1987.asm`
+- Actualizat CLAUDE.md + USER_GOALS.md cu noul target
+- **Next:** Obiectiv 2 УКНЦ (completare adnotare rutine I/O УКНЦ pas cu pas)
 
 ## Template pentru intrări viitoare
 

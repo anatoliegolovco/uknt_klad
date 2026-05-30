@@ -107,21 +107,28 @@ Three source files only:
 ## Key decisions (see `design/decisions.md` for full ADRs)
 
 - **D1**: Custom `tools/pdp11dis.py` instead of radare2 (Ubuntu radare2 has no PDP-11 plugin).
-- **D3**: Study target is BK-0010 (linear framebuffer), not УКНЦ (planar video). Gameplay is identical.
+- **D3**: Study target pivoted la УКНЦ (МС-0511) — versiunea originală Баранов 1987. BK-0010 Crocodile era repacked din același cod (83% identic). УКНЦ folosește video planar prin porturi @#176640/176642.
 - **D4**: C23 + raylib → WebAssembly. Single codebase, native dev + web ship.
 - **D5**: Romanian UI strings by default via `i18n.h`.
 - **D6/D7**: Original blobs and disassembly ARE tracked in the repo (personal preservation archive). `.gitignore` excludes only build artifacts.
 
-## Ce vrea userul — obiective obligatorii (Crocodile КЛАД)
+## Ce vrea userul — obiective obligatorii (УКНЦ КЛАД 1987 Баранов)
+
+**⚠ TARGET ACTUAL: `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (УКНЦ МС-0511)**  
+**NU** `KLAD.BIN` (BK-0010) — acela era reperul anterior, acum lucrăm cu originalul УКНЦ.
 
 **IMPORTANT:** Dacă ești tentat să spui că totul e gata și totul e bine, oprește-te și citești mai întâi `docs/reverse/USER_GOALS.md`. Acel fișier conține lista exactă de livrabile cu statusuri. Dacă vreun status e ❌, NU e gata.
 
+Context: BK-0010 Crocodile КЛАД era repacked din același cod (83% identic cu УКНЦ 1987).  
+Adnotat BK-0010 (bază): `disassembly/annotated/crocodile_klad.asm` (35 rutine complete)  
+Adnotat УКНЦ (target): `disassembly/annotated/uknc_klad_1987.asm`
+
 Cele 6 obiective (detalii + criterii în `docs/reverse/USER_GOALS.md`):
-1. **BYTE_MAP** — hartă completă a octeților din `KLAD.BIN` → `docs/reverse/BYTE_MAP.md`
-2. **Assembler adnotat** — cod extras + documentat → `disassembly/annotated/crocodile_klad.asm` + `docs/reverse/ROUTINES.md`
+1. **BYTE_MAP** — hartă completă a octeților din `KLAD_1987_Baranov.SAV` → `docs/reverse/BYTE_MAP.md`
+2. **Assembler adnotat** — cod + doc → `disassembly/annotated/uknc_klad_1987.asm` + `docs/reverse/ROUTINES.md`
 3. **Mecanica jocului** — exclusiv din cod assembler → `docs/reverse/MECHANICS.md`
-4. **Toate nivelurile** — extrase ca JSON + PNG → `assets/original/extracted/crocodile/levels/`
-5. **Sprites/texturi** — pixel fidelity, catalogate → `assets/original/extracted/crocodile/tiles/` + `docs/reverse/GFX_MAP.md`
+4. **Toate nivelurile** — extrase ca JSON + PNG → `assets/original/extracted/uknc/levels/`
+5. **Sprites/texturi** — pixel fidelity → `assets/original/extracted/uknc/tiles/` + `docs/reverse/GFX_MAP.md`
 6. **Animații** — frame-uri, timing, triggere → `docs/reverse/ANIMATIONS.md`
 
 Log de lucru (cu timestamp, pentru continuitate după crash): `docs/reverse/WORK_LOG.md`
