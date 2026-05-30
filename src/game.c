@@ -50,18 +50,18 @@ static const char TILE_ART[TI_COUNT][8][9] = {
     { // TI_WALL — tile 9/11: both planes = FC 3F A8 2A FC 3F FC 3F → white brick
         "WWWWWW..", "..WWWWWW", "W.W.W...", "..W.W.W.",
         "WWWWWW..", "..WWWWWW", "WWWWWW..", "WWWWWW.." },
-    { // TI_LADDER — tile 1: both planes = 3C 3C FF FF 3C 3C 3C 3C → white cross
-        "..WWWW..", "..WWWW..", "WWWWWWWW", "WWWWWWWW",
-        "..WWWW..", "..WWWW..", "..WWWW..", "..WWWW.." },
+    { // TI_LADDER — two vertical rails + rungs (looks like a ladder when tiled)
+        "W......W", "W......W", "WWWWWWWW", "W......W",
+        "W......W", "W......W", "WWWWWWWW", "W......W" },
     { // TI_WATER — tile 7: pixel = 00 00 FF FF CC CC 00 00, color = 0 → green band
         "........", "........", "GGGGGGGG", "GGGGGGGG",
         "GG..GG..", "GG..GG..", "........", "........" },
     { // TI_GOLD — tile 4: pixel = 0, color = FC 3F A8 2A FC 3F FC 3F → yellow brick
         "YYYYYY..", "..YYYYYY", "Y.Y.Y...", "..Y.Y.Y.",
         "YYYYYY..", "..YYYYYY", "YYYYYY..", "YYYYYY.." },
-    { // TI_EXIT — original tile 2 = all zeros (invisible); use same cross as ladder
-        "..WWWW..", "..WWWW..", "WWWWWWWW", "WWWWWWWW",
-        "..WWWW..", "..WWWW..", "..WWWW..", "..WWWW.." },
+    { // TI_EXIT — original = air (invisible); slight marker for reimplementation
+        "W......W", "W......W", "WWWWWWWW", "W..WW..W",
+        "W..WW..W", "WWWWWWWW", "W......W", "W......W" },
     { // TI_PLAYER — white body + green limbs (matches УКНЦ sprite palette)
         "..PP....", ".PPPP...", "..PP....", "..gg....",
         ".gggg...", ".g..g...", "..g.g...", "........" },
