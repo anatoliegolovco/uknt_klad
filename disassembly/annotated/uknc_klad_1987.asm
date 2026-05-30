@@ -5248,6 +5248,12 @@ LEVEL_MAPS:
 030764: 135673   BITB   @-(SP),@135673(R3)
 030770: 135673   BITB   @-(SP),@135673(R3)
 030774: 135673   BITB   @-(SP),@135673(R3)
+
+; --- DAT_INTRO_TILES (031000) ---
+; 12 × 16-byte sprite frames (2bpp 8×8, same format as DAT_TILE_BANK).
+; Referenced from intro display code at 003206 (word ptr 031054).
+; Content: horizontal border/rope tiles + background pattern for title screen.
+; Extracted → assets/original/extracted/uknc/intro_tiles/
 031000: 000273   .WORD  273
 031002: 000000   HALT
 031004: 000000   HALT

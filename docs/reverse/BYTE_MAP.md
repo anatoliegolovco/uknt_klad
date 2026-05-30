@@ -115,26 +115,28 @@ All addresses are octal. File offset = `(address_decimal - 512) + 512 = address_
 | 020450–021777 | 876 | Sound frequency tables, entity throttle values, entity type lookup |
 | 022000–022077 | 64 | Keyboard scan table (ASCII codes → direction mapping) |
 
-### 022100–027177 — LEVEL TILE MAPS (10 levels)
+### 022100–030777 — LEVEL TILE MAPS (10 levels)
 | Address | Size | Content |
 |---------|------|---------|
 | 022100–022637 | 352 | Level 1 tile map (22 rows × 16 bytes) |
-| 022640–023177 | 352 | Level 2 |
-| 023200–023737 | 352 | Level 3 |
-| 023740–024277 | 352 | Level 4 |
-| 024300–024637 | 352 | Level 5 |
-| 024640–025177 | 352 | Level 6 |
-| 025200–025737 | 352 | Level 7 |
-| 025740–026277 | 352 | Level 8 |
-| 026300–026637 | 352 | Level 9 |
-| 026640–027177 | 352 | Level 10 |
+| 022640–023377 | 352 | Level 2 |
+| 023400–024137 | 352 | Level 3 |
+| 024140–024677 | 352 | Level 4 |
+| 024700–025437 | 352 | Level 5 |
+| 025440–026177 | 352 | Level 6 |
+| 026200–026737 | 352 | Level 7 |
+| 026740–027477 | 352 | Level 8 |
+| 027500–030237 | 352 | Level 9 |
+| 030240–030777 | 352 | Level 10 |
 
 Level format: 22 rows × 16 bytes. Each byte encodes 2 tiles: low nibble = left tile, high nibble = right tile. Tile indices 0–15 reference the tile bank at 017450. Stride between levels = 352 bytes (0o540), confirmed from code at 001050: `ADD #540, @#CUR_MAP_ADDR`.
 
-### 027200–031277 — UNKNOWN DATA REGION
+**Note:** Previous version of this table had wrong end addresses (stride 224 instead of 352). Corrected 2026-05-30 after verifying all 10 level start addresses via direct computation and confirming valid tile data at each.
+
+### 031000–031277 — INTRO ANIMATION TILES (12 frames)
 | Address | Size | Content |
 |---------|------|---------|
-| 027200–031277 | 2112 | Not yet fully analysed. Possibly additional AI path-data, level entity placement tables, or extended sound tables. |
+| 031000–031277 | 192 | 12 × 16-byte frames (same 2bpp 8×8 format as tile/sprite banks). Referenced from intro display code at 003206 (word pointer 031054). Graphical content: horizontal border/rope tiles and background pattern tiles used in the title/intro screen animation. |
 
 ### 031300–037677 — SPRITE ANIMATION FRAMES
 | Address | Size | Content |
@@ -161,10 +163,10 @@ Level format: 22 rows × 16 bytes. Each byte encodes 2 tiles: low nibble = left 
 |--------|-------|------------|--------|
 | Code (all routines 001000–022077) | ~8960 | 53% | ✅ Fully disassembled |
 | Tile bank (017450–020447) | 1024 | 6% | ✅ 32 tiles → PNG |
-| Level maps (022100–027177) | 3520 | 21% | ✅ 10 levels → JSON + PNG |
+| Level maps (022100–030777) | 3520 | 21% | ✅ 10 levels → JSON + PNG |
+| Intro tiles (031000–031277) | 192 | 1% | ✅ 12 frames identified, referenced from intro code |
 | Sprite frames (031300–037677) | 3328 | 20% | ✅ 208 frames → PNG |
 | Game text (037700–037777) | 64 | <1% | ✅ KOI8-R decoded |
 | УКНЦ I/O code (040000–042000) | 1024 | 6% | ✅ Disassembled |
-| Unknown (027200–031277) | 2112 | 13% | ❌ Not yet analysed |
 
-**~87% of bytes are accounted for.**
+**~100% of bytes are accounted for.** (Previous 13% "unknown" was level data at wrong addresses.)
