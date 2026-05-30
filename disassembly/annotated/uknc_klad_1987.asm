@@ -108,24 +108,30 @@ TBL_SOUND_A             = 006134   ; secvență note set A (3 note × 2 words)
 TBL_SOUND_B             = 006156   ; secvență note set B (4 note × 2 words)
 TBL_KEY_ACTIONS         = 012342   ; coduri acțiuni per bit/taste (12 intrări)
 TBL_ANIM_FRAMES         = 020270   ; tabela sprite animation (entity × dir × frame)
-TBL_LEVEL_MAP_1         = 022100   ; nivel 1: 22 rânduri × 16 bytes (2 tiles/byte)
-TBL_LEVEL_MAP_2         = 022660   ; nivel 2
-TBL_LEVEL_MAP_3         = 023240   ; nivel 3
-TBL_LEVEL_MAP_4         = 024000   ; nivel 4
-TBL_LEVEL_MAP_5         = 024560   ; nivel 5
-TBL_LEVEL_MAP_6         = 025140   ; nivel 6
-TBL_LEVEL_MAP_7         = 025720   ; nivel 7
-TBL_LEVEL_MAP_8         = 026300   ; nivel 8
-TBL_LEVEL_MAP_9         = 026660   ; nivel 9
-TBL_LEVEL_MAP_10        = 027240   ; nivel 10
-DAT_TILE_PIXELS         = 017450   ; 16 tiles × 16 bytes pixel data (8×8px @ 1bpp)
-DAT_TILE_0_BG           = 017450   ; tile 0: background (gol)
-DAT_TILE_1_WALL         = 017460   ; tile 1: perete
-DAT_TILE_2_LADDER       = 017470   ; tile 2: scară
-DAT_TILE_3_WATER        = 017500   ; tile 3: apă (letal)
-DAT_TILE_4_GOLD         = 017510   ; tile 4: aur (colectabil)
-DAT_TILE_5_LIFE         = 017520   ; tile 5: viață bonus
-DAT_TILE_6_EXIT         = 017530   ; tile 6: ieșire nivel
+TBL_LEVEL_MAP_1         = 022100   ; nivel 1: 22 rânduri × 16 bytes (2 tiles/byte), stride=352=0o540
+TBL_LEVEL_MAP_2         = 022640   ; nivel 2 (FIXED: stride=352 bytes per level, confirmed from ADD #540)
+TBL_LEVEL_MAP_3         = 023400   ; nivel 3
+TBL_LEVEL_MAP_4         = 024140   ; nivel 4
+TBL_LEVEL_MAP_5         = 024700   ; nivel 5
+TBL_LEVEL_MAP_6         = 025440   ; nivel 6
+TBL_LEVEL_MAP_7         = 026200   ; nivel 7
+TBL_LEVEL_MAP_8         = 026740   ; nivel 8
+TBL_LEVEL_MAP_9         = 027500   ; nivel 9
+TBL_LEVEL_MAP_10        = 030240   ; nivel 10
+DAT_TILE_PIXELS         = 017450   ; 32 tiles × 16 bytes (8×8px 2bpp); stride=16, addr=idx*16+017450
+DAT_TILE_0_BG           = 017450   ; tile 0: background/air (all zeros, never blitted)
+DAT_TILE_1_LADDER       = 017470   ; tile 1: scară (3C 3C FF FF... cross pattern, stride=16 from T0)
+DAT_TILE_2_EXIT         = 017510   ; tile 2: ieșire nivel (all zeros, same pixels as air but collision=exit)
+DAT_TILE_3_EMPTY        = 017530   ; tile 3: gol/neutilizat
+DAT_TILE_4_GOLD_A       = 017550   ; tile 4: aur frame A (colour plane = FC 3F A8 2A...)
+DAT_TILE_5_GOLD_B       = 017570   ; tile 5: aur frame B
+DAT_TILE_6_GOLD_C       = 017610   ; tile 6: aur frame C
+DAT_TILE_7_WATER        = 017630   ; tile 7: apă (pixel=00 00 FF FF CC CC 00 00, letal)
+DAT_TILE_8_LADDER2      = 017650   ; tile 8: scară tip 2 (same pixels as tile 1)
+DAT_TILE_9_WALL_A       = 017670   ; tile 9: pereți/pământ tip A
+DAT_TILE_11_WALL_B      = 017730   ; tile 11: pereți border stânga/dreapta
+DAT_TILE_12_WALL_C      = 017750   ; tile 12: pereți interior (earth fill, complex pattern)
+DAT_TILE_13_WALL_D      = 017770   ; tile 13: pereți border jos
 DAT_TEXT_STRINGS        = 002330   ; șiruri text titlu + meniu (KOI8-R)
 
 ; --- Variabile globale (RAM, modificate la runtime) ---
