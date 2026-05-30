@@ -105,13 +105,23 @@ void render_enemy(Renderer *r, const Enemy *e) {
 // HUD_RENDER (003652): scor + vieți la EMT 024 (УКНЦ text output)
 // Reimplementare: DrawText pe bara de jos (16px sub nivelul de 176px)
 void render_hud(Renderer *r, const Score *s) {
-    (void)r;  // DrawText scrie direct în render target activ
-    char buf[64];
+    (void)r;
+    char buf[96];
     snprintf(buf, sizeof buf, "%s:%d  %s:%d  %s:%d",
              T(STR_SCORE), s->score,
              T(STR_LEVEL), s->level + 1,
              T(STR_LIVES), s->lives);
     DrawText(buf, 2, MAP_ROWS * TILE_PX + 2, 6, (Color){236,236,236,255});
+}
+
+// debug: afișează px,py playerului în al doilea rând HUD
+void render_debug_player(const Player *p) {
+    char buf[64];
+    int col = (int)((p->px + TILE_PX*0.5f) / TILE_PX);
+    int row = (int)((p->py + TILE_PX*0.5f) / TILE_PX);
+    snprintf(buf, sizeof buf, "px=%.0f py=%.0f col=%d row=%d lad=%d",
+             p->px, p->py, col, row, (int)p->on_ladder);
+    DrawText(buf, 2, MAP_ROWS * TILE_PX + 10, 5, (Color){0,255,0,255});
 }
 
 // Upscale nearest-neighbor la dimensiunea ferestrei (păstrează aspect ratio)

@@ -44,6 +44,7 @@ void render_enemy(Renderer *r, const Enemy *e);
 
 // HUD_RENDER (003652): scor + nivel + vieți în bara de jos
 void render_hud(Renderer *r, const Score *s);
+void render_debug_player(const Player *p);
 
 // Composite: upscale nearest-neighbour target → fereastră
 void render_present(Renderer *r);

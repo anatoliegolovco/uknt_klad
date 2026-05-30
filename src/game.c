@@ -160,6 +160,7 @@ void game_frame(Game *g, float dt) {
         render_enemy(&g->renderer, &g->enemies[i]);
     render_player(&g->renderer, &g->player, g->state, g->state_timer);
     render_hud(&g->renderer, &g->score);
+    render_debug_player(&g->player);
 
     // Overlay mesaje
     int mx = VW/2, my = MAP_ROWS*TILE_PX/2;

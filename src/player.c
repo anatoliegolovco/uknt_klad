@@ -9,13 +9,20 @@ static void center_tile(const Player *p, int *col, int *row) {
     *row = (int)((p->py + TILE_PX * 0.5f) / TILE_PX);
 }
 
-// PLAYER_MOVE_STEP (012740): detectare scară la coloana centrală, rânduri sus+jos
-// Playerul poate urca dacă tile-ul de la centru (sus sau jos) e LADDER
+// CMAP_FLAGS (013570): flag #20000 = tile scară cu tavan solid deasupra.
+// Asta înseamnă că playerul poate urca PRIN platforme (wall tiles) pe coloana
+// de scară. Fix: verificăm scara în 3 rânduri consecutive în jurul playerului,
+// inclusiv rândul de deasupra (pentru "climb-through-platform").
 static bool on_ladder(const Player *p, const Map *m) {
     int cx  = (int)((p->px + TILE_PX * 0.5f) / TILE_PX);
     int ry1 = (int)(p->py / TILE_PX);
     int ry2 = (int)((p->py + TILE_PX - 1) / TILE_PX);
-    return map_ladder(m, cx, ry1) || map_ladder(m, cx, ry2);
+    // Rândul de deasupra: dacă playerul apasă Up și există scară deasupra,
+    // continuă să urce chiar dacă tile-ul curent e platformă (wall)
+    return map_ladder(m, cx, ry1)   ||
+           map_ladder(m, cx, ry2)   ||
+           map_ladder(m, cx, ry1-1) ||  // scară imediat deasupra → climb-through
+           map_ladder(m, cx, ry2+1);    // scară imediat dedesubt → intrare scară
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
