@@ -54,18 +54,25 @@ def main():
     out.append("#include <stdint.h>")
     out.append("")
 
-    # ── Tiles (017450, stride 16, 16 used entries) ──────────────────────────
-    # We extract all 32 tiles but only emit the ones the game uses (indices 0-15).
+    # ── Tiles (017450, stride 16, 32 entries) ────────────────────────────────
+    # Indices 0-15 = level tiles. Indices 16-31 = character sprite tiles,
+    # confirmed from ANIMATIONS.md + table 012410 (states 0o21-0o24 reference
+    # tiles 16,18,20,21,22,25). The УКНЦ draws the character as 2 of these tiles
+    # overlaid 1px apart (planar SPRITE_DRAW 014030).
     TILE_NAMES = {
         0: "bg_empty",    1: "ladder",       2: "exit",        3: "empty3",
         4: "gold_a",      5: "gold_b",       6: "gold_c",      7: "water",
         8: "ladder2",     9: "wall_a",      10: "empty10",    11: "wall_b",
        12: "wall_c",     13: "wall_d",      14: "water2",     15: "empty15",
+       16: "char_a",     17: "char_b",      18: "char_climb", 19: "char_climb2",
+       20: "char_walk0", 21: "char_walk1",  22: "char_walk2", 23: "char_walk3",
+       24: "char_c",     25: "char_d",      26: "char26",     27: "char27",
+       28: "char28",     29: "char29",      30: "char30",     31: "char31",
     }
     bank_off = 0o17450 - 0o1000
-    out.append("// TILE_GFX[tile_index][row][col] — 16 tile entries (indices 0-15)")
-    out.append("static const uint8_t TILE_GFX[16][8][8] = {")
-    for t in range(16):
+    out.append("// TILE_GFX[tile_index][row][col] — 32 entries (0-15 level, 16-31 character)")
+    out.append("static const uint8_t TILE_GFX[32][8][8] = {")
+    for t in range(32):
         off = bank_off + t * 16
         pixels = decode_tile(prog[off:off + 16])
         name = TILE_NAMES.get(t, f"tile{t}")
@@ -73,22 +80,10 @@ def main():
     out.append("};")
     out.append("")
 
-    # ── Sprites (031300, stride 16, 208 frames) ──────────────────────────────
-    # Frame groups (from GFX_MAP.md estimate + visual inspection):
-    #   0-7   = player walk (right + left)
-    #   8-11  = player climb
-    #   12-15 = player death
-    #   16+   = enemy frames
-    spr_off = 0o31300 - 0o1000
-    n_frames = (0o37700 - 0o31300) // 16   # = 208 frames max
-    out.append(f"// SPRITE_GFX[frame][row][col] — {n_frames} animation frames")
-    out.append(f"static const uint8_t SPRITE_GFX[{n_frames}][8][8] = {{")
-    for i in range(n_frames):
-        off = spr_off + i * 16
-        pixels = decode_tile(prog[off:off + 16])
-        out.append(tile_c_array(pixels, f"frame_{i}", i))
-    out.append("};")
-    out.append("")
+    # Note: the sprite bank at 031300 (208 frames) was previously extracted here,
+    # but the player/enemy character is NOT drawn from it — it comes from the
+    # tile bank entries 16-31 (see ANIMATIONS.md). Bank 031300 holds intro/title
+    # frames only, so it is no longer emitted.
 
     # ── Palette RGB for convenience ──────────────────────────────────────────
     out.append("// UKNC_PAL[palette_index] = {R, G, B}")

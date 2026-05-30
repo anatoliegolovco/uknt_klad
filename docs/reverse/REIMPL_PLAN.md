@@ -128,11 +128,11 @@ Sursa ASM: `GAME_INIT (004000)`, `GAME_TICK (001602)`, `GAME_LOOP (001344)`,
 
 ## Status
 
-- Faza 0: ⏳
-- Faza 1: ⏳
-- Faza 2: ⏳
-- Faza 3: ⏳
-- Faza 4: ⏳
-- Faza 5: ⏳
-- Faza 6: ⏳
-- Faza 7: ⏳
+- Faza 0: ✅ compilat curat
+- Faza 1: ✅ map.c/.h — COLLISION_MAP_BUILD (013524)
+- Faza 2: ✅ player.c/.h — PLAYER_STATE_CHECK (012570), PLAYER_MOVE_STEP (012740)
+- Faza 3: ✅ enemy.c/.h — ENEMY2_TICK (006552), LEVEL_END_CHECK (001636)
+- Faza 4: ✅ score.c/.h — SCORE_ADD (003764), LEVEL_COMPLETE (001034)
+- Faza 5: ✅ render.c/.h — LEVEL_RENDER (004776), SPRITE_DRAW (014030)
+- Faza 6: ✅ game.c/.h — GAME_INIT (004000), GAME_TICK (001602)
+- Faza 7: ✅ verificare completă (unit tests + live test nivel 1→2)

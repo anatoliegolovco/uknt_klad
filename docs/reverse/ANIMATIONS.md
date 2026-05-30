@@ -188,3 +188,45 @@ Accesate via **word pointer** (nu tile index byte) prin varianta `TILE_BLIT_REV`
 | Enemy 3 vertical | ~256 ticks/pas | 6 ticks/frame |
 
 La viteza maximă (difficulty 4, DELAY_SPIN_COUNT = 10000 octal), un game-tick ≈ 1 ciclu de bază al CPU УКНЦ (~1MHz efectiv per delay). Frecvența exactă în Hz depinde de clock-ul УКНЦ și de DELAY_SPIN_COUNT.
+
+---
+
+## Sprite-ul caracterului — investigație 2026-05-30 (reimplementare C23)
+
+Investigat în cadrul reimplementării C23, pentru a desena corect personajul (crocodilul).
+
+### Confirmat din cod (sigur)
+
+- **Personajul NU se desenează din sprite bank 031300.** Banca 031300 conține
+  frame-uri de intro/titlu. Personajul de joc vine din **banca de tile-uri
+  017450**, intrările **16–31** (tile_addr = idx×16 + 017450).
+- `SPRITE_DRAW` (014030) desenează personajul ca **2 tile-uri**, al doilea blit
+  decalat cu `(ΔX, ΔY)` din `TBL_ANIM_FRAMES` (020270). ΔX-urile sînt mici (~1px)
+  → cele 2 tile-uri sînt **half-plane suprapuse** (fiecare umple coloane
+  alternante: pattern `.G.G.G.`). Desenat individual, un tile arată ca puncte
+  rare (de aici efectul de "pătrat care licărește" dacă folosești tile greșit).
+- `SPRITE_HELPERS` (013216): state valid ∈ {0o21..0o24}. `0o21 = climb`
+  (cînd `entity[+0o16] == 0o12`, adică pe scară), `0o23 = walk`.
+- Tabela `012410` (indexată `(state-0o21)*2 + dir_code`) referențiază tile-urile
+  caracter **{16, 18, 20, 21, 22, 25}**. Verificat: pe scară (dir=0o12),
+  `table[10] = 18` → **tile 18 = cadru climb**.
+
+### Inferat (NU confirmat — necesită trace emulator)
+
+- Perechile exacte de tile-uri per cadru de animație. Reconstrucția folosită în
+  C23 (climb=18+19, walk=20+21 / 22+23, stand=16+17) produce figuri coerente
+  (crocodil verde cu picioare galbene), dar **maparea exactă cadru→pereche și
+  ordinea direcțiilor NU sînt confirmate** din cod.
+- Decalajul exact al celui de-al doilea tile (1px presupus) — valorile reale din
+  `TBL_ANIM_FRAMES` sînt în unități planare УКНЦ, netranspuse pixel-exact.
+
+### Cum se confirmă definitiv
+
+Trace în emulator: breakpoint pe `SPRITE_DRAW` (014030, sau echivalent BK-0010
+în `crocodile_klad.asm`), pentru player entity (014420):
+- citește `entity[+2]` (X), `entity[+6]` (Y), tile-ul blit-uit din `(R2)`
+- citește `TBL_ANIM_FRAMES[state*4 + 2..4]` pentru ΔX/ΔY real
+- dump-ul celor 2 tile-uri efectiv desenate = sprite-ul real al personajului
+
+Aceasta este singura sursă de adevăr pixel-exactă; restul (mai sus) e derivat
+static din cod și parțial inferat.

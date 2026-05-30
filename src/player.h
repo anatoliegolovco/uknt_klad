@@ -35,14 +35,26 @@ typedef enum {
     PR_ENEMY,      // coliziune inamic: LEVEL_END_CHECK (001636)
 } PlayerResult;
 
+// ── stare animație, din SPRITE_HELPERS (013216) ───────────────────────────────
+// ASM: state ∈ {0o21..0o24}. 0o21 = climb (cînd entity[+0o16]==0o12 = pe scară),
+//      0o23 = walk (altfel). Direcția (stînga/dreapta) vine din action code.
+// Transpunem în enum-ul de mai jos.
+typedef enum {
+    PA_STAND,   // nemișcat
+    PA_WALK,    // mers orizontal (state 0o23)
+    PA_CLIMB,   // urcat scară (state 0o21)
+} PlayerAnim;
+
 // ── structura playerului ──────────────────────────────────────────────────────
 typedef struct {
-    float px, py;     // poziție pixel (continuă)
-    float vy;         // viteză verticală (gravitație)
-    bool  on_ladder;  // detectat din tile curent
-    bool  dead;       // flag moarte curentă
-    int   anim_ctr;   // ANIM_THROTTLE_PLAYER: contor 0-3
-    int   anim_frame; // frame curent (0-PLAYER_ANIM_STATES-1)
+    float      px, py;     // poziție pixel (continuă)
+    float      vy;         // viteză verticală (gravitație)
+    bool       on_ladder;  // detectat din tile curent
+    bool       dead;       // flag moarte curentă
+    int        facing;     // direcție: -1 stînga, +1 dreapta (pentru flip sprite)
+    PlayerAnim anim;       // starea de animație (SPRITE_HELPERS state)
+    int        anim_ctr;   // ANIM_THROTTLE_PLAYER: contor 0..PLAYER_ANIM_STATES-1
+    int        anim_frame; // frame curent în ciclul de mers (0,1)
 } Player;
 
 // ── API ───────────────────────────────────────────────────────────────────────

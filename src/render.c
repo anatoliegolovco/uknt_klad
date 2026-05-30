@@ -12,44 +12,55 @@ static const Color PAL[4] = {
     {236, 236, 236, 255},   // 3: alb    (pereți, scări, sprite-uri)
 };
 
-// Frame-uri din SPRITE_GFX[] pentru fiecare slot sprite
-static const int SPR_SLOT_SRC[] = {
-    0, 1, 2, 3,   // RS_PLW (16-19): player walk
-    8,            // RS_PLC (20):    player climb — SPRITE_GFX[8]
-    12,           // RS_PLD (21):    player death — SPRITE_GFX[12]
-    16, 17, 18, 19 // RS_ENW (22-25): enemy walk
-};
+// ── Perechi de tile-uri half-plane pentru caracter (SPRITE_DRAW 014030) ───────
+// Caracterul = 2 tile-uri half-plane suprapuse 1px. Indici confirmați din
+// tabela 012410 (states 0o21-0o24 → tiles {16,18,20,21,22}) + ANIMATIONS.md.
+//   climb  = 18+19  (state 0o21, verificat: table[10]=18)
+//   walk0  = 20+21  (state 0o23, cadru A)
+//   walk1  = 22+23  (state 0o23, cadru B)
+//   stand  = 16+17
+typedef struct { int a, b; } CharPair;
+static const CharPair CHAR_CLIMB = {18, 19};
+static const CharPair CHAR_WALK0 = {20, 21};
+static const CharPair CHAR_WALK1 = {22, 23};
+static const CharPair CHAR_STAND = {16, 17};
+// Inamic: aceleași tile-uri de caracter (jocul folosește același set), cadru distinct
+static const CharPair ENEMY_WALK0 = {20, 21};
+static const CharPair ENEMY_WALK1 = {22, 23};
 
-static void draw_slot(const Renderer *r, int slot, int x, int y) {
-    DrawTextureRec(r->tileset,
-        (Rectangle){(float)(slot * TILE_PX), 0, (float)TILE_PX, (float)TILE_PX},
-        (Vector2){(float)x, (float)y}, WHITE);
+static void draw_slot(const Renderer *r, int slot, int x, int y, bool flip) {
+    float w = flip ? -(float)TILE_PX : (float)TILE_PX;
+    DrawTexturePro(r->tileset,
+        (Rectangle){(float)(slot * TILE_PX), 0, w, (float)TILE_PX},
+        (Rectangle){(float)x, (float)y, (float)TILE_PX, (float)TILE_PX},
+        (Vector2){0, 0}, 0.0f, WHITE);
+}
+
+// SPRITE_DRAW (014030): blit 2 tile-uri half-plane suprapuse 1px → figură completă.
+// ASM: prima blit la (X,Y), a doua la (X+ΔX, Y+ΔY) din TBL_ANIM_FRAMES (ΔX≈1px).
+static void draw_char(const Renderer *r, CharPair cp, int x, int y, bool flip) {
+    if (flip) {
+        // oglindit: a doua jumătate ajunge la stînga
+        draw_slot(r, cp.a, x + 1, y, true);
+        draw_slot(r, cp.b, x,     y, true);
+    } else {
+        draw_slot(r, cp.a, x,     y, false);
+        draw_slot(r, cp.b, x + 1, y, false);
+    }
 }
 
 void render_init(Renderer *r) {
-    // Build tileset din TILE_GFX + SPRITE_GFX (date pixel-perfect din binar)
-    Image img = GenImageColor(TILE_PX * RS_COUNT, TILE_PX, (Color){0,0,0,0});
+    // Build tileset: toate 32 tile-uri din TILE_GFX (pixel-perfect din binar).
+    // slot index == tile index (0-15 hartă, 16-31 caracter half-plane).
+    Image img = GenImageColor(TILE_PX * TILESET_SLOTS, TILE_PX, (Color){0,0,0,0});
 
-    // LEVEL_RENDER (004776): ASL×4 + ADD #17450 → tile_addr = idx*16 + 017450
-    // TILE_GFX[idx][row][col] conține valoarea paletei 0-3
-    for (int t = 0; t < 16; t++)
+    // LEVEL_RENDER (004776): tile_addr = idx*16 + 017450; TILE_GFX[idx] = paletă 0-3
+    for (int t = 0; t < TILESET_SLOTS; t++)
         for (int row = 0; row < TILE_PX; row++)
             for (int col = 0; col < TILE_PX; col++) {
                 uint8_t p = TILE_GFX[t][row][col];
                 if (p) ImageDrawPixel(&img, t * TILE_PX + col, row, PAL[p]);
             }
-
-    // SPRITE_DRAW (014030): sprite frames din binar
-    int n = (int)(sizeof(SPR_SLOT_SRC) / sizeof(SPR_SLOT_SRC[0]));
-    for (int s = 0; s < n; s++) {
-        int fr   = SPR_SLOT_SRC[s];
-        int slot = 16 + s;
-        for (int row = 0; row < TILE_PX; row++)
-            for (int col = 0; col < TILE_PX; col++) {
-                uint8_t p = SPRITE_GFX[fr][row][col];
-                if (p) ImageDrawPixel(&img, slot * TILE_PX + col, row, PAL[p]);
-            }
-    }
 
     r->tileset = LoadTextureFromImage(img);
     SetTextureFilter(r->tileset, TEXTURE_FILTER_POINT);
@@ -77,29 +88,35 @@ void render_map(Renderer *r, const Map *m) {
                                    (Color){255,255,255,40});
                 continue;
             }
-            draw_slot(r, RS_MAP + idx, col * TILE_PX, row * TILE_PX);
+            draw_slot(r, idx, col * TILE_PX, row * TILE_PX, false);
         }
 }
 
-// SPRITE_DRAW (014030): alege frame în funcție de starea animației
+// SPRITE_DRAW (014030) + SPRITE_HELPERS (013216): alege perechea de tile-uri
+// caracter în funcție de starea animației (climb/walk/stand) și o desenează
+// ca figură 2-tile suprapusă.
 void render_player(Renderer *r, const Player *p, GameState gs, float state_timer) {
     // Blink în GS_DEAD (8 Hz)
     bool show = (gs == GS_PLAYING || gs == GS_LEVEL_WIN || gs == GS_ALL_WIN)
              || (gs == GS_DEAD && (int)(state_timer * 8) % 2 == 0);
     if (!show) return;
 
-    int slot;
-    if (p->dead)       slot = RS_PLD;
-    else if (p->on_ladder) slot = RS_PLC;
-    else               slot = RS_PLW + (p->anim_frame % 4);
-
-    draw_slot(r, slot, (int)p->px, (int)p->py);
+    CharPair cp;
+    switch (p->anim) {
+        case PA_CLIMB: cp = CHAR_CLIMB; break;
+        case PA_WALK:  cp = (p->anim_frame & 1) ? CHAR_WALK1 : CHAR_WALK0; break;
+        case PA_STAND:
+        default:       cp = CHAR_STAND; break;
+    }
+    draw_char(r, cp, (int)p->px, (int)p->py, p->facing < 0);
 }
 
+// Inamic: aceeași logică de blit 2-tile, cadru alternant din throttle animație
 void render_enemy(Renderer *r, const Enemy *e) {
     if (!e->active) return;
     int frame = (int)(e->anim_t / ENEMY_ANIM_DT) % ENEMY_ANIM_HORIZ;
-    draw_slot(r, RS_ENW + (frame % 4), e->col * TILE_PX, e->row * TILE_PX);
+    CharPair cp = (frame & 1) ? ENEMY_WALK1 : ENEMY_WALK0;
+    draw_char(r, cp, e->col * TILE_PX, e->row * TILE_PX, e->dir < 0);
 }
 
 // HUD_RENDER (003652): scor + vieți la EMT 024 (УКНЦ text output)

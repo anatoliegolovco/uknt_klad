@@ -10,20 +10,12 @@
 #include "i18n.h"
 
 // LEVEL_RENDER (004776): ASL×4 + ADD #17450 → tile_addr = idx*16 + 0o17450
-// Tileset texture: un strip orizontal de slots 8×8 px
-// Slot 0-15   : tile-uri hartă (TILE_GFX[0..15], din binar)
-// Slot 16-19  : player walk frames (SPRITE_GFX[0..3])
-// Slot 20     : player climb        (SPRITE_GFX[8])
-// Slot 21     : player death        (SPRITE_GFX[12])
-// Slot 22-25  : enemy walk frames   (SPRITE_GFX[16..19])
-enum {
-    RS_MAP     =  0,  // tile-uri hartă (índicele = TileIdx direct)
-    RS_PLW     = 16,  // player walk
-    RS_PLC     = 20,  // player climb
-    RS_PLD     = 21,  // player death
-    RS_ENW     = 22,  // enemy walk
-    RS_COUNT   = 26,
-};
+// Tileset texture = strip orizontal de 32 sloturi 8×8 px, slot index = tile index.
+//   slots 0-15  : tile-uri hartă (TILE_GFX[0..15])
+//   slots 16-31 : tile-uri caracter (TILE_GFX[16..31]) — half-plane sprite tiles
+// Caracterul (crocodil) e desenat din 2 tile-uri half-plane suprapuse 1px (planar),
+// exact ca SPRITE_DRAW (014030). Perechile sînt în render.c.
+enum { TILESET_SLOTS = 32 };
 
 typedef struct {
     Texture2D       tileset;

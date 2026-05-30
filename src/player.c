@@ -35,6 +35,8 @@ void player_init(Player *p, int spawn_col, int spawn_row) {
         .vy         = 0.0f,
         .on_ladder  = false,
         .dead       = false,
+        .facing     = 1,           // implicit cu fața la dreapta
+        .anim       = PA_STAND,
         .anim_ctr   = 0,
         .anim_frame = 0,
     };
@@ -72,9 +74,20 @@ PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
     if (p->py < 0.0f)                           { p->py = 0.0f;  p->vy = 0.0f; }
     if (p->py > (MAP_ROWS - 1) * (float)TILE_PX) p->py = (MAP_ROWS - 1) * (float)TILE_PX;
 
+    // ── direcție + stare animație (SPRITE_HELPERS 013216) ────────────────────
+    // ASM: dacă entity[+0o16]==0o12 (pe scară) → state 0o21 (climb), altfel 0o23 (walk).
+    if (in.right) p->facing = 1;
+    else if (in.left) p->facing = -1;
+
+    bool moving_h = in.left || in.right;
+    bool moving_v = p->on_ladder && (in.up || in.down);
+    if (p->on_ladder && (moving_v || moving_h))  p->anim = PA_CLIMB;  // state 0o21
+    else if (moving_h)                           p->anim = PA_WALK;   // state 0o23
+    else                                         p->anim = PA_STAND;
+
     // ── animație (ANIM_THROTTLE_PLAYER 007432) ───────────────────────────────
     // CMP #3, @#PLAYER_ANIM_CTR: la al 4-lea tick → schimbă frame, resetează
-    bool moving = in.left || in.right || (p->on_ladder && (in.up || in.down));
+    bool moving = moving_h || moving_v;
     if (moving) {
         p->anim_ctr++;
         if (p->anim_ctr >= PLAYER_ANIM_STATES) {
