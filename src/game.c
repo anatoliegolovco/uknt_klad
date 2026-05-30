@@ -8,18 +8,23 @@
 #include <string.h>
 #include <stdio.h>
 
-// ---- palette (confirmed from УКНЦ 2bpp: pixel×color planes) ----
-// pixel=0,color=0 → Black; pixel=1,color=0 → Green (water)
-// pixel=0,color=1 → Yellow (gold);  pixel=1,color=1 → White (wall/ladder)
-static const Color C_BG     = {  0,   0,   0, 255};
-static const Color C_WHITE  = {240, 240, 240, 255};  // walls, ladders
-static const Color C_WHITE2 = {180, 180, 180, 255};  // wall shadow row
-static const Color C_GREEN  = {  0, 192,   0, 255};  // water
-static const Color C_GREEN2 = {  0, 110,   0, 255};  // water dark wave
-static const Color C_YELLOW = {200, 200,   0, 255};  // gold
-static const Color C_EXIT   = {255, 230,  50, 255};  // exit marker
-static const Color C_PLAYER = {110, 210, 255, 255};  // player (readable contrast)
-static const Color C_ENEMY  = {220,  70,  70, 255};  // enemy
+// ---- palette — УКНЦ МС-0511 2bpp confirmed from disassembly ----
+// (pixel_plane=P, color_plane=C):
+//   (P=0,C=0)=BLACK  (P=1,C=0)=GREEN  (P=0,C=1)=YELLOW  (P=1,C=1)=WHITE
+// Wall/ladder tiles: both planes same pattern → WHITE
+// Water tiles: pixel plane only → GREEN
+// Gold tiles: color plane only → YELLOW
+static const Color C_BG     = {  0,   0,   0, 255};  // black
+static const Color C_WHITE  = {236, 236, 236, 255};  // walls, ladders (pixel=1,color=1)
+static const Color C_GREEN  = {  0, 192,   0, 255};  // water (pixel=1,color=0)
+static const Color C_GREEN2 = {  0, 110,   0, 255};  // water wave variant
+static const Color C_YELLOW = {210, 200,   0, 255};  // gold (pixel=0,color=1)
+static const Color C_EXIT   = {236, 236, 236, 255};  // exit = white (same plane combo)
+// Player/enemy: УКНЦ sprite tiles mix WHITE + GREEN for human figure
+static const Color C_PLAYER = {236, 236, 236, 255};  // white body (dominant)
+static const Color C_PLGRN  = {  0, 192,   0, 255};  // green limb accent
+static const Color C_ENEMY  = {  0, 192,   0, 255};  // enemy body green
+static const Color C_ENWHIT = {236, 236, 236, 255};  // enemy white accent
 
 // ---- tile types ----
 typedef enum { T_EMPTY=0, T_WALL, T_LADDER, T_WATER, T_GOLD, T_EXIT } Tile;
@@ -38,41 +43,44 @@ static Tile orig_to_tile(uint8_t idx) {
 // ---- tileset (procedural pixel art) ----
 enum { TI_WALL, TI_LADDER, TI_WATER, TI_GOLD, TI_EXIT, TI_PLAYER, TI_ENEMY, TI_COUNT };
 
-// 8×8 tile art; ' '=transparent, other chars mapped in tile_col()
+// Pixel patterns derived from actual УКНЦ tile data (GFX_MAP.md).
+// Each row is 8 chars; ' '=transparent (black bg shows through).
+// W=white  G=green  g=dark-green  Y=yellow  X=exit  P=player  E=enemy
 static const char TILE_ART[TI_COUNT][8][9] = {
-    { // TI_WALL: brick grid
-        "WW...WW.", "WW...WW.", "wwwwwwww", ".WW...WW",
-        ".WW...WW", "wwwwwwww", "WW...WW.", "WW...WW." },
-    { // TI_LADDER: double rail + rungs
-        "W......W", "W......W", "WWWWWWWW", "W......W",
-        "W......W", "W......W", "WWWWWWWW", "W......W" },
-    { // TI_WATER: green waves
-        "GGGGGGGG", "GgGgGgGg", "gGgGgGgG", "GGGGGGGG",
-        "GGGGGGGG", "GgGgGgGg", "gGgGgGgG", "GGGGGGGG" },
-    { // TI_GOLD: yellow diamond
-        "...YY...", "..YYYY..", ".YYYYYY.", "YYYYYYYY",
-        "YYYYYYYY", ".YYYYYY.", "..YYYY..", "...YY..." },
-    { // TI_EXIT: bright cross/arrow
-        "...XX...", "...XX...", ".XXXXXXX", "XXXXXXXX",
-        "XXXXXXXX", ".XXXXXXX", "...XX...", "...XX..." },
-    { // TI_PLAYER: cyan stick figure
-        "..PPPP..", ".PPPPPP.", "..PPPP..", "...PP...",
-        ".PPPPPP.", ".P....P.", "..P..P..", "........" },
-    { // TI_ENEMY: red X
-        "EE....EE", ".EE..EE.", "..EEEE..", "...EE...",
-        "...EE...", "..EEEE..", ".EE..EE.", "EE....EE" },
+    { // TI_WALL — tile 9/11: both planes = FC 3F A8 2A FC 3F FC 3F → white brick
+        "WWWWWW..", "..WWWWWW", "W.W.W...", "..W.W.W.",
+        "WWWWWW..", "..WWWWWW", "WWWWWW..", "WWWWWW.." },
+    { // TI_LADDER — tile 1: both planes = 3C 3C FF FF 3C 3C 3C 3C → white cross
+        "..WWWW..", "..WWWW..", "WWWWWWWW", "WWWWWWWW",
+        "..WWWW..", "..WWWW..", "..WWWW..", "..WWWW.." },
+    { // TI_WATER — tile 7: pixel = 00 00 FF FF CC CC 00 00, color = 0 → green band
+        "........", "........", "GGGGGGGG", "GGGGGGGG",
+        "GG..GG..", "GG..GG..", "........", "........" },
+    { // TI_GOLD — tile 4: pixel = 0, color = FC 3F A8 2A FC 3F FC 3F → yellow brick
+        "YYYYYY..", "..YYYYYY", "Y.Y.Y...", "..Y.Y.Y.",
+        "YYYYYY..", "..YYYYYY", "YYYYYY..", "YYYYYY.." },
+    { // TI_EXIT — original tile 2 = all zeros (invisible); use same cross as ladder
+        "..WWWW..", "..WWWW..", "WWWWWWWW", "WWWWWWWW",
+        "..WWWW..", "..WWWW..", "..WWWW..", "..WWWW.." },
+    { // TI_PLAYER — white body + green limbs (matches УКНЦ sprite palette)
+        "..PP....", ".PPPP...", "..PP....", "..gg....",
+        ".gggg...", ".g..g...", "..g.g...", "........" },
+    { // TI_ENEMY — green body + white accent (inverted from player)
+        "..EE....", ".EEEE...", "..EE....", "..ww....",
+        ".wwww...", ".w..w...", "..w.w...", "........" },
 };
 
 static Color tile_col(char c) {
     switch (c) {
         case 'W': return C_WHITE;
-        case 'w': return C_WHITE2;
         case 'G': return C_GREEN;
         case 'g': return C_GREEN2;
         case 'Y': return C_YELLOW;
         case 'X': return C_EXIT;
         case 'P': return C_PLAYER;
+        case 'p': return C_PLGRN;
         case 'E': return C_ENEMY;
+        case 'w': return C_ENWHIT;
         default:  return (Color){0,0,0,0};
     }
 }
