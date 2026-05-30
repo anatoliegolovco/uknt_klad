@@ -27,6 +27,22 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 
 ---
 
+## 2026-05-30 (continuat)
+
+`[2026-05-30 13:00 UTC] DONE` — Confirmat emulator funcțional (MAME bk001001)  
+- ROM-uri BK-0010 descărcate de pe archive.org → `~/mame/roms/bk0010.zip`  
+- Mecanism de injecție Lua creat: `tools/bk_inject.lua` injectează binar la frame 180 (3s)  
+- `ex_klad/KLAD.BIN` rulează în MAME — title screen КЛАД cu diamond-mesh walls confirmat  
+- Convertor BIN→WAV creat (`/tmp/bkbin2wav.py`) pentru referință viitoare  
+- bk0010 (fără -01) este BROKEN în MAME 0.264; varianta funcțională = `bk001001`
+
+`[2026-05-30 13:00 UTC] DONE` — Identificat corect versiunea Crocodile  
+- `ex_klad/KLAD.BIN` = Crocodile 1991 (packed, load=0732, entropy=7.42)  
+- Titlul arată „Николаев 1987 Баранов" = creditul originalilor autori, nu branding Crocodile  
+- KLAD2/KLAD4/klad10 = alte versiuni packed (probabil secvele)  
+- KLAD3.BIN = necomprimat, load=01000, entropy=5.66 (versiunea Баранов neambalată)  
+- **Next:** Obiectiv 2 — disassembly adnotat din entry 01000 (depacker) → joc
+
 ## Template pentru intrări viitoare
 
 ```
