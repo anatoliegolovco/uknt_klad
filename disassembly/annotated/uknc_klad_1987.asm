@@ -1,480 +1,6979 @@
 ; =============================================================================
-; КЛАД (Баранов 1987) — Annotated Disassembly, УКНЦ (МС-0511) version
-; Source binary: assets/original/extracted/uknc/KLAD_1987_Baranov.SAV
-;   RT-11 .SAV format: 512-byte header + 16896-byte program image
-;   SAVBLK=41 (33 blocks), SAVTOP=040000, SAVSTA=001000 (entry point)
-;   Image covers addresses 0o001000..0o042000 (16896 bytes)
+; КЛАД (Баранов 1987) — Complete Annotated Disassembly, УКНЦ (МС-0511)
+; Source: assets/original/extracted/uknc/KLAD_1987_Baranov.SAV
+;   RT-11 .SAV: 512-byte header + 16896-byte program image at 0o001000
+;   Entry point: 0o001000  Top: 0o042000
 ;
-; Relation to BK-0010 Crocodile version:
-;   83% of code is WORD-IDENTICAL to the BK-0010 Crocodile version
-;   (disassembly/annotated/crocodile_klad.asm).
-;   The BK-0010 Crocodile 1991 binary is a 2-stage LZ-packed rerelease of
-;   this УКНЦ 1987 Баранов binary. Game logic, level data, tile bank, and
-;   entity routines are the same. Only hardware I/O routines differ.
+; 83% of code is word-identical to BK-0010 Crocodile (see crocodile_klad.asm).
+; [УКНЦ DIFF] = word differs from BK-0010 counterpart at same address.
+; [УКНЦ]      = УКНЦ-only path (no equivalent in BK-0010).
 ;
-; All addresses and constants are OCTAL unless noted [dec] or [hex].
-;
-; УКНЦ (МС-0511) hardware differences from BK-0010:
-;   VIDEO: Planar framebuffer. Accessed via port registers:
-;         @#176640 — pixel data (word, written per scanline via I/O)
-;         @#176642 — colour register
-;         @#176676 — line/row register
-;     NOT a linear memory-mapped framebuffer like BK-0010's 040000-077777.
-;   KEYBOARD: Polled via status register @#040546 (bit 7 = key ready).
-;             Key data read via @#040700 (MOVB @#040546, R0 etc.).
-;             NOT the shift-register @#177714 or data @#177662 of BK-0010.
-;   VSYNC: Game calls in-game routine at 041400 (soft vsync loop)
-;          instead of EMT 016 r0=7.
-;   SPEAKER: @#177716 bit 7 still used for audio (same as BK-0010).
-;   CPU: KM1801VM2-compatible (PDP-11), same instruction set.
-;        Different clock, so speed/timing values differ.
-; =============================================================================
-
-; =============================================================================
-; MEMORY MAP (УКНЦ, unpacked in user address space)
-; =============================================================================
-; 000000–000777   Interrupt vectors + RT-11/FODOS system workspace
-; 001000–014417   Game code — 83% identical to BK-0010 Crocodile version
-;                 (see crocodile_klad.asm for line-by-line annotations)
-; 014420–017777   Entity records, working tile buffer, tile bank, globals
-; 020000–022077   Sprite animation tables, sprite workspaces
-; 022100–037677   Level maps (10 levels × 352 bytes)
-; 037700–040057   Tile pixel data (УКНЦ format — different encoding)
-; 040060–042000   УКНЦ-specific I/O driver (video blit, keyboard, vsync)
-;
-; KEY VARIABLES (same addresses as BK-0010):
-; 001300  CUR_MAP_ADDR     — current level map start address
-; 001302  CUR_LEVEL_PTR    — pointer in level table
-; 001304  LEVEL_TBL_PTR    — current level table entry
-; 001312  SPEED            — game speed (differs: УКНЦ values)
-; 014420  PLAYER_STATE     — player entity state word
-; 014422  PLAYER_TILE_PTR  — pointer into working tile buffer @#14550
-; 014430  ENEMY1_STATE
-; 014432  ENEMY1_TILE_PTR
-; 014440  ENEMY2_STATE
-; 014442  ENEMY2_TILE_PTR
-; 017430  GAME_STATE       — word = 010404 at init
-; 017436  LIVES            — init = 0o333 (= 219 dec, see GAME_INIT)
-; 017440  SCORE            — init = 0
-; 017450  TILE_BANK        — 16 tiles × 16 bytes each (8×8 px)
-;
-; УКНЦ I/O REGISTERS (hardware-specific):
-; 040546  Keyboard status register (bit 7 = key ready, bit 8 = key code)
-; 040660  KBD_READ — keyboard read routine entry
-; 041020  KBD_POLL — keyboard poll wrapper
-; 041040  DISP_COL_BLIT — write one tile column to УКНЦ video hardware
-; 041100  EMT_TEXT — EMT 020 display text routine
-; 041140  DISP_SETUP — display initialization entry
-; 041400  VSYNC_WAIT_UKNC — software vsync loop
-; 041740  DISP_WRITE_COL — write column word to @#176640 (pixel data port)
-; 176640  Video pixel data port (write: sends scanline word to display)
-; 176642  Video colour register
-; 176676  Video line/row control register
-; 177716  System register (bit 7 = speaker toggle, shared with BK-0010)
-
-; =============================================================================
-; SECTION 1: SHARED GAME CODE (001000–014417)
-; This section is 83% identical to crocodile_klad.asm.
-; Differences are marked with [УКНЦ DIFF] comments.
-; See crocodile_klad.asm for full annotation of identical routines.
+; All constants OCTAL unless noted [dec] or [hex].
+; Hardware: KM1801VM2 PDP-11, УКНЦ video port @#176640, kbd @#040546.
 ; =============================================================================
 
         .ORG    001000
 
-; --- RESTART/trampolines --- (identical to BK-0010)
-RESTART:        ; 001000
-        JMP     @#004000        ; JMP @#GAME_INIT
-
-GAME_OVER_SOFT: ; 001004
-        CLR     R0
-        JMP     @#004160
-
-; 001012: MOV (R2),R0 / BGE 1000 — game-over counter check (identical)
-; 001016: JSR PC, @#010206      — LEVEL_RESET (identical)
-; 001024: MOV #1000, R0         — BK-0010 bonus path
-; 001034: JSR PC, @#013524      — COLLISION_MAP_BUILD (identical)
-
-; --- LEVEL_COMPLETE (001034) --- (identical to BK-0010)
-LEVEL_COMPLETE: ; 001034
-        JSR     PC,@#013524     ; COLLISION_MAP_BUILD
-        MOV     @#001304,R5
-        MOV     (R5),@#001302
-        ADD     #540,@#001300
-        ADD     #2,@#001304
-        MOV     @#001304,R5
-        CMP     #001302,R5
-        BEQ     001112
-        NOP
-        NOP
-        JSR     PC,@#012442     ; LEVEL_RENDER_FULL
-        JMP     @#001344        ; back to game loop
-
-001112: JMP     RESTART
-
-; 001116: MOV #010404, @#017430 + JMP (game state init, identical)
-
-; --- KEY_DIFFICULTY (001142) --- [УКНЦ DIFF: speed values differ]
-; BK-0010: speed values = 400/1000/2000/4000
-; УКНЦ:    speed values = different (УКНЦ CPU clock ≠ BK-0010 clock)
-KEY_DIFFICULTY: ; 001142
-        ; Structure identical to BK-0010; immediate speed values differ
-        ; (the four MOV #SPEED, @#001312 instructions have different values)
-        ; See _uknc1987_raw.asm at 001142..001227 for exact values.
-
-; --- DELAY_SPIN (001306) --- (identical)
-; --- GAME_LOOP (001344) --- (identical: JMP @#004674)
-
-; --- GAME_LOOP_MENU (001354) --- [УКНЦ DIFF: keyboard read path]
-; BK-0010: MOV @#177662, R0  (reads menu keyboard data register)
-; УКНЦ:    JSR PC, @#040660  (calls keyboard read routine)
-;          then CMP #055, R0  (different sentinel value)
-GAME_LOOP_MENU: ; 001354
-        JSR     PC,@#040660     ; [УКНЦ] read keyboard via custom routine
-        CMP     #055,R0         ; CTRL-M (= 45 dec) = stop key?
-        BNE     001372
-        JMP     @#001004        ; → GAME_OVER_SOFT
-001372: CMP     #033,R0         ; < 033 (ESC-related code)?
-        BGT     001406          ; ≥ 033: table lookup
-        JSR     PC,@#001142     ; KEY_DIFFICULTY
-        BR      001344          ; back to game loop
-001406: ; table scan (identical structure to BK-0010)
-        ; [УКНЦ DIFF] key code table at 001732 has УКНЦ key codes
-        ; [УКНЦ DIFF] some key codes differ (УКНЦ keyboard layout)
-
-; --- KEY_CODE_TBL (001732) --- [УКНЦ DIFF: different key codes]
-; BK-0010 codes: 017(←), 016(→), 031(↑), 010(Ctrl-H), 032, 022
-; УКНЦ codes:    different mapping from УКНЦ keyboard scan codes
-
-; --- Game loop body (001436..001671) --- (IDENTICAL to BK-0010)
-; ACT_DISPATCH, GAME_TICK sequence: all addresses identical.
-
-; --- TITLE_SEQ (002072..003233) --- [УКНЦ DIFF: text display calls]
-; EMT 020 and EMT 024 calls go through УКНЦ RT-11 display routines.
-; String content: KOI8-R encoded Russian text (УКНЦ native).
-; Text display calls use EMT 020 (RT-11) not BK-0010 specific EMTs.
-; Otherwise title, difficulty select, and game-over wait are identical.
-
-; --- DIFF_SELECT (003234) --- [УКНЦ DIFF: uses EMT 006 or keyboard routine]
-; --- GAME_LEVEL_LOOP (003576) --- (identical)
-; --- HUD_RENDER (003652) --- [УКНЦ DIFF: display addresses differ slightly]
-; --- BONUS_LIFE_ADD (003746) --- [УКНЦ DIFF: calls VSYNC_WAIT_UKNC]
-; --- SCORE_ADD (003764) --- [УКНЦ DIFF: calls VSYNC_WAIT_UKNC]
-
 ; =============================================================================
-; GAME_INIT (004000) — [УКНЦ DIFF: lives initial value]
-; =============================================================================
-GAME_INIT:      ; 004000
-        MOV     #0333,@#017436  ; [УКНЦ DIFF] LIVES = 0o333 (≠ BK-0010's #5)
-                                ; 0o333 = 219 decimal = possibly BCD encoding
-                                ; or УКНЦ version uses a different lives scheme
-        ; Rest identical to BK-0010: draws lives, clears score, stack reset,
-        ; bus-error vector setup, then JMP @#005754 (HW_INIT)
-
-; =============================================================================
-; HW_INIT (005754) — [УКНЦ DIFF: first instruction is BR not TSTB]
-; УКНЦ: starts with BR (skip some check) + EMT calls for display init
-; =============================================================================
-HW_INIT:        ; 005754
-        BR      005762          ; [УКНЦ DIFF] skip ROM check (BR not TSTB)
-        ; 005762: continues with EMT 016 calls and @#177664 (scroll)
-        ; same EMT sequence and JMP @#002072 as BK-0010
-
-; =============================================================================
-; KBD_GAME_POLL (004674) — [УКНЦ DIFF: polls УКНЦ keyboard, not @#177714]
-; =============================================================================
-KBD_GAME_POLL:  ; 004674
-        JSR     PC,@#041020     ; [УКНЦ] KBD_POLL — reads УКНЦ keyboard status
-        NOP
-        BNE     004710          ; key available → process
-        JMP     @#001354        ; no key → menu keyboard path
-004710: MOV     #004660,R1      ; [УКНЦ DIFF] R1 → different action table base
-        MOV     #6,R5           ; [УКНЦ DIFF] only 6 entries (vs 11 in BK-0010)
-        MOV     #0,R3           ; [УКНЦ DIFF] R3=0 (key code from KBD_POLL)
-KBD_SCAN:       ; 004724
-        MOV     (R1)+,R0        ; action code from table
-        ROR     R3              ; rotate key bit
-        BCS     KBD_HIT         ; key pressed
-        SOB     R5,KBD_SCAN
-        JMP     @#001424        ; no key
-KBD_HIT:        ; 004740
-        JMP     @#001436        ; dispatch
-
-; Key action data (004660-004773) — [УКНЦ DIFF: different from BK-0010]
-; УКНЦ uses 6-entry keyboard table with different key assignments.
-; Data at 004744-004773 = УКНЦ key codes in KOI8-R (Ш, Ю, etc. for arrows)
-
-; =============================================================================
-; TILE_BLIT_FWD (005106) — [УКНЦ DIFF: inner loop writes via I/O port, not direct RAM]
-; =============================================================================
-TILE_BLIT_FWD_UKNC: ; 005106
-        MOV     R5,-(SP)
-        MOV     R4,-(SP)
-        MOV     R3,-(SP)
-        MOV     R1,-(SP)
-        MOV     #010,R5         ; 8 scanlines
-TBLIT_ROW_U:    ; 005120 (identical start)
-        ; [УКНЦ DIFF] instead of: MOV (R2)+, 046000(R1) [direct FB write]
-        ; УКНЦ does:
-        JSR     PC,@#041040     ; DISP_COL_BLIT — write tile column via port
-        JSR     PC,@#040060     ; secondary display write (colour/line update)
-        NOP
-        MOV     (SP)+,R1
-        MOV     (SP)+,R3
-        MOV     (SP)+,R4
-        MOV     (SP)+,R5
-        RTS     PC
-
-; NOTE: TILE_BLIT_REV (014302), TILE_BLIT_SUB (012530) also differ in inner
-; loop — use JSR to display routines instead of direct 046000(R1) write.
-
-; =============================================================================
-; ENTITY_HANDLER / SOUND ENGINE (006204) — [УКНЦ DIFF: speaker values]
-; Structure identical to BK-0010. The two constants at @#102064 and @#102076
-; (speaker HIGH/LOW values for @#177716) have different values in УКНЦ version.
-; УКНЦ uses the same @#177716 bit 7 for speaker (hardware is same).
-; =============================================================================
-; (body identical — see crocodile_klad.asm for full annotation)
-
-; =============================================================================
-; VSYNC_WAIT (012326) — [УКНЦ DIFF: calls in-game vsync routine, not EMT]
-; =============================================================================
-VSYNC_WAIT_UKNC: ; 012326
-        MOV     R0,-(SP)        ; save R0
-        JSR     PC,@#041400     ; [УКНЦ] VSYNC_WAIT_LOOP (soft vsync)
-        NOP
-        MOV     (SP)+,R0
-        RTS     PC
-
-; KEY_ACTION_TBL (012342) — [УКНЦ DIFF: different action codes + key layout]
-; 6 entries instead of 11 (УКНЦ keyboard has fewer mapped keys in this game)
-; Entry layout: same (word = action code matched to key bit/position)
-
-; =============================================================================
-; SECTIONS 012442–013523 — IDENTICAL TO BK-0010
-; (LEVEL_RENDER_FULL, TILE_BLIT_SUB inner differs at framebuffer write,
-;  PLAYER_STATE_CHECK, ENEMY_RESPAWN, PLAYER_MOVE_STEP — logic identical)
+; SECTION 1: GAME LOGIC (001000–037677) — 83% identical to BK-0010
+; See disassembly/annotated/crocodile_klad.asm for full BK-0010 reference.
+; Lines marked [УКНЦ DIFF] are hardware-specific changes.
+; Lines marked [УКНЦ] are УКНЦ-only paths (keyboard, video).
 ; =============================================================================
 
-; =============================================================================
-; SECTIONS 013524–014417 — IDENTICAL TO BK-0010
-; (COLLISION_MAP_BUILD, SPRITE_DRAW, TILE_BLIT_REV — logic identical,
-;  only TILE_BLIT_REV inner framebuffer write differs)
-; =============================================================================
+; --- Restart / game-over trampolines ---
+
+RESTART:
+001000: 000137   JMP    @#4000  ; JMP @#GAME_INIT — full restart trampoline
+GAME_OVER_SOFT:
+001004: 005000   CLR    R0  ; CLR R0
+001006: 000137   JMP    @#4160  ; JMP @#004160 — partial reinit
+001012: 011200   MOV    (R2),R0  ; MOV (R2),R0 — load game-over counter
+001014: 002371   BGE    1000  ; BGE RESTART — counter < 0 → keep going
+PLAYER_DEATH:
+001016: 004737   JSR    PC,@#10206  ; JSR PC, @#LEVEL_RESET — death animation + level reinit
+001022: 000403   BR     1032  ; BR 1032 — skip bonus path
+BONUS_LIFE:
+001024: 012700   MOV    #1000,R0  ; MOV #1000, R0 — bonus life award value
+001030: 000766   BR     1006  ; BR GAME_OVER_SOFT+2 — apply bonus
+001032: 000425   BR     1106
+
+; --- LEVEL_COMPLETE (001034) ---
+
+LEVEL_COMPLETE:
+001034: 004737   JSR    PC,@#13524  ; JSR PC, @#COLLISION_MAP_BUILD — rebuild tile flags
+001040: 013705   MOV    @#1304,R5  ; MOV @#LEVEL_TBL_PTR, R5
+001044: 011537   MOV    (R5),@#1302  ; MOV (R5), @#CUR_LEVEL_PTR — load next level address
+001050: 062737   ADD    #540,@#1300  ; ADD #540, @#CUR_MAP_ADDR — advance map 352 bytes (one level)
+001056: 062737   ADD    #2,@#1304  ; ADD #2, @#LEVEL_TBL_PTR — next table entry
+001064: 013705   MOV    @#1304,R5  ; MOV @#LEVEL_TBL_PTR, R5
+001070: 022705   CMP    #1302,R5  ; CMP #001302, R5 — wrapped around table?
+001074: 001406   BEQ    1112  ; BEQ ALL_LEVELS_DONE
+001076: 000240   NOP  ; NOP
+001100: 000240   NOP  ; NOP
+001102: 004737   JSR    PC,@#12442  ; JSR PC, @#LEVEL_RENDER_FULL — render new level
+001106: 000137   JMP    @#1344  ; JMP @#GAME_LOOP
+ALL_LEVELS_DONE:
+001112: 000167   JMP    1000  ; JMP RESTART — all levels done → full restart
+GAME_STATE_INIT:
+001116: 012737   MOV    #10404,@#17430  ; MOV #010404, @#GAME_STATE — init game-state word
+001124: 000167   JMP    1014  ; JMP 1014 — back to game-over check
+LEVEL_PTR_INIT:
+001130: 001302   BNE    736
+001132: 012737   MOV    #1230,@#1304  ; MOV #001230, @#LEVEL_TBL_PTR — reset to level 1
+001140: 000207   RTS    PC  ; RTS PC
+
+; --- KEY_DIFFICULTY (001142) — [УКНЦ DIFF: speed values] ---
+
+KEY_DIFFICULTY:
+001142: 022700   CMP    #31,R0  ; CMP #061, R0 — key '1'?
+001146: 001004   BNE    1160  ; BNE 1160
+001150: 012737   MOV    #1000,@#1312  ; MOV #SPEED1, @#001312 — [УКНЦ DIFF] speed value differs (УКНЦ clock)
+001156: 000207   RTS    PC  ; RTS PC
+001160: 022700   CMP    #32,R0  ; CMP #062, R0 — key '2'?
+001164: 001004   BNE    1176  ; BNE 1176
+001166: 012737   MOV    #2000,@#1312  ; MOV #SPEED2, @#001312
+001174: 000207   RTS    PC  ; RTS PC
+001176: 022700   CMP    #33,R0  ; CMP #063, R0 — key '3'?
+001202: 001003   BNE    1212  ; BNE 1212
+001204: 012737   MOV    #4000,@#1312  ; MOV #SPEED3, @#001312
+001212: 022700   CMP    #34,R0  ; CMP #064, R0 — key '4'?
+001216: 001003   BNE    1226  ; BNE 1226
+001220: 012737   MOV    #10000,@#1312  ; MOV #SPEED4, @#001312
+001226: 000207   RTS    PC  ; RTS PC
+001230: 015230   MOV    @-(R2),@(R0)+
+001232: 014550   MOV    -(R5),@-(R0)
+001234: 014734   MOV    -(PC),@(R4)+
+001236: 015260   MOV    @-(R2),15040(R0)
+001242: 017242   MOV    @14706(R2),-(R2)
+001246: 015226   MOV    @-(R2),(SP)+
+001250: 015640   MOV    @-(SP),-(R0)
+001252: 014550   MOV    -(R5),@-(R0)
+001254: 017036   MOV    @15236(R0),@(SP)+
+001260: 016440   MOV    16640(R4),-(R0)
+001264: 017240   MOV    @16776(R2),-(R0)
+001270: 016642   MOV    17240(SP),-(R2)
+001274: 016702   MOV    16050,R2
+001300: 022100   CMP    (R1)+,R0
+001302: 016702   MOV    2536,R2
+
+; --- DELAY_SPIN (001306) ---
+
+DELAY_SPIN:
+001306: 010546   MOV    R5,-(SP)  ; MOV R5, -(SP)
+001310: 012705   MOV    #400,R5  ; MOV #1, R5
+001314: 005700   TST    R0  ; TST R0 — burn cycle
+001316: 077502   SOB    R5,1314  ; SOB R5, 1314
+001320: 012605   MOV    (SP)+,R5  ; MOV (SP)+, R5
+001322: 000207   RTS    PC  ; RTS PC
+001324: 004737   JSR    PC,@#2050
+001330: 000240   NOP
+001332: 000240   NOP
+001334: 000137   JMP    @#2254
+001340: 000240   NOP
+001342: 000240   NOP
+
+; --- GAME_LOOP entry (001344) ---
+
+GAME_LOOP:
+001344: 000137   JMP    @#4674  ; JMP @#KBD_GAME_POLL — main per-frame entry
+001350: 000240   NOP
+001352: 001024   BNE    1424
+
+; --- GAME_LOOP_MENU (001354) — [УКНЦ DIFF: keyboard read path] ---
+
+GAME_LOOP_MENU:
+        ; [УКНЦ DIFF]
+001354: 004737   JSR    PC,@#40660  ; [УКНЦ] JSR PC, @#KBD_READ — read keyboard via УКНЦ routine
+001360: 022700   CMP    #55,R0  ; CMP #055, R0 — Ctrl-M = stop key?
+001364: 001002   BNE    1372  ; BNE 1372
+001366: 000137   JMP    @#1004  ; JMP @#GAME_OVER_SOFT
+001372: 022700   CMP    #33,R0  ; CMP #033, R0 — [УКНЦ] < ESC-range threshold
+001376: 003403   BLE    1406  ; BGT 1406
+001400: 004737   JSR    PC,@#1142  ; JSR PC, @#KEY_DIFFICULTY
+001404: 000757   BR     1344  ; BR GAME_LOOP
+KEY_TABLE_SCAN:
+001406: 012703   MOV    #6,R3  ; MOV #014, R3 — 12 table entries
+001412: 012705   MOV    #12342,R5  ; MOV #001732, R5 — R5 → KEY_CODE_TBL
+001416: 022500   CMP    (R5)+,R0  ; CMP (R5)+, R0 — compare key code
+001420: 001404   BEQ    1432  ; BEQ 1432
+001422: 077303   SOB    R3,1416  ; SOB R3, 1416
+NO_KEY:
+001424: 012700   MOV    #177777,R0  ; MOV #177777, R0 — no match sentinel
+001430: 000402   BR     1436  ; BR ACT_DISPATCH
+KEY_HIT:
+001432: 016500   MOV    12(R5),R0  ; MOV 010406(R5), R0 — load action code from KEY_ACTION_TBL
+
+; --- ACT_DISPATCH (001436) ---
+
+ACT_DISPATCH:
+001436: 012704   MOV    #14420,R4  ; MOV #014420, R4 — R4 → player entity
+001442: 022714   CMP    #10,(R4)  ; CMP #010, (R4) — entity type active?
+001446: 001021   BNE    1512  ; BNE 1512
+001450: 032774   BIT    #2000,@2(R4)  ; BIT #2000, @2(R4) — collision/active flag set?
+001456: 001415   BEQ    1512  ; BEQ 1512
+001460: 012702   MOV    #21640,R2  ; MOV #021640, R2 — sprite workspace
+001464: 010046   MOV    R0,-(SP)  ; MOV R0, -(SP)
+001466: 012700   MOV    #10,R0  ; MOV #010, R0
+001472: 004737   JSR    PC,@#7432  ; JSR PC, @#ANIM_THROTTLE_PLAYER
+001476: 012600   MOV    (SP)+,R0  ; MOV (SP)+, R0
+001500: 122774   CMPB   #15,@2(R4)  ; CMPB #015, @2(R4) — state == dead?
+001506: 001706   BEQ    1324  ; BEQ 1324
+001510: 000434   BR     1602  ; BR 1602
+001512: 022700   CMP    #177777,R0  ; CMP #177777, R0 — no-key sentinel?
+001516: 001431   BEQ    1602  ; BEQ 1602
+001520: 022700   CMP    #12,R0  ; CMP #012, R0 — action ≤ 12?
+001524: 003404   BLE    1536  ; BLE 1536
+001526: 012702   MOV    #21640,R2  ; MOV #021640, R2
+001532: 004737   JSR    PC,@#7432  ; JSR PC, @#ANIM_THROTTLE_PLAYER
+001536: 016403   MOV    2(R4),R3  ; MOV 2(R4), R3
+001542: 000240   NOP
+001544: 000240   NOP
+001546: 000240   NOP
+001550: 000240   NOP
+001552: 000240   NOP
+001554: 000240   NOP
+001556: 000240   NOP
+001560: 000240   NOP
+001562: 032713   BIT    #4000,(R3)  ; BIT #4000, (R3) — ground collision flag?
+001566: 001005   BNE    1602  ; BNE 1602
+001570: 012700   MOV    #10,R0  ; MOV #010, R0
+001574: 004737   JSR    PC,@#1306  ; JSR PC, @#DELAY_SPIN
+001600: 000716   BR     1436  ; BR ACT_DISPATCH
+
+; --- GAME_TICK (001602) — per-frame entity update sequence ---
+
+GAME_TICK:
+001602: 004737   JSR    PC,@#1306  ; JSR PC, @#DELAY_SPIN
+001606: 004737   JSR    PC,@#12570  ; JSR PC, @#PLAYER_STATE_CHECK
+001612: 004737   JSR    PC,@#7376  ; JSR PC, @#ENEMY1_TICK
+001616: 004737   JSR    PC,@#6552  ; JSR PC, @#ENEMY2_TICK
+001622: 004737   JSR    PC,@#7462  ; JSR PC, @#ENEMY3_TICK
+001626: 004737   JSR    PC,@#7306  ; JSR PC, @#ENTITY1_RESTORE
+001632: 004737   JSR    PC,@#6462  ; JSR PC, @#WATER_COLLISION
+LEVEL_END_CHECK:
+001636: 023737   CMP    @#14422,@#14432  ; CMP @#014422, @#014432 — player tile == enemy1 tile?
+001644: 001002   BNE    1652  ; BNE 1652
+001646: 000167   JMP    2040  ; JMP 002040 — level end
+001652: 023737   CMP    @#14422,@#14442  ; CMP @#014422, @#014442 — player tile == enemy2 tile?
+001660: 001002   BNE    1666  ; BNE 1666
+001662: 000167   JMP    2040  ; JMP 002040
+001666: 000167   JMP    2000  ; JMP 002000
+001672: 000000   HALT
+001674: 000000   HALT
+001676: 000000   HALT
+001700: 000000   HALT
+001702: 000000   HALT
+001704: 000000   HALT
+001706: 000000   HALT
+001710: 000000   HALT
+001712: 000000   HALT
+001714: 000000   HALT
+001716: 000000   HALT
+001720: 000000   HALT
+001722: 000000   HALT
+001724: 000000   HALT
+001726: 000000   HALT
+001730: 000000   HALT
+
+; --- KEY_CODE_TBL (001732) — [УКНЦ DIFF: УКНЦ key scan codes] ---
+
+KEY_CODE_TBL:
+        ; [УКНЦ DIFF]
+001732: 000000   HALT  ; [УКНЦ] key code table — 12 entries, УКНЦ keyboard scan codes
+001734: 000000   HALT
+001736: 000000   HALT
+001740: 000000   HALT
+001742: 000000   HALT
+001744: 000000   HALT
+001746: 000000   HALT
+001750: 000000   HALT
+001752: 000000   HALT
+001754: 000000   HALT
+001756: 000000   HALT
+001760: 000000   HALT
+001762: 000000   HALT
+001764: 000000   HALT
+001766: 000000   HALT
+001770: 000000   HALT
+001772: 000000   HALT
+001774: 000000   HALT
+001776: 000000   HALT
+
+; --- Game branches + sound wrappers (002000..002071) ---
+
+GAME_BRANCHES:
+002000: 013700   MOV    @#14422,R0
+002004: 121027   CMPB   (R0),#1
+002010: 001002   BNE    2016
+002012: 000137   JMP    @#4130
+002016: 000167   JMP    1344
+002022: 004737   JSR    PC,@#2050
+002026: 000167   JMP    1024
+002032: 000000   HALT
+002034: 000000   HALT
+002036: 000000   HALT
+002040: 004737   JSR    PC,@#2050
+002044: 000137   JMP    @#2254
+SOUND_WRAPPER_B:
+002050: 012705   MOV    #6156,R5
+002054: 000137   JMP    @#2214
+SOUND_WRAPPER_A:
+002060: 012705   MOV    #6134,R5
+002064: 004737   JSR    PC,@#6204
+002070: 000207   RTS    PC
+
+; --- TITLE_SEQ (002072) ---
+
+TITLE_SEQ:
+002072: 004737   JSR    PC,@#4776
+002076: 012702   MOV    #15,R2
+002102: 000240   NOP
+002104: 012701   MOV    #40,R1
+002110: 104024   EMT    24
+002112: 005002   CLR    R2
+002114: 012701   MOV    #4744,R1
+002120: 104020   EMT    20
+002122: 012702   MOV    #17,R2
+002126: 000240   NOP
+002130: 012701   MOV    #43,R1
+002134: 104024   EMT    24
+002136: 005002   CLR    R2
+002140: 012701   MOV    #4762,R1
+002144: 104020   EMT    20
+002146: 000240   NOP
+002150: 000137   JMP    @#2246
+002154: 171440   .WORD  171440
+002156: 142736   BICB   #20324,@(SP)+
+002162: 020040   CMP    R0,-(R0)
+002164: 020040   CMP    R0,-(R0)
+002166: 030040   BIT    R0,-(R0)
+002170: 020040   CMP    R0,-(R0)
+002172: 020040   CMP    R0,-(R0)
+002174: 170040   .WORD  170040
+002176: 150317   BISB   R3,(PC)
+002200: 152331   BISB   (R3)+,@(R1)+
+002202: 144713   BICB   -(PC),(R3)
+002204: 020040   CMP    R0,-(R0)
+002206: 020040   CMP    R0,-(R0)
+002210: 032440   BIT    (R4)+,-(R0)
+002212: 000200   RTS    R0
+002214: 004737   JSR    PC,@#6204
+002220: 162737   SUB    #1,@#17436
+002226: 005737   TST    @#17436
+002232: 001401   BEQ    2236
+002234: 000207   RTS    PC
+002236: 000240   NOP
+002240: 000240   NOP
+002242: 000137   JMP    @#3576
+002246: 000406   BR     2264
+002250: 000137   JMP    @#1024
+002254: 012700   MOV    #1000,R0
+002260: 000137   JMP    @#1016
+
+; --- TITLE_WAIT (002264) ---
+
+TITLE_WAIT:
+002264: 104006   EMT    6
+002266: 004737   JSR    PC,@#41220
+002272: 001374   BNE    2264
+002274: 012701   MOV    #2330,R1
+002300: 004737   JSR    PC,@#41140
+002304: 000240   NOP
+002306: 000137   JMP    @#3234
+002312: 022700   CMP    #12,R0
+002316: 001374   BNE    2310
+002320: 012700   MOV    #14,R0
+002324: 104016   EMT    16
+002326: 000750   BR     2250
+002330: 006414   MARK   14
+002332: 020040   CMP    R0,-(R0)
+002334: 020040   CMP    R0,-(R0)
+002336: 020040   CMP    R0,-(R0)
+002340: 020040   CMP    R0,-(R0)
+002342: 020040   CMP    R0,-(R0)
+002344: 020040   CMP    R0,-(R0)
+002346: 165442   SUB    @-(R4),-(R2)
+002350: 160754   SUB    PC,@-(R4)
+002352: 021344   CMP    (R3),-(R4)
+002354: 006412   MARK   12
+002356: 111040   MOVB   (R0),-(R0)
+002360: 143751   BICB   @#140722,@-(R1)
+002364: 155040   BISB   @-(R0),-(R0)
+002366: 145701   BICB   @-(PC),R1
+002370: 140314   BICB   R3,(R4)
+002372: 140736   BICB   PC,@(SP)+
+002374: 152305   BISB   (R3)+,R5
+002376: 150723   BISB   PC,(R3)+
+002400: 153440   BISB   @(R4)+,-(R0)
+002402: 152040   BISB   (R0)+,-(R0)
+002404: 146717   BICB   161464,(PC)
+002410: 147724   BICB   @157316,(R4)+
+002414: 006412   MARK   12
+002416: 150040   BISB   R0,-(R0)
+002420: 147722   BICB   @154736,(R2)+
+002424: 020311   CMP    R3,(R1)
+002426: 151727   BISB   (PC),#20305
+002432: 140714   BICB   PC,(R4)
+002434: 144702   BICB   -(PC),R2
+002436: 144722   BICB   -(PC),(R2)+
+002440: 152316   BISB   (R3)+,(SP)
+002442: 026331   CMP    147723(R3),@(R1)+
+002446: 144702   BICB   -(PC),R2
+002450: 140722   BICB   PC,(R2)+
+002452: 005321   DEC    (R1)+
+002454: 020015   CMP    R0,(R5)
+002456: 153440   BISB   @(R4)+,-(R0)
+002460: 142723   BICB   #145440,(R3)+
+002464: 140714   BICB   PC,(R4)
+002466: 154704   BISB   -(PC),R4
+002470: 144440   BICB   -(R4),-(R0)
+002472: 144440   BICB   -(R4),-(R0)
+002474: 141332   BICB   (R3),@(R2)+
+002476: 143705   BICB   @#150701,R5
+002502: 153440   BISB   @(R4)+,-(R0)
+002504: 152323   BISB   (R3)+,(R3)+
+002506: 142722   BICB   #5336,(R2)+
+002512: 151415   BISB   (R4),(R5)
+002514: 155040   BISB   @-(R0),-(R0)
+002516: 146305   BICB   147305(R3),R5
+002522: 146731   BICB   23037,@(R1)+
+002526: 142736   BICB   #147714,@(SP)+
+002532: 142727   BICB   #145736,#146701
+002540: 026311   CMP    152323(R3),(R1)
+002544: 151301   BISB   (R3),R1
+002546: 152301   BISB   (R3)+,R1
+002550: 151730   BISB   (PC),@(R0)+
+002552: 005321   DEC    (R1)+
+002554: 147015   BICB   @20305(R0),(R5)
+002560: 150325   BISB   R3,(R5)+
+002562: 151701   BISB   (PC),R1
+002564: 154324   BISB   -(R3),(R4)+
+002566: 153440   BISB   @(R4)+,-(R0)
+002570: 153440   BISB   @(R4)+,-(R0)
+002572: 142317   BICB   (R3)+,(PC)
+002574: 020325   CMP    R3,(R5)+
+002576: 020311   CMP    R3,(R1)
+002600: 140716   BICB   PC,(SP)
+002602: 151302   BISB   (R3),R2
+002604: 152301   BISB   (R3)+,R1
+002606: 005330   DEC    @(R0)+
+002610: 020015   CMP    R0,(R5)
+002612: 020040   CMP    R0,-(R0)
+002614: 146440   BICB   145701(R4),-(R0)
+002620: 144723   BICB   -(PC),(R3)+
+002622: 140715   BICB   PC,(R5)
+002624: 154314   BISB   -(R3),(R4)
+002626: 147716   BICB   @23137,(SP)
+002632: 144736   BICB   -(PC),@(SP)+
+002634: 146323   BICB   20317(R3),(R3)+
+002640: 157317   BISB   @147713(R3),(PC)
+002644: 005327   DEC    #20015
+002650: 172440   .WORD  172440
+002652: 151320   BISB   (R3),(R0)+
+002654: 153701   BISB   @#150714,R1
+002660: 154324   BISB   -(R3),(R4)+
+002662: 142040   BICB   (R0)+,-(R0)
+002664: 144727   BICB   -(PC),#142726
+002670: 144716   BICB   -(PC),(SP)
+002672: 146705   BICB   150336,R5
+002676: 140722   BICB   PC,(R2)+
+002700: 147323   BICB   @143717(R3),(R3)+
+002704: 005317   DEC    (PC)
+002706: 020015   CMP    R0,(R5)
+002710: 020040   CMP    R0,-(R0)
+002712: 142736   BICB   #147714,@(SP)+
+002716: 142727   BICB   #145736,#20301
+002724: 147715   BICB   @152256,(R5)
+002730: 020317   CMP    R3,(PC)
+002732: 151320   BISB   (R3),(R0)+
+002734: 020311   CMP    R3,(R1)
+002736: 147720   BICB   @152657,(R0)+
+002742: 144735   BICB   -(PC),@(R5)+
+002744: 006412   MARK   12
+002746: 146313   BICB   153701(R3),(R3)
+002752: 155711   BISB   @-(PC),(R1)
+002754: 020072   CMP    R0,@100600(R2)
+002760: 101602   BLOS   2366
+002762: 020056   CMP    R0,@-(SP)
+002764: 151745   BISB   (PC),-(R5)
+002766: 154324   BISB   -(R3),(R4)+
+002770: 153440   BISB   @(R4)+,-(R0)
+002772: 155317   BISB   @-(R3),(PC)
+002774: 147715   BICB   @152326,(R5)
+003000: 151717   BISB   (PC),(PC)
+003002: 154324   BISB   -(R3),(R4)+
+003004: 006412   MARK   12
+003006: 020040   CMP    R0,-(R0)
+003010: 140722   BICB   PC,(R2)+
+003012: 151332   BISB   (R3),@(R2)+
+003014: 155725   BISB   @-(PC),(R5)+
+003016: 152301   BISB   (R3)+,R1
+003020: 020330   CMP    R3,@(R0)+
+003022: 142716   BICB   #147713,(SP)
+003026: 147724   BICB   @157754,(R4)+
+003032: 020305   CMP    R3,R5
+003034: 152323   BISB   (R3)+,(R3)+
+003036: 147305   BICB   @144713(R3),R5
+003042: 005072   CLR    @20015(R2)
+003046: 020040   CMP    R0,-(R0)
+003050: 152363   BISB   (R3)+,142722(R3)
+003054: 154314   BISB   -(R3),(R4)
+003056: 140702   BICB   PC,R2
+003060: 153440   BISB   @(R4)+,-(R0)
+003062: 142714   BICB   #147727,(R4)
+003066: 026440   CMP    36040(R4),-(R0)
+003072: 037121   BIT    @5040(R1),(R1)+
+003076: 111015   MOVB   (R0),(R5)
+003100: 020040   CMP    R0,-(R0)
+003102: 020040   CMP    R0,-(R0)
+003104: 152363   BISB   (R3)+,142722(R3)
+003110: 154314   BISB   -(R3),(R4)
+003112: 140702   BICB   PC,R2
+003114: 153440   BISB   @(R4)+,-(R0)
+003116: 151320   BISB   (R3),(R0)+
+003120: 153701   BISB   @#26717,R1
+003124: 036040   BIT    37123(R0),-(R0)
+003130: 005040   CLR    -(R0)
+003132: 020015   CMP    R0,(R5)
+003134: 154767   BISB   -(PC),146042
+003140: 144722   BICB   -(PC),(R2)+
+003142: 142724   BICB   #151440,(R4)+
+003146: 147713   BICB   @153074,(R3)
+003152: 152323   BISB   (R3)+,(R3)+
+003154: 026330   CMP    140716(R3),@(R0)+
+003160: 140726   BICB   PC,(SP)+
+003162: 020327   CMP    R3,#140314
+003166: 152702   BISB   #5300,R2
+003172: 144415   BICB   -(R4),(R5)
+003174: 020332   CMP    R3,@(R2)+
+003176: 146313   BICB   153701(R3),(R3)
+003202: 155711   BISB   @-(PC),(R1)
+003204: 030472   BIT    R4,@31054(R2)
+003210: 031454   BIT    (R4),@-(R4)
+003212: 032054   BIT    (R0)+,@-(R4)
+003214: 030450   BIT    R4,@-(R0)
+003216: 066455   ADD    74141(R4),@-(R5)
+003222: 032054   BIT    (R0)+,@-(R4)
+003224: 066455   ADD    67151(R4),@-(R5)
+003230: 000051   .WORD  51
+003232: 001621   BEQ    2676
+
+; --- DIFF_SELECT (003234) ---
+
+DIFF_SELECT:
+003234: 104006   EMT    6
+003236: 022700   CMP    #61,R0
+003242: 003374   BGT    3234
+003244: 022700   CMP    #64,R0
+003250: 002771   BLT    3234
+003252: 162700   SUB    #30,R0
+003256: 004737   JSR    PC,@#1142
+003262: 012700   MOV    #14,R0
+003266: 104016   EMT    16
+003270: 000137   JMP    @#37740
+
+; --- GAME_OVER_WAIT (003274) ---
+
+GAME_OVER_WAIT:
+003274: 104006   EMT    6
+003276: 022700   CMP    #15,R0
+003302: 001374   BNE    3274
+003304: 000137   JMP    @#1000
+003310: 000000   HALT
+003312: 000000   HALT
+003314: 000000   HALT
+003316: 000000   HALT
+003320: 000000   HALT
+003322: 000000   HALT
+003324: 000000   HALT
+003326: 000000   HALT
+003330: 000000   HALT
+003332: 000000   HALT
+003334: 000000   HALT
+003336: 000000   HALT
+003340: 000000   HALT
+003342: 000000   HALT
+003344: 000000   HALT
+003346: 000000   HALT
+003350: 000000   HALT
+003352: 000000   HALT
+003354: 000000   HALT
+003356: 104006   EMT    6
+003360: 022700   CMP    #15,R0
+003364: 001374   BNE    3356
+003366: 000137   JMP    @#1000
+
+; --- LIVES_DISPLAY (003372) ---
+
+LIVES_DISPLAY:
+003372: 012702   MOV    #0,R2
+003376: 000240   NOP
+003400: 012701   MOV    #40,R1
+003404: 104024   EMT    24
+003406: 162706   SUB    #12,SP
+003412: 012746   MOV    #1,-(SP)
+003416: 012746   MOV    #17436,-(SP)
+003422: 012746   MOV    #2204,-(SP)
+003426: 004737   JSR    PC,@#4210
+003432: 012701   MOV    #2171,R1
+003436: 005002   CLR    R2
+003440: 104020   EMT    20
+003442: 000207   RTS    PC
+
+; --- DEATH_SCORE (003444) ---
+
+DEATH_SCORE:
+003444: 005337   DEC    @#17436
+003450: 062737   ADD    #764,@#17440
+003456: 162706   SUB    #12,SP
+003462: 012746   MOV    #1,-(SP)
+003466: 012746   MOV    #17436,-(SP)
+003472: 012746   MOV    #2204,-(SP)
+003476: 004737   JSR    PC,@#4210
+003502: 162706   SUB    #12,SP
+003506: 012746   MOV    #1,-(SP)
+003512: 012746   MOV    #17440,-(SP)
+003516: 012746   MOV    #2162,-(SP)
+003522: 004737   JSR    PC,@#4210
+003526: 005002   CLR    R2
+003530: 012701   MOV    #17,R1
+003534: 104024   EMT    24
+003536: 012701   MOV    #2154,R1
+003542: 005002   CLR    R2
+003544: 000240   NOP
+003546: 104020   EMT    20
+003550: 012705   MOV    #6134,R5
+003554: 004737   JSR    PC,@#6204
+003560: 005737   TST    @#17436
+003564: 001327   BNE    3444
+003566: 000240   NOP
+003570: 000240   NOP
+003572: 000137   JMP    @#3356
+
+; --- GAME_LEVEL_LOOP (003576) ---
+
+GAME_LEVEL_LOOP:
+003576: 013702   MOV    @#17430,R2
+003602: 016204   MOV    2(R2),R4
+003606: 010446   MOV    R4,-(SP)
+003610: 010246   MOV    R2,-(SP)
+003612: 004737   JSR    PC,@#5002
+003616: 012705   MOV    #6156,R5
+003622: 004737   JSR    PC,@#6204
+003626: 012602   MOV    (SP)+,R2
+003630: 012604   MOV    (SP)+,R4
+003632: 022704   CMP    #22640,R4
+003636: 003003   BGT    3646
+003640: 162702   SUB    #24,R2
+003644: 000756   BR     3602
+003646: 000137   JMP    @#3274
+
+; --- HUD_RENDER (003652) ---
+
+HUD_RENDER:
+        ; [УКНЦ DIFF]
+003652: 012701   MOV    #17,R1
+003656: 005002   CLR    R2
+003660: 104024   EMT    24
+003662: 162706   SUB    #12,SP
+003666: 012746   MOV    #1,-(SP)
+003672: 012746   MOV    #17440,-(SP)
+003676: 012746   MOV    #2162,-(SP)
+003702: 004737   JSR    PC,@#4210
+003706: 162706   SUB    #12,SP
+003712: 012746   MOV    #1,-(SP)
+003716: 012746   MOV    #17436,-(SP)
+003722: 012746   MOV    #2204,-(SP)
+003726: 004737   JSR    PC,@#4210
+003732: 012701   MOV    #2154,R1
+003736: 005002   CLR    R2
+003740: 004737   JSR    PC,@#41100
+003744: 000207   RTS    PC
+
+; --- BONUS_LIFE_ADD (003746) ---
+
+BONUS_LIFE_ADD:
+003746: 004737   JSR    PC,@#12326
+003752: 005237   INC    @#17436
+003756: 004737   JSR    PC,@#3372
+003762: 000207   RTS    PC
+
+; --- SCORE_ADD (003764) ---
+
+SCORE_ADD:
+003764: 004737   JSR    PC,@#12326
+003770: 062737   ADD    #12,@#17440
+003776: 000207   RTS    PC
+
+; --- GAME_INIT (004000) — [УКНЦ DIFF: lives = 0o333] ---
+
+GAME_INIT:
+004000: 012737   MOV    #333,@#17436  ; [УКНЦ DIFF] MOV #0333, @#LIVES — init lives (0o333=219 dec, УКНЦ encoding)
+004006: 162706   SUB    #12,SP  ; SUB #012, SP — allocate stack args for NUM_RENDER
+004012: 012746   MOV    #1,-(SP)  ; MOV #1, -(SP)
+004016: 012746   MOV    #17436,-(SP)  ; MOV #017436, -(SP) — @#LIVES
+004022: 012746   MOV    #2204,-(SP)  ; MOV #002204, -(SP)
+004026: 004737   JSR    PC,@#4210  ; JSR PC, @#NUM_RENDER — draw lives counter
+004032: 005037   CLR    @#17440  ; CLR @#017440 — SCORE = 0
+004036: 162706   SUB    #12,SP
+004042: 012746   MOV    #1,-(SP)
+004046: 012746   MOV    #17440,-(SP)
+004052: 012746   MOV    #2162,-(SP)
+004056: 004737   JSR    PC,@#4210
+004062: 000407   BR     4102
+004064: 004737   JSR    PC,@#12326
+004070: 062737   ADD    #12,@#17440
+004076: 000207   RTS    PC
+004100: 000000   HALT
+004102: 000240   NOP
+004104: 012737   MOV    #12360,@#100
+004112: 012706   MOV    #740,SP
+004116: 000240   NOP
+004120: 000240   NOP
+004122: 000240   NOP
+004124: 000137   JMP    @#5754
+004130: 012705   MOV    #4550,R5
+004134: 004737   JSR    PC,@#6204
+004140: 000137   JMP    @#1004
+004144: 011200   MOV    (R2),R0
+004146: 002002   BGE    4154
+004150: 000137   JMP    @#1016
+004154: 000137   JMP    @#1000
+004160: 023727   CMP    @#17430,#11200
+004166: 002002   BGE    4174
+004170: 000137   JMP    @#1016
+004174: 012705   MOV    #4400,R5
+004200: 004737   JSR    PC,@#6204
+004204: 000137   JMP    @#3444
+
+; --- NUM_RENDER (004210) ---
+
+NUM_RENDER:
+004210: 010166   MOV    R1,10(SP)
+004214: 010601   MOV    SP,R1
+004216: 062701   ADD    #12,R1
+004222: 010221   MOV    R2,(R1)+
+004224: 010421   MOV    R4,(R1)+
+004226: 010521   MOV    R5,(R1)+
+004230: 012621   MOV    (SP)+,(R1)+
+004232: 012605   MOV    (SP)+,R5
+004234: 012604   MOV    (SP)+,R4
+004236: 162705   SUB    #6,R5
+004242: 062705   ADD    #6,R5
+004246: 105015   CLRB   (R5)
+004250: 005316   DEC    (SP)
+004252: 100444   BMI    4364
+004254: 012746   MOV    #6,-(SP)
+004260: 061605   ADD    (SP),R5
+004262: 011402   MOV    (R4),R2
+004264: 100002   BPL    4272
+004266: 005102   COM    R2
+004270: 005202   INC    R2
+004272: 005046   CLR    -(SP)
+004274: 012701   MOV    #20,R1
+004300: 006302   ASL    R2
+004302: 006116   ROL    (SP)
+004304: 021627   CMP    (SP),#12
+004310: 100403   BMI    4320
+004312: 162716   SUB    #12,(SP)
+004316: 005202   INC    R2
+004320: 077111   SOB    R1,4300
+004322: 052716   BIS    #60,(SP)
+004326: 112645   MOVB   (SP)+,-(R5)
+004330: 005316   DEC    (SP)
+004332: 005702   TST    R2
+004334: 001356   BNE    4272
+004336: 005724   TST    (R4)+
+004340: 100004   BPL    4352
+004342: 112745   MOVB   #55,-(R5)
+004346: 005316   DEC    (SP)
+004350: 001403   BEQ    4360
+004352: 112745   MOVB   #40,-(R5)
+004356: 000773   BR     4346
+004360: 005726   TST    (SP)+
+004362: 000727   BR     4242
+004364: 005726   TST    (SP)+
+004366: 012601   MOV    (SP)+,R1
+004370: 012602   MOV    (SP)+,R2
+004372: 012604   MOV    (SP)+,R4
+004374: 012605   MOV    (SP)+,R5
+004376: 000207   RTS    PC
+004400: 000100   JMP    R0
+004402: 010106   MOV    R1,SP
+004404: 011102   MOV    (R1),R2
+004406: 011076   MOV    (R0),@12072(SP)
+004412: 012067   MOV    (R0)+,17502
+004416: 014061   MOV    -(R0),14056(R1)
+004422: 015053   MOV    @-(R0),@-(R3)
+004424: 016051   MOV    17046(R0),@-(R1)
+004430: 017044   MOV    @10306(R0),-(R4)
+004434: 011302   MOV    (R3),R2
+004436: 011276   MOV    (R2),@12272(SP)
+004442: 012267   MOV    (R2)+,17732
+004446: 014261   MOV    -(R2),14256(R1)
+004452: 015253   MOV    @-(R2),@-(R3)
+004454: 016251   MOV    17246(R2),@-(R1)
+004460: 017244   MOV    @10506(R2),-(R4)
+004464: 011502   MOV    (R5),R2
+004466: 011476   MOV    (R4),@12472(SP)
+004472: 012467   MOV    (R4)+,20162
+004476: 014461   MOV    -(R4),14456(R1)
+004502: 015453   MOV    @-(R4),@-(R3)
+004504: 016451   MOV    17446(R4),@-(R1)
+004510: 017444   MOV    @10706(R4),-(R4)
+004514: 011702   MOV    (PC),R2
+004516: 011676   MOV    (SP),@12672(SP)
+004522: 012667   MOV    (SP)+,20412
+004526: 014661   MOV    -(SP),14656(R1)
+004532: 015653   MOV    @-(SP),@-(R3)
+004534: 016651   MOV    17646(SP),@-(R1)
+004540: 017644   MOV    @0(SP),-(R4)
+004544: 000000   HALT
+004546: 000000   HALT
+004550: 000100   JMP    R0
+004552: 010506   MOV    R5,SP
+004554: 011502   MOV    (R5),R2
+004556: 011476   MOV    (R4),@12472(SP)
+004562: 012467   MOV    (R4)+,20252
+004566: 014461   MOV    -(R4),14456(R1)
+004572: 015453   MOV    @-(R4),@-(R3)
+004574: 016451   MOV    17446(R4),@-(R1)
+004600: 017444   MOV    @10706(R4),-(R4)
+004604: 011702   MOV    (PC),R2
+004606: 011676   MOV    (SP),@12672(SP)
+004612: 012667   MOV    (SP)+,20502
+004616: 014661   MOV    -(SP),14656(R1)
+004622: 015653   MOV    @-(SP),@-(R3)
+004624: 016651   MOV    17646(SP),@-(R1)
+004630: 017644   MOV    @0(SP),-(R4)
+004634: 000000   HALT
+004636: 000000   HALT
+
+; --- PLAYER_DEATH_TRIGGER (004640) ---
+
+PLAYER_DEATH_TRIGGER:
+004640: 052763   BIS    #2000,177700(R3)
+004646: 052763   BIS    #20000,100(R3)
+004654: 000137   JMP    @#12614
+
+; --- KEY_ACTION_DATA (004660) — [УКНЦ DIFF: 6 entries] ---
+
+KEY_ACTION_DATA:
+004660: 000000   HALT
+004662: 000006   RTT
+004664: 000002   RTI
+004666: 000012   .WORD  12
+004670: 000004   IOT
+004672: 000022   .WORD  22
+
+; --- KBD_GAME_POLL (004674) — [УКНЦ DIFF: УКНЦ keyboard] ---
+
+KBD_GAME_POLL:
+        ; [УКНЦ DIFF]
+004674: 004737   JSR    PC,@#41020  ; [УКНЦ] JSR PC, @#KBD_POLL — check УКНЦ keyboard status
+004700: 000240   NOP  ; NOP
+004702: 001002   BNE    4710  ; BNE 4710 — key available?
+004704: 000137   JMP    @#1354  ; JMP @#GAME_LOOP_MENU — no key → menu path
+004710: 012701   MOV    #4660,R1  ; [УКНЦ DIFF] MOV #004660, R1 — R1 → УКНЦ action table (6 entries)
+004714: 012705   MOV    #6,R5  ; [УКНЦ DIFF] MOV #6, R5 — 6 entries (not 11 like BK-0010)
+004720: 012703   MOV    #0,R3  ; [УКНЦ DIFF] MOV #0, R3 — R3 = key code from KBD_POLL
+KBD_SCAN:
+004724: 012100   MOV    (R1)+,R0  ; MOV (R1)+, R0 — action code
+004726: 006003   ROR    R3  ; ROR R3 — rotate key bit into carry
+004730: 103403   BCS    4740  ; BCS KBD_HIT
+004732: 077504   SOB    R5,4724  ; SOB R5, KBD_SCAN
+004734: 000137   JMP    @#1424  ; JMP @#NO_KEY
+KBD_HIT:
+004740: 000137   JMP    @#1436  ; JMP @#ACT_DISPATCH
+004744: 144756   BICB   -(PC),@-(SP)
+004746: 147713   BICB   @145666,(R3)
+004752: 153705   BISB   @#30440,R5
+004756: 034071   BIT    -(R0),@67(R1)
+004762: 140742   BICB   PC,-(R2)
+004764: 140722   BICB   PC,(R2)+
+004766: 147716   BICB   @5321,(SP)
+004772: 027344   CMP    @27347(R3),-(R4)
+
+; --- LEVEL_RENDER (004776) ---
+
+LEVEL_RENDER:
+004776: 012704   MOV    #5150,R4
+
+; --- LEVEL_RENDER_R4 (005002) ---
+
+LEVEL_RENDER_R4:
+005002: 005001   CLR    R1
+005004: 012705   MOV    #26,R5
+LRND_ROW:
+005010: 010146   MOV    R1,-(SP)
+005012: 012703   MOV    #20,R3
+LRND_BYTE:
+005016: 111402   MOVB   (R4),R2
+005020: 042702   BIC    #177760,R2
+005024: 006302   ASL    R2
+005026: 006302   ASL    R2
+005030: 006302   ASL    R2
+005032: 006302   ASL    R2
+005034: 062702   ADD    #17450,R2
+005040: 004737   JSR    PC,@#5106
+005044: 062701   ADD    #2,R1
+005050: 112402   MOVB   (R4)+,R2
+005052: 042702   BIC    #177417,R2
+005056: 062702   ADD    #17450,R2
+005062: 004737   JSR    PC,@#5106
+005066: 062701   ADD    #2,R1
+005072: 077327   SOB    R3,5016
+005074: 012601   MOV    (SP)+,R1
+005076: 062701   ADD    #1000,R1
+005102: 077536   SOB    R5,5010
+005104: 000207   RTS    PC
+
+; --- TILE_BLIT_FWD (005106) ---
+; [УКНЦ DIFF] inner loop calls DISP_COL_BLIT instead of direct MOV to 046000(R1)
+; BK-0010: MOV (R2)+, 046000(R1)   ← direct framebuffer write
+; УКНЦ:    JSR PC, @#DISP_COL_BLIT ← goes through video port @#176640
+
+TILE_BLIT_FWD:
+005106: 010546   MOV    R5,-(SP)
+005110: 010446   MOV    R4,-(SP)
+005112: 010346   MOV    R3,-(SP)
+005114: 010146   MOV    R1,-(SP)
+005116: 012705   MOV    #10,R5
+005122: 004737   JSR    PC,@#41040  ; [УКНЦ DIFF] JSR PC, @#DISP_COL_BLIT — write column via video port (not direct RAM)
+005126: 004737   JSR    PC,@#40060  ; [УКНЦ DIFF] JSR PC, @#DISP_SCANLINE_WRITE — secondary scanline write
+005132: 000240   NOP  ; NOP
+005134: 012601   MOV    (SP)+,R1
+005136: 012603   MOV    (SP)+,R3
+005140: 012604   MOV    (SP)+,R4
+005142: 012605   MOV    (SP)+,R5
+005144: 000207   RTS    PC
+005146: 007760   .WORD  7760
+005150: 135673   BITB   @-(SP),@135673(R3)
+005154: 135673   BITB   @-(SP),@135673(R3)
+005160: 135673   BITB   @-(SP),@135673(R3)
+005164: 135673   BITB   @-(SP),@135673(R3)
+005170: 000013   .WORD  13
+005172: 000000   HALT
+005174: 000000   HALT
+005176: 000000   HALT
+005200: 000000   HALT
+005202: 000000   HALT
+005204: 000000   HALT
+005206: 130000   BITB   R0,R0
+005210: 004013   JSR    R0,(R3)
+005212: 004000   JSR    R0,R0
+005214: 000000   HALT
+005216: 004210   JSR    R2,(R0)
+005220: 100000   BPL    5222
+005222: 000000   HALT
+005224: 104000   EMT    0
+005226: 130010   BITB   R0,(R0)
+005230: 004013   JSR    R0,(R3)
+005232: 000200   RTS    R0
+005234: 100000   BPL    5236
+005236: 004000   JSR    R0,R0
+005240: 004000   JSR    R0,R0
+005242: 000010   .WORD  10
+005244: 000200   RTS    R0
+005246: 130010   BITB   R0,(R0)
+005250: 004013   JSR    R0,(R3)
+005252: 000010   .WORD  10
+005254: 004000   JSR    R0,R0
+005256: 004000   JSR    R0,R0
+005260: 000200   RTS    R0
+005262: 000200   RTS    R0
+005264: 000010   .WORD  10
+005266: 130010   BITB   R0,(R0)
+005270: 104013   EMT    13
+005272: 000000   HALT
+005274: 004000   JSR    R0,R0
+005276: 004000   JSR    R0,R0
+005300: 000200   RTS    R0
+005302: 000200   RTS    R0
+005304: 000010   .WORD  10
+005306: 130010   BITB   R0,(R0)
+005310: 004013   JSR    R0,(R3)
+005312: 000010   .WORD  10
+005314: 004000   JSR    R0,R0
+005316: 004000   JSR    R0,R0
+005320: 000200   RTS    R0
+005322: 000200   RTS    R0
+005324: 000010   .WORD  10
+005326: 130010   BITB   R0,(R0)
+005330: 004013   JSR    R0,(R3)
+005332: 000200   RTS    R0
+005334: 004000   JSR    R0,R0
+005336: 004000   JSR    R0,R0
+005340: 104200   EMT    200
+005342: 000210   .WORD  210
+005344: 000010   .WORD  10
+005346: 130010   BITB   R0,(R0)
+005350: 004013   JSR    R0,(R3)
+005352: 004000   JSR    R0,R0
+005354: 004000   JSR    R0,R0
+005356: 004000   JSR    R0,R0
+005360: 000200   RTS    R0
+005362: 000200   RTS    R0
+005364: 000010   .WORD  10
+005366: 130010   BITB   R0,(R0)
+005370: 004013   JSR    R0,(R3)
+005372: 004000   JSR    R0,R0
+005374: 000200   RTS    R0
+005376: 004000   JSR    R0,R0
+005400: 000200   RTS    R0
+005402: 000200   RTS    R0
+005404: 104210   EMT    210
+005406: 130010   BITB   R0,(R0)
+005410: 000013   .WORD  13
+005412: 000000   HALT
+005414: 000000   HALT
+005416: 000000   HALT
+005420: 000000   HALT
+005422: 100000   BPL    5424
+005424: 000000   HALT
+005426: 130200   BITB   R2,R0
+005430: 040113   BIC    R1,(R3)
+005432: 000000   HALT
+005434: 000000   HALT
+005436: 000000   HALT
+005440: 000000   HALT
+005442: 000000   HALT
+005444: 000000   HALT
+005446: 132004   BITB   (R0)+,R4
+005450: 146313   BICB   214(R3),(R3)
+005454: 000000   HALT
+005456: 000000   HALT
+005460: 000000   HALT
+005462: 000000   HALT
+005464: 144000   BICB   -(R0),R0
+005466: 136314   BITB   13(R3),(R4)
+005472: 000200   RTS    R0
+005474: 000000   HALT
+005476: 000000   HALT
+005500: 000000   HALT
+005502: 000000   HALT
+005504: 004000   JSR    R0,R0
+005506: 130000   BITB   R0,R0
+005510: 110013   MOVB   R0,(R3)
+005512: 000200   RTS    R0
+005514: 000000   HALT
+005516: 000000   HALT
+005520: 000000   HALT
+005522: 000000   HALT
+005524: 004000   JSR    R0,R0
+005526: 130011   BITB   R0,(R1)
+005530: 140013   BICB   R0,(R3)
+005532: 004314   JSR    R3,(R4)
+005534: 000000   HALT
+005536: 000000   HALT
+005540: 000000   HALT
+005542: 000000   HALT
+005544: 146200   BICB   130014(R2),R0
+005550: 000013   .WORD  13
+005552: 004000   JSR    R0,R0
+005554: 000000   HALT
+005556: 000000   HALT
+005560: 000000   HALT
+005562: 000000   HALT
+005564: 000200   RTS    R0
+005566: 130000   BITB   R0,R0
+005570: 000113   JMP    (R3)
+005572: 074000   XOR    R0,R0
+005574: 103567   BCS    6154
+005576: 042104   BIC    (R1)+,R4
+005600: 042104   BIC    (R1)+,R4
+005602: 073570   ASHC   @207(R0),R5
+005606: 132400   BITB   (R4)+,R0
+005610: 073713   ASHC   (R3),PC
+005612: 004167   JSR    R1,105616
+005616: 146314   BICB   146314(R3),(R4)
+005622: 000010   .WORD  10
+005624: 073600   ASHC   R0,SP
+005626: 136167   BITB   156713(R1),11650
+005634: 000000   HALT
+005636: 000000   HALT
+005640: 000000   HALT
+005642: 000000   HALT
+005644: 140200   BICB   R2,R0
+005646: 136335   BITB   167313(R3),@(R5)+
+005652: 156314   BISB   156735(R3),(R4)
+005656: 156735   BISB   164617,@(R5)+
+005662: 156735   BISB   154203,@(R5)+
+005666: 136356   BITB   135673(R3),@-(SP)
+005672: 135673   BITB   @-(SP),@135673(R3)
+005676: 135673   BITB   @-(SP),@135673(R3)
+005702: 135673   BITB   @-(SP),@135673(R3)
+005706: 135673   BITB   @-(SP),@11405(R3)
+005712: 061305   ADD    (R3),R5
+005714: 004737   JSR    PC,@#12326
+005720: 000137   JMP    @#13216
+005724: 022700   CMP    #177777,R0
+005730: 001407   BEQ    5750
+005732: 022700   CMP    #12,R0
+005736: 003004   BGT    5750
+005740: 004737   JSR    PC,@#12326
+005744: 000137   JMP    @#13006
+005750: 000137   JMP    @#13112
+
+; --- HW_INIT (005754) — [УКНЦ DIFF: BR instead of TSTB] ---
+
+HW_INIT:
+        ; [УКНЦ DIFF]
+005754: 000432   BR     6042  ; [УКНЦ DIFF] BR 5762 — skip ROM presence check
+005756: 000040   .WORD  40
+005760: 001003   BNE    5770
+005762: 012700   MOV    #233,R0
+005766: 104016   EMT    16
+005770: 105737   TSTB   @#56
+005774: 001003   BNE    6004
+005776: 012700   MOV    #232,R0
+006002: 104016   EMT    16
+006004: 012700   MOV    #224,R0
+006010: 104016   EMT    16
+006012: 012700   MOV    #236,R0
+006016: 104016   EMT    16
+006020: 012700   MOV    #14,R0
+006024: 104016   EMT    16
+006026: 012700   MOV    #221,R0
+006032: 104016   EMT    16
+006034: 012737   MOV    #1330,@#177664
+006042: 012737   MOV    #10404,@#17430
+006050: 000137   JMP    @#2072
+
+; --- PLAYER_SPRITE_INIT (006054) ---
+
+PLAYER_SPRITE_INIT:
+006054: 004737   JSR    PC,@#3652
+006060: 013700   MOV    @#14420,R0
+006064: 012702   MOV    #21640,R2
+006070: 012704   MOV    #14420,R4
+006074: 004737   JSR    PC,@#14030
+006100: 013703   MOV    @#14422,R3
+006104: 032713   BIT    #4000,(R3)
+006110: 001010   BNE    6132
+006112: 012700   MOV    #10,R0
+006116: 012702   MOV    #21640,R2
+006122: 012704   MOV    #14420,R4
+006126: 004737   JSR    PC,@#14030
+006132: 000207   RTS    PC
+
+; --- SOUND_TBL_A (006134) — sound entity data, set A ---
+
+SOUND_TBL_A:
+006134: 000100   JMP    R0
+006136: 011502   MOV    (R5),R2
+006140: 012472   MOV    (R4)+,@14461(R2)
+006144: 015453   MOV    @-(R4),@-(R3)
+006146: 017446   MOV    @100(R4),-(SP)
+006152: 000000   HALT
+006154: 000000   HALT
+
+; --- SOUND_TBL_B (006156) — sound entity data, set B ---
+
+SOUND_TBL_B:
+006156: 000400   BR     6160
+006160: 037044   BIT    @36051(R0),-(R4)
+006164: 034056   BIT    -(R0),@-(SP)
+006166: 033064   BIT    @(R0)+,32067(R4)
+006172: 031076   BIT    (R0),@30106(SP)
+006176: 000400   BR     6200
+006200: 000000   HALT
+006202: 000000   HALT
+
+; --- ENTITY_HANDLER / SOUND ENGINE (006204) ---
+; Generates BK-0010/УКНЦ speaker tones by toggling @#177716 bit 7.
+; [УКНЦ DIFF] the two speaker HIGH/LOW constants differ (same register, different values).
+
+ENTITY_HANDLER:
+006204: 011501   MOV    (R5),R1
+006206: 032701   BIT    #10000,R1
+006212: 001444   BEQ    6324
+006214: 010102   MOV    R1,R2
+006216: 042701   BIC    #177600,R1
+006222: 006302   ASL    R2
+006224: 000302   SWAB   R2
+006226: 042702   BIC    #177774,R2
+006232: 012503   MOV    (R5)+,R3
+006234: 000303   SWAB   R3
+006236: 006203   ASR    R3
+006240: 042703   BIC    #177600,R3
+006244: 010304   MOV    R3,R4
+006246: 042703   BIC    #177760,R3
+006252: 006204   ASR    R4
+006254: 006204   ASR    R4
+006256: 006204   ASR    R4
+006260: 006204   ASR    R4
+006262: 000240   NOP
+006264: 000240   NOP
+006266: 060204   ADD    R2,R4
+006270: 012700   MOV    #3,R0
+006274: 160200   SUB    R2,R0
+006276: 005700   TST    R0
+006300: 001402   BEQ    6306
+006302: 006301   ASL    R1
+006304: 077004   SOB    R0,6276
+006306: 005704   TST    R4
+006310: 001402   BEQ    6316
+006312: 006303   ASL    R3
+006314: 077404   SOB    R4,6306
+006316: 012702   MOV    #1,R2
+006322: 000421   BR     6366
+ENT_INACTIVE:
+006324: 022701   CMP    #77,R1
+006330: 100042   BPL    6436
+006332: 012702   MOV    #6,R2
+006336: 006201   ASR    R1
+006340: 077202   SOB    R2,6336
+006342: 012702   MOV    #377,R2
+006346: 006302   ASL    R2
+006350: 077102   SOB    R1,6346
+006352: 010237   MOV    R2,@#5146
+006356: 012504   MOV    (R5)+,R4
+006360: 000711   BR     6204
+006362: 010102   MOV    R1,R2
+006364: 000415   BR     6420
+ENT_SPEAKER_LOOP:
+        ; [УКНЦ DIFF]
+006366: 010146   MOV    R1,-(SP)
+006370: 010246   MOV    R2,-(SP)  ; [УКНЦ DIFF] MOV @#?, @#177716 — speaker HIGH value (different from BK-0010)
+006372: 010346   MOV    R3,-(SP)
+006374: 004737   JSR    PC,@#41740
+006400: 012603   MOV    (SP)+,R3
+006402: 012602   MOV    (SP)+,R2  ; [УКНЦ DIFF] MOV @#?, @#177716 — speaker LOW value
+006404: 012601   MOV    (SP)+,R1
+006406: 000240   NOP
+006410: 000240   NOP
+006412: 000240   NOP
+006414: 005715   TST    (R5)
+006416: 001406   BEQ    6434
+006420: 013700   MOV    @#5146,R0
+006424: 077001   SOB    R0,6424
+006426: 077204   SOB    R2,6420
+006430: 000167   JMP    6204
+ENT_DONE:
+006434: 000207   RTS    PC
+006436: 010102   MOV    R1,R2
+006440: 012504   MOV    (R5)+,R4
+006442: 000764   BR     6414
+
+; --- ENTITY_STATE_INIT (006444) ---
+
+ENTITY_STATE_INIT:
+006444: 005037   CLR    @#17360
+006450: 005037   CLR    @#17376
+006454: 004737   JSR    PC,@#6054
+006460: 000207   RTS    PC
+
+; --- WATER_COLLISION (006462) ---
+
+WATER_COLLISION:
+006462: 013700   MOV    @#14442,R0
+006466: 122710   CMPB   #15,(R0)
+006472: 001026   BNE    6550
+006474: 013702   MOV    @#14442,R2
+006500: 013701   MOV    @#14446,R1
+006504: 004737   JSR    PC,@#14302
+006510: 162702   SUB    #100,R2
+006514: 162701   SUB    #1000,R1
+006520: 004737   JSR    PC,@#14302
+006524: 013700   MOV    @#17430,R0
+006530: 016037   MOV    20(R0),@#14442
+006536: 016037   MOV    22(R0),@#14446
+006544: 005037   CLR    @#17376
+006550: 000207   RTS    PC
+
+; --- ENEMY2_TICK (006552) ---
+
+ENEMY2_TICK:
+006552: 005737   TST    @#14442
+006556: 001001   BNE    6562
+006560: 000207   RTS    PC
+006562: 022737   CMP    #400,@#17376
+006570: 001001   BNE    6574
+006572: 000403   BR     6602
+006574: 005237   INC    @#17376
+006600: 000207   RTS    PC
+ENEMY2_MOVE:
+006602: 012705   MOV    #14440,R5
+006606: 012704   MOV    #14422,R4
+006612: 022725   CMP    #10,(R5)+
+006616: 001547   BEQ    7136
+006620: 011500   MOV    (R5),R0
+006622: 162700   SUB    #14550,R0
+006626: 042700   BIC    #177700,R0
+006632: 011401   MOV    (R4),R1
+006634: 162701   SUB    #14550,R1
+006640: 042701   BIC    #177700,R1
+006644: 020001   CMP    R0,R1
+006646: 001440   BEQ    6750
+006650: 003072   BGT    7036
+006652: 011501   MOV    (R5),R1
+006654: 032711   BIT    #100000,(R1)
+006660: 001433   BEQ    6750
+006662: 122761   CMPB   #11,2(R1)
+006670: 001427   BEQ    6750
+006672: 062701   ADD    #2,R1
+006676: 020137   CMP    R1,@#14432
+006702: 001422   BEQ    6750
+006704: 005000   CLR    R0
+006706: 004767   JSR    PC,7202
+006712: 012704   MOV    #14440,R4
+006716: 032774   BIT    #4000,@2(R4)
+006724: 001010   BNE    6746
+006726: 011501   MOV    (R5),R1
+006730: 062701   ADD    #100,R1
+006734: 020137   CMP    R1,@#14432
+006740: 001402   BEQ    6746
+006742: 004767   JSR    PC,7242
+006746: 000207   RTS    PC
+006750: 011500   MOV    (R5),R0
+006752: 162700   SUB    #14550,R0
+006756: 042700   BIC    #77,R0
+006762: 011401   MOV    (R4),R1
+006764: 162701   SUB    #14550,R1
+006770: 042701   BIC    #77,R1
+006774: 020001   CMP    R0,R1
+006776: 001745   BEQ    6712
+007000: 003040   BGT    7102
+007002: 011501   MOV    (R5),R1
+007004: 032711   BIT    #10000,(R1)
+007010: 001740   BEQ    6712
+007012: 062701   ADD    #100,R1
+007016: 020137   CMP    R1,@#14432
+007022: 001733   BEQ    6712
+007024: 012700   MOV    #6,R0
+007030: 004767   JSR    PC,7202
+007034: 000726   BR     6712
+007036: 011501   MOV    (R5),R1
+007040: 032711   BIT    #40000,(R1)
+007044: 001741   BEQ    6750
+007046: 122761   CMPB   #11,177776(R1)
+007054: 001735   BEQ    6750
+007056: 162701   SUB    #2,R1
+007062: 020137   CMP    R1,@#14432
+007066: 001730   BEQ    6750
+007070: 012700   MOV    #2,R0
+007074: 004767   JSR    PC,7202
+007100: 000704   BR     6712
+007102: 011501   MOV    (R5),R1
+007104: 032711   BIT    #20000,(R1)
+007110: 001700   BEQ    6712
+007112: 162701   SUB    #100,R1
+007116: 020137   CMP    R1,@#14432
+007122: 001673   BEQ    6712
+007124: 012700   MOV    #4,R0
+007130: 004767   JSR    PC,7202
+007134: 000666   BR     6712
+
+; --- ENEMY2_MOVE_UP (007136) ---
+
+ENEMY2_MOVE_UP:
+007136: 011501   MOV    (R5),R1
+007140: 062701   ADD    #100,R1
+007144: 020137   CMP    R1,@#14432
+007150: 001410   BEQ    7172
+007152: 012700   MOV    #10,R0
+007156: 004767   JSR    PC,7242
+007162: 032774   BIT    #2000,@2(R4)
+007170: 001266   BNE    6746
+007172: 012737   MOV    #6,@#14440
+007200: 000662   BR     6746
+
+; --- SPRITE_ANIM_C (007202) — 8-frame throttle, enemy 2 ---
+
+SPRITE_ANIM_C:
+007202: 012702   MOV    #21760,R2
+007206: 012704   MOV    #14440,R4
+007212: 122737   CMPB   #7,@#17366
+007220: 002005   BGE    7234
+007222: 004737   JSR    PC,@#14030
+007226: 105037   CLRB   @#17366
+007232: 000402   BR     7240
+007234: 105237   INCB   @#17366
+007240: 000207   RTS    PC
+
+; --- SPRITE_ANIM_D (007242) — 5-frame throttle, enemy 2 ---
+
+SPRITE_ANIM_D:
+007242: 012700   MOV    #10,R0
+007246: 012702   MOV    #21760,R2
+007252: 012704   MOV    #14440,R4
+007256: 122737   CMPB   #4,@#17370
+007264: 002005   BGE    7300
+007266: 004737   JSR    PC,@#14030
+007272: 105037   CLRB   @#17370
+007276: 000402   BR     7304
+007300: 105237   INCB   @#17370
+007304: 000207   RTS    PC
+
+; --- ENTITY1_RESTORE (007306) ---
+
+ENTITY1_RESTORE:
+007306: 013700   MOV    @#14432,R0
+007312: 122710   CMPB   #15,(R0)
+007316: 001026   BNE    7374
+007320: 013702   MOV    @#14432,R2
+007324: 013701   MOV    @#14436,R1
+007330: 004737   JSR    PC,@#14302
+007334: 162702   SUB    #100,R2
+007340: 162701   SUB    #1000,R1
+007344: 004737   JSR    PC,@#14302
+007350: 013700   MOV    @#17430,R0
+007354: 016037   MOV    14(R0),@#14432
+007362: 016037   MOV    16(R0),@#14436
+007370: 005037   CLR    @#17360
+007374: 000207   RTS    PC
+
+; --- ENEMY1_TICK (007376) ---
+
+ENEMY1_TICK:
+007376: 022737   CMP    #4,@#17372
+007404: 002007   BGE    7424
+007406: 004737   JSR    PC,@#12740
+007412: 004737   JSR    PC,@#12024
+007416: 005037   CLR    @#17372
+007422: 000402   BR     7430
+007424: 005237   INC    @#17372
+007430: 000207   RTS    PC
+
+; --- ANIM_THROTTLE_PLAYER (007432) ---
+
+ANIM_THROTTLE_PLAYER:
+007432: 022737   CMP    #3,@#17374
+007440: 002005   BGE    7454
+007442: 004737   JSR    PC,@#14030
+007446: 005037   CLR    @#17374
+007452: 000402   BR     7460
+007454: 005237   INC    @#17374
+007460: 000207   RTS    PC
+
+; --- ENEMY3_TICK (007462) ---
+
+ENEMY3_TICK:
+007462: 022737   CMP    #400,@#17360
+007470: 002001   BGE    7474
+007472: 000403   BR     7502
+007474: 005237   INC    @#17360
+007500: 000207   RTS    PC
+ENEMY3_MOVE:
+007502: 012705   MOV    #14430,R5
+007506: 012704   MOV    #14422,R4
+007512: 022725   CMP    #10,(R5)+
+007516: 001547   BEQ    10036
+007520: 011500   MOV    (R5),R0
+007522: 162700   SUB    #14550,R0
+007526: 042700   BIC    #177700,R0
+007532: 011401   MOV    (R4),R1
+007534: 162701   SUB    #14550,R1
+007540: 042701   BIC    #177700,R1
+007544: 020001   CMP    R0,R1
+007546: 001440   BEQ    7650
+007550: 003072   BGT    7736
+007552: 011501   MOV    (R5),R1
+007554: 032711   BIT    #100000,(R1)
+007560: 001433   BEQ    7650
+007562: 122761   CMPB   #11,2(R1)
+007570: 001427   BEQ    7650
+007572: 062701   ADD    #2,R1
+007576: 020137   CMP    R1,@#14442
+007602: 001422   BEQ    7650
+007604: 005000   CLR    R0
+007606: 004767   JSR    PC,10102
+007612: 012704   MOV    #14430,R4
+007616: 032774   BIT    #4000,@2(R4)
+007624: 001010   BNE    7646
+007626: 011501   MOV    (R5),R1
+007630: 062701   ADD    #100,R1
+007634: 020137   CMP    R1,@#14442
+007640: 001402   BEQ    7646
+007642: 004767   JSR    PC,10142
+007646: 000207   RTS    PC
+007650: 011500   MOV    (R5),R0
+007652: 162700   SUB    #14550,R0
+007656: 042700   BIC    #77,R0
+007662: 011401   MOV    (R4),R1
+007664: 162701   SUB    #14550,R1
+007670: 042701   BIC    #77,R1
+007674: 020001   CMP    R0,R1
+007676: 001745   BEQ    7612
+007700: 003040   BGT    10002
+007702: 011501   MOV    (R5),R1
+007704: 032711   BIT    #10000,(R1)
+007710: 001740   BEQ    7612
+007712: 062701   ADD    #100,R1
+007716: 020137   CMP    R1,@#14442
+007722: 001733   BEQ    7612
+007724: 012700   MOV    #6,R0
+007730: 004767   JSR    PC,10102
+007734: 000726   BR     7612
+007736: 011501   MOV    (R5),R1
+007740: 032711   BIT    #40000,(R1)
+007744: 001741   BEQ    7650
+007746: 122761   CMPB   #11,177776(R1)
+007754: 001735   BEQ    7650
+007756: 162701   SUB    #2,R1
+007762: 020137   CMP    R1,@#14442
+007766: 001730   BEQ    7650
+007770: 012700   MOV    #2,R0
+007774: 004767   JSR    PC,10102
+010000: 000704   BR     7612
+010002: 011501   MOV    (R5),R1
+010004: 032711   BIT    #20000,(R1)
+010010: 001700   BEQ    7612
+010012: 162701   SUB    #100,R1
+010016: 020137   CMP    R1,@#14442
+010022: 001673   BEQ    7612
+010024: 012700   MOV    #4,R0
+010030: 004767   JSR    PC,10102
+010034: 000666   BR     7612
+
+; --- ENEMY3_MOVE_UP (010036) ---
+
+ENEMY3_MOVE_UP:
+010036: 011501   MOV    (R5),R1
+010040: 062701   ADD    #100,R1
+010044: 020137   CMP    R1,@#14442
+010050: 001410   BEQ    10072
+010052: 012700   MOV    #10,R0
+010056: 004767   JSR    PC,10142
+010062: 032774   BIT    #2000,@2(R4)
+010070: 001266   BNE    7646
+010072: 012737   MOV    #6,@#14430
+010100: 000662   BR     7646
+
+; --- SPRITE_ANIM_A (010102) — 8-frame throttle, enemy 3 ---
+
+SPRITE_ANIM_A:
+010102: 012702   MOV    #21760,R2
+010106: 012704   MOV    #14430,R4
+010112: 022737   CMP    #7,@#17362
+010120: 002005   BGE    10134
+010122: 004737   JSR    PC,@#14030
+010126: 005037   CLR    @#17362
+010132: 000402   BR     10140
+010134: 005237   INC    @#17362
+010140: 000207   RTS    PC
+
+; --- SPRITE_ANIM_B (010142) — 5-frame throttle, enemy 3 ---
+
+SPRITE_ANIM_B:
+010142: 012700   MOV    #10,R0
+010146: 012702   MOV    #21760,R2
+010152: 012704   MOV    #14430,R4
+010156: 022737   CMP    #4,@#17364
+010164: 002005   BGE    10200
+010166: 004737   JSR    PC,@#14030
+010172: 005037   CLR    @#17364
+010176: 000402   BR     10204
+010200: 005237   INC    @#17364
+010204: 000207   RTS    PC
+
+; --- LEVEL_RESET (010206) — full level reinit on death ---
+
+LEVEL_RESET:
+010206: 012704   MOV    #17420,R4
+010212: 016402   MOV    10(R4),R2
+010216: 005700   TST    R0
+010220: 001005   BNE    10234
+010222: 062764   ADD    #24,10(R4)
+010230: 016402   MOV    10(R4),R2
+010234: 012705   MOV    #4,R5
+LRESET_COPY:
+010240: 012224   MOV    (R2)+,(R4)+
+010242: 077502   SOB    R5,10240
+010244: 012704   MOV    #17420,R4
+010250: 016402   MOV    10(R4),R2
+010254: 062702   ADD    #10,R2
+010260: 012705   MOV    #14422,R5
+010264: 012701   MOV    #6,R1
+LRESET_ENEMIES:
+010270: 012215   MOV    (R2)+,(R5)
+010272: 062705   ADD    #4,R5
+010276: 077104   SOB    R1,10270
+010300: 016404   MOV    2(R4),R4
+010304: 004737   JSR    PC,@#13524
+010310: 004737   JSR    PC,@#12442
+010314: 012704   MOV    #0,R4
+010320: 010437   MOV    R4,@#14420
+010324: 010437   MOV    R4,@#14430
+010330: 010437   MOV    R4,@#14440
+010334: 012704   MOV    #24,R4
+010340: 010437   MOV    R4,@#14424
+010344: 010437   MOV    R4,@#14434
+010350: 010437   MOV    R4,@#14444
+010354: 004737   JSR    PC,@#6444
+010360: 012705   MOV    #11224,R5
+LRESET_CLR:
+010364: 005025   CLR    (R5)+
+010366: 022705   CMP    #12024,R5
+010372: 003374   BGT    10364
+010374: 012737   MOV    #11224,@#17400
+010402: 000207   RTS    PC
+010404: 000524   BR     10656
+010406: 022100   CMP    (R1)+,R0
+010410: 015230   MOV    @-(R2),@(R0)+
+010412: 014550   MOV    -(R5),@-(R0)
+010414: 014554   MOV    -(R5),@-(R4)
+010416: 000004   IOT
+010420: 015010   MOV    @-(R0),(R0)
+010422: 002040   BGE    10524
+010424: 000000   HALT
+010426: 000000   HALT
+010430: 000000   HALT
+010432: 022640   CMP    (SP)+,-(R0)
+010434: 014550   MOV    -(R5),@-(R0)
+010436: 014550   MOV    -(R5),@-(R0)
+010440: 017154   MOV    @24004(R1),@-(R4)
+010444: 014626   MOV    -(SP),(SP)+
+010446: 000056   .WORD  56
+010450: 000000   HALT
+010452: 000000   HALT
+010454: 000000   HALT
+010456: 023400   CMP    @(R4)+,R0
+010460: 014734   MOV    -(PC),@(R4)+
+010462: 014550   MOV    -(R5),@-(R0)
+010464: 017154   MOV    @24004(R1),@-(R4)
+010470: 014606   MOV    -(SP),SP
+010472: 000036   .WORD  36
+010474: 000000   HALT
+010476: 000000   HALT
+010500: 000000   HALT
+010502: 024140   CMP    -(R1),-(R0)
+010504: 015260   MOV    @-(R2),14550(R0)
+010510: 017154   MOV    @24004(R1),@-(R4)
+010514: 014756   MOV    -(PC),@-(SP)
+010516: 002006   BGE    10534
+010520: 000000   HALT
+010522: 000000   HALT
+010524: 000000   HALT
+010526: 024700   CMP    -(PC),R0
+010530: 015040   MOV    @-(R0),-(R0)
+010532: 014550   MOV    -(R5),@-(R0)
+010534: 017054   MOV    @23004(R0),@-(R4)
+010540: 014564   MOV    -(R5),14(R4)
+010544: 014630   MOV    -(SP),@(R0)+
+010546: 000060   .WORD  60
+010550: 000000   HALT
+010552: 025440   CMP    @-(R4),-(R0)
+010554: 017242   MOV    @14550(R2),-(R2)
+010560: 017154   MOV    @24004(R1),@-(R4)
+010564: 014570   MOV    -(R5),@20(R0)
+010570: 014626   MOV    -(SP),(SP)+
+010572: 000056   .WORD  56
+010574: 000000   HALT
+010576: 026200   CMP    14706(R2),R0
+010602: 014550   MOV    -(R5),@-(R0)
+010604: 017154   MOV    @24004(R1),@-(R4)
+010610: 014556   MOV    -(R5),@-(SP)
+010612: 000006   RTT
+010614: 014640   MOV    -(SP),-(R0)
+010616: 000070   .WORD  70
+010620: 000000   HALT
+010622: 026740   CMP    26054,-(R0)
+010626: 014550   MOV    -(R5),@-(R0)
+010630: 017156   MOV    @24006(R1),@-(SP)
+010634: 014606   MOV    -(SP),SP
+010636: 000036   .WORD  36
+010640: 014610   MOV    -(SP),(R0)
+010642: 000040   .WORD  40
+010644: 000000   HALT
+010646: 027500   CMP    @15640(R5),R0
+010652: 014550   MOV    -(R5),@-(R0)
+010654: 017154   MOV    @24004(R1),@-(R4)
+010660: 015572   MOV    @-(R5),@10022(R2)
+010664: 015434   MOV    @-(R4),@(R4)+
+010666: 006064   ROR    0(R4)
+010672: 030240   BIT    R2,-(R0)
+010674: 014550   MOV    -(R5),@-(R0)
+010676: 014550   MOV    -(R5),@-(R0)
+010700: 017156   MOV    @24006(R1),@-(SP)
+010704: 014562   MOV    -(R5),12(R2)
+010710: 014634   MOV    -(SP),@(R4)+
+010712: 000064   .WORD  64
+010714: 000000   HALT
+010716: 031000   BIT    (R0),R0
+010720: 017036   MOV    @14550(R0),@(SP)+
+010724: 016756   MOV    32736,@-(SP)
+010730: 016704   MOV    31770,R4
+010734: 016710   MOV    32000,(R0)
+010740: 000000   HALT
+010742: 031540   BIT    (R5),-(R0)
+010744: 015236   MOV    @-(R2),@(SP)+
+010746: 014550   MOV    -(R5),@-(R0)
+010750: 017156   MOV    @24006(R1),@-(SP)
+010754: 014602   MOV    -(SP),R2
+010756: 000032   .WORD  32
+010760: 014620   MOV    -(SP),(R0)+
+010762: 000050   .WORD  50
+010764: 000000   HALT
+010766: 032300   BIT    (R3)+,R0
+010770: 016440   MOV    14550(R4),-(R0)
+010774: 017176   MOV    @24026(R1),@15416(SP)
+011002: 006046   ROR    -(SP)
+011004: 015424   MOV    @-(R4),(R4)+
+011006: 006054   ROR    @-(R4)
+011010: 000000   HALT
+011012: 033040   BIT    @(R0)+,-(R0)
+011014: 016640   MOV    14550(SP),-(R0)
+011020: 017154   MOV    @24004(R1),@-(R4)
+011024: 014574   MOV    -(R5),@24(R4)
+011030: 014624   MOV    -(SP),(R4)+
+011032: 000054   .WORD  54
+011034: 000000   HALT
+011036: 033600   BIT    @(SP)+,R0
+011040: 017240   MOV    @14550(R2),-(R0)
+011044: 017154   MOV    @24004(R1),@-(R4)
+011050: 014604   MOV    -(SP),R4
+011052: 000034   .WORD  34
+011054: 014614   MOV    -(SP),(R4)
+011056: 000044   .WORD  44
+011060: 000000   HALT
+011062: 034340   BIT    -(R3),-(R0)
+011064: 016776   MOV    25640,@17154(SP)
+011072: 024004   CMP    -(R0),R4
+011074: 017006   MOV    @22036(R0),SP
+011100: 015314   MOV    @-(R3),(R4)
+011102: 005044   CLR    -(R4)
+011104: 000000   HALT
+011106: 035100   BIT    @-(R1),R0
+011110: 016642   MOV    14550(SP),-(R2)
+011114: 014652   MOV    -(SP),@-(R2)
+011116: 001002   BNE    11124
+011120: 014606   MOV    -(SP),SP
+011122: 000036   .WORD  36
+011124: 014612   MOV    -(SP),(R2)
+011126: 000042   .WORD  42
+011130: 000000   HALT
+011132: 035640   BIT    @-(SP),-(R0)
+011134: 017240   MOV    @14550(R2),-(R0)
+011140: 017154   MOV    @24004(R1),@-(R4)
+011144: 014604   MOV    -(SP),R4
+011146: 000034   .WORD  34
+011150: 014614   MOV    -(SP),(R4)
+011152: 000044   .WORD  44
+011154: 000000   HALT
+011156: 036400   BIT    16702(R4),R0
+011162: 014732   MOV    -(PC),@(R2)+
+011164: 016460   MOV    17010(R4),14570(R0)
+011172: 000020   .WORD  20
+011174: 014634   MOV    -(SP),@(R4)+
+011176: 000064   .WORD  64
+011200: 000000   HALT
+011202: 037140   BIT    @14550(R1),-(R0)
+011206: 014550   MOV    -(R5),@-(R0)
+011210: 017210   MOV    @24040(R2),(R0)
+011214: 014700   MOV    -(PC),R0
+011216: 001030   BNE    11300
+011220: 014720   MOV    -(PC),(R0)+
+011222: 001050   BNE    11344
+011224: 000000   HALT
+011226: 000000   HALT
+011230: 000000   HALT
+011232: 000000   HALT
+011234: 000000   HALT
+011236: 000000   HALT
+011240: 000000   HALT
+011242: 000000   HALT
+011244: 000000   HALT
+011246: 000000   HALT
+011250: 000000   HALT
+011252: 000000   HALT
+011254: 000000   HALT
+011256: 000000   HALT
+011260: 000000   HALT
+011262: 000000   HALT
+011264: 000000   HALT
+011266: 000000   HALT
+011270: 000000   HALT
+011272: 000000   HALT
+011274: 000000   HALT
+011276: 000000   HALT
+011300: 000000   HALT
+011302: 000000   HALT
+011304: 000000   HALT
+011306: 000000   HALT
+011310: 000000   HALT
+011312: 000000   HALT
+011314: 000000   HALT
+011316: 000000   HALT
+011320: 000000   HALT
+011322: 000000   HALT
+011324: 000000   HALT
+011326: 000000   HALT
+011330: 000000   HALT
+011332: 000000   HALT
+011334: 000000   HALT
+011336: 000000   HALT
+011340: 000000   HALT
+011342: 000000   HALT
+011344: 000000   HALT
+011346: 000000   HALT
+011350: 000000   HALT
+011352: 000000   HALT
+011354: 000000   HALT
+011356: 000000   HALT
+011360: 000000   HALT
+011362: 000000   HALT
+011364: 000000   HALT
+011366: 000000   HALT
+011370: 000000   HALT
+011372: 000000   HALT
+011374: 000000   HALT
+011376: 000000   HALT
+011400: 000000   HALT
+011402: 000000   HALT
+011404: 000000   HALT
+011406: 000000   HALT
+011410: 000000   HALT
+011412: 000000   HALT
+011414: 000000   HALT
+011416: 000000   HALT
+011420: 000000   HALT
+011422: 000000   HALT
+011424: 000000   HALT
+011426: 000000   HALT
+011430: 000000   HALT
+011432: 000000   HALT
+011434: 000000   HALT
+011436: 000000   HALT
+011440: 000000   HALT
+011442: 000000   HALT
+011444: 000000   HALT
+011446: 000000   HALT
+011450: 000000   HALT
+011452: 000000   HALT
+011454: 000000   HALT
+011456: 000000   HALT
+011460: 000000   HALT
+011462: 000000   HALT
+011464: 000000   HALT
+011466: 000000   HALT
+011470: 000000   HALT
+011472: 000000   HALT
+011474: 000000   HALT
+011476: 000000   HALT
+011500: 000000   HALT
+011502: 000000   HALT
+011504: 000000   HALT
+011506: 000000   HALT
+011510: 000000   HALT
+011512: 000000   HALT
+011514: 000000   HALT
+011516: 000000   HALT
+011520: 000000   HALT
+011522: 000000   HALT
+011524: 000000   HALT
+011526: 000000   HALT
+011530: 000000   HALT
+011532: 000000   HALT
+011534: 000000   HALT
+011536: 000000   HALT
+011540: 000000   HALT
+011542: 000000   HALT
+011544: 000000   HALT
+011546: 000000   HALT
+011550: 000000   HALT
+011552: 000000   HALT
+011554: 000000   HALT
+011556: 000000   HALT
+011560: 000000   HALT
+011562: 000000   HALT
+011564: 000000   HALT
+011566: 000000   HALT
+011570: 000000   HALT
+011572: 000000   HALT
+011574: 000000   HALT
+011576: 000000   HALT
+011600: 000000   HALT
+011602: 000000   HALT
+011604: 000000   HALT
+011606: 000000   HALT
+011610: 000000   HALT
+011612: 000000   HALT
+011614: 000000   HALT
+011616: 000000   HALT
+011620: 000000   HALT
+011622: 000000   HALT
+011624: 000000   HALT
+011626: 000000   HALT
+011630: 000000   HALT
+011632: 000000   HALT
+011634: 000000   HALT
+011636: 000000   HALT
+011640: 000000   HALT
+011642: 000000   HALT
+011644: 000000   HALT
+011646: 000000   HALT
+011650: 000000   HALT
+011652: 000000   HALT
+011654: 000000   HALT
+011656: 000000   HALT
+011660: 000000   HALT
+011662: 000000   HALT
+011664: 000000   HALT
+011666: 000000   HALT
+011670: 000000   HALT
+011672: 000000   HALT
+011674: 000000   HALT
+011676: 000000   HALT
+011700: 000000   HALT
+011702: 000000   HALT
+011704: 000000   HALT
+011706: 000000   HALT
+011710: 000000   HALT
+011712: 000000   HALT
+011714: 000000   HALT
+011716: 000000   HALT
+011720: 000000   HALT
+011722: 000000   HALT
+011724: 000000   HALT
+011726: 000000   HALT
+011730: 000000   HALT
+011732: 000000   HALT
+011734: 000000   HALT
+011736: 000000   HALT
+011740: 000000   HALT
+011742: 000000   HALT
+011744: 000000   HALT
+011746: 000000   HALT
+011750: 000000   HALT
+011752: 000000   HALT
+011754: 000000   HALT
+011756: 000000   HALT
+011760: 000000   HALT
+011762: 000000   HALT
+011764: 000000   HALT
+011766: 000000   HALT
+011770: 000000   HALT
+011772: 000000   HALT
+011774: 000000   HALT
+011776: 000000   HALT
+012000: 000000   HALT
+012002: 000000   HALT
+012004: 000000   HALT
+012006: 000000   HALT
+012010: 000000   HALT
+012012: 000000   HALT
+012014: 000000   HALT
+012016: 000000   HALT
+012020: 000000   HALT
+012022: 000000   HALT
+012024: 005701   TST    R1
+012026: 001425   BEQ    12102
+012030: 022737   CMP    #12016,@#17400
+012036: 001004   BNE    12050
+012040: 012737   MOV    #11224,@#17400
+012046: 000403   BR     12056
+012050: 062737   ADD    #6,@#17400
+012056: 013705   MOV    @#17400,R5
+012062: 010215   MOV    R2,(R5)
+012064: 010165   MOV    R1,2(R5)
+012070: 105065   CLRB   5(R5)
+012074: 112765   MOVB   #150,4(R5)
+012102: 012705   MOV    #11224,R5
+012106: 005715   TST    (R5)
+012110: 001405   BEQ    12124
+012112: 105765   TSTB   4(R5)
+012116: 001410   BEQ    12140
+012120: 105365   DECB   4(R5)
+012124: 062705   ADD    #6,R5
+012130: 022705   CMP    #12024,R5
+012134: 003364   BGT    12106
+012136: 000207   RTS    PC
+012140: 011502   MOV    (R5),R2
+012142: 016501   MOV    2(R5),R1
+012146: 012704   MOV    #4,R4
+012152: 012703   MOV    #17402,R3
+012156: 122365   CMPB   (R3)+,5(R5)
+012162: 001402   BEQ    12170
+012164: 077404   SOB    R4,12156
+012166: 000000   HALT
+012170: 000434   BR     12262
+012172: 000003   BPT
+012174: 000005   RESET
+012176: 112765   MOVB   #150,4(R5)
+012204: 004737   JSR    PC,@#14302
+012210: 122765   CMPB   #14,5(R5)
+012216: 001342   BNE    12124
+012220: 005015   CLR    (R5)
+012222: 042762   BIC    #12000,177700(R2)
+012230: 052762   BIS    #4000,177700(R2)
+012236: 042762   BIC    #101000,177776(R2)
+012244: 042762   BIC    #40400,2(R2)
+012252: 042762   BIC    #20000,100(R2)
+012260: 000721   BR     12124
+012262: 116365   MOVB   3(R3),5(R5)
+012270: 116512   MOVB   5(R5),(R2)
+012274: 000740   BR     12176
+012276: 122762   CMPB   #20,100(R2)
+012304: 002401   BLT    12310
+012306: 000207   RTS    PC
+012310: 122762   CMPB   #25,100(R2)
+012316: 003001   BGT    12322
+012320: 000207   RTS    PC
+012322: 000137   JMP    @#13430
+
+; --- VSYNC_WAIT (012326) — [УКНЦ DIFF: calls soft vsync routine] ---
+
+VSYNC_WAIT:
+012326: 010046   MOV    R0,-(SP)  ; MOV R0, -(SP)
+012330: 004737   JSR    PC,@#41400  ; [УКНЦ DIFF] JSR PC, @#VSYNC_WAIT_LOOP — soft vsync (no EMT 016)
+012334: 000240   NOP  ; NOP
+012336: 012600   MOV    (SP)+,R0  ; MOV (SP)+, R0
+012340: 000207   RTS    PC  ; RTS PC
+
+; --- KEY_ACTION_TBL (012342) — [УКНЦ DIFF: 6 entries, different codes] ---
+
+KEY_ACTION_TBL:
+        ; [УКНЦ DIFF]
+012342: 000133   JMP    @(R3)+  ; [УКНЦ DIFF] key action table — 6 entries (fewer than BK-0010's 11)
+012344: 000116   JMP    (SP)
+012346: 000154   JMP    @-(R4)
+012350: 000134   JMP    @(R4)+
+012352: 000111   JMP    (R1)
+012354: 000067   .WORD  67
+012356: 000000   HALT
+012360: 000002   RTI
+012362: 000004   IOT
+012364: 000006   RTT
+012366: 000012   .WORD  12
+012370: 000022   .WORD  22
+012372: 015054   MOV    @-(R0),@-(R4)
+012374: 003004   BGT    12406
+012376: 000000   HALT
+012400: 017174   MOV    @24024(R1),@2(R4)
+012406: 001000   BNE    12410
+012410: 000022   .WORD  22
+012412: 001244   BNE    12124
+012414: 177776   .WORD  177776
+012416: 000400   BR     12420
+012420: 000000   HALT
+012422: 000022   .WORD  22
+012424: 000000   HALT
+012426: 000022   .WORD  22
+012430: 000000   HALT
+012432: 000024   .WORD  24
+012434: 000000   HALT
+012436: 000024   .WORD  24
+012440: 000000   HALT
+
+; --- LEVEL_RENDER_FULL (012442) ---
+
+LEVEL_RENDER_FULL:
+012442: 012704   MOV    #14550,R4
+012446: 005001   CLR    R1
+012450: 012705   MOV    #26,R5
+LFULL_ROW:
+012454: 010146   MOV    R1,-(SP)
+012456: 012703   MOV    #40,R3
+LFULL_COL:
+012462: 012402   MOV    (R4)+,R2
+012464: 042702   BIC    #177760,R2
+012470: 006302   ASL    R2
+012472: 006302   ASL    R2
+012474: 006302   ASL    R2
+012476: 006302   ASL    R2
+012500: 062702   ADD    #17450,R2
+012504: 004737   JSR    PC,@#12530
+012510: 062701   ADD    #2,R1
+012514: 077316   SOB    R3,12462
+012516: 012601   MOV    (SP)+,R1
+012520: 062701   ADD    #1000,R1
+012524: 077525   SOB    R5,12454
+012526: 000207   RTS    PC
+
+; --- TILE_BLIT_SUB (012530) ---
+
+TILE_BLIT_SUB:
+012530: 010346   MOV    R3,-(SP)
+012532: 010246   MOV    R2,-(SP)
+012534: 010146   MOV    R1,-(SP)
+012536: 010546   MOV    R5,-(SP)
+012540: 012705   MOV    #10,R5
+TSUB_ROW:
+        ; [УКНЦ DIFF]
+012544: 004737   JSR    PC,@#41040  ; [УКНЦ DIFF] JSR PC → display port write (not MOV to 046000)
+012550: 004737   JSR    PC,@#40060
+012554: 000240   NOP
+012556: 012605   MOV    (SP)+,R5
+012560: 012601   MOV    (SP)+,R1
+012562: 012602   MOV    (SP)+,R2
+012564: 012603   MOV    (SP)+,R3
+012566: 000207   RTS    PC
+
+; --- PLAYER_STATE_CHECK (012570) ---
+
+PLAYER_STATE_CHECK:
+012570: 013703   MOV    @#14422,R3
+012574: 122713   CMPB   #11,(R3)
+012600: 001012   BNE    12626
+012602: 112713   MOVB   #17,(R3)
+012606: 000137   JMP    @#4640
+012612: 000240   NOP
+012614: 042763   BIC    #4000,177700(R3)
+012622: 004737   JSR    PC,@#12326
+012626: 122713   CMPB   #4,(R3)
+012632: 001003   BNE    12642
+012634: 105013   CLRB   (R3)
+012636: 004737   JSR    PC,@#3764
+012642: 122713   CMPB   #5,(R3)
+012646: 001003   BNE    12656
+012650: 105013   CLRB   (R3)
+012652: 004737   JSR    PC,@#3746
+012656: 122713   CMPB   #6,(R3)
+012662: 001014   BNE    12714
+012664: 112713   MOVB   #20,(R3)
+012670: 013705   MOV    @#17424,R5
+012674: 004737   JSR    PC,@#12716
+012700: 013705   MOV    @#17426,R5
+012704: 004737   JSR    PC,@#12716
+012710: 004737   JSR    PC,@#2060
+012714: 000207   RTS    PC
+
+; --- ENEMY_RESPAWN (012716) ---
+
+ENEMY_RESPAWN:
+012716: 112715   MOVB   #11,(R5)
+012722: 052765   BIS    #100000,177776(R5)
+012730: 052765   BIS    #40000,2(R5)
+012736: 000207   RTS    PC
+
+; --- PLAYER_MOVE_STEP (012740) ---
+
+PLAYER_MOVE_STEP:
+012740: 012704   MOV    #12372,R4
+012744: 012705   MOV    #14420,R5
+012750: 016564   MOV    2(R5),6(R4)
+012756: 016564   MOV    6(R5),10(R4)
+012764: 005764   TST    4(R4)
+012770: 001015   BNE    13024
+012772: 000137   JMP    @#5724
+012776: 001445   BEQ    13112
+013000: 022700   CMP    #12,R0
+013004: 003042   BGT    13112
+013006: 010064   MOV    R0,4(R4)
+013012: 016414   MOV    6(R4),(R4)
+013016: 016464   MOV    10(R4),2(R4)
+PMOVE_EXEC:
+013024: 010403   MOV    R4,R3
+013026: 066403   ADD    4(R4),R3
+013032: 036374   BIT    2(R3),@0(R4)
+013040: 001426   BEQ    13116
+013042: 117402   MOVB   @0(R4),R2
+013046: 016401   MOV    2(R4),R1
+013052: 006302   ASL    R2
+013054: 006302   ASL    R2
+013056: 006302   ASL    R2
+013060: 006302   ASL    R2
+013062: 004737   JSR    PC,@#41436
+013066: 000240   NOP
+013070: 061314   ADD    (R3),(R4)
+013072: 061364   ADD    (R3),2(R4)
+013076: 012705   MOV    #1700,R5
+013102: 016401   MOV    2(R4),R1
+013106: 004737   JSR    PC,@#41314
+013112: 005001   CLR    R1
+013114: 000207   RTS    PC
+PMOVE_BLIT:
+013116: 011402   MOV    (R4),R2
+013120: 016401   MOV    2(R4),R1
+013124: 010346   MOV    R3,-(SP)
+013126: 004737   JSR    PC,@#14302
+013132: 012603   MOV    (SP)+,R3
+013134: 016464   MOV    4(R4),16(R4)
+013142: 005064   CLR    4(R4)
+013146: 010446   MOV    R4,-(SP)
+013150: 010146   MOV    R1,-(SP)
+013152: 010246   MOV    R2,-(SP)
+013154: 012704   MOV    #14420,R4
+013160: 012705   MOV    #21640,R5
+013164: 066405   ADD    4(R4),R5
+013170: 061405   ADD    (R4),R5
+013172: 011502   MOV    (R5),R2
+013174: 016401   MOV    6(R4),R1
+013200: 004737   JSR    PC,@#12530
+013204: 012602   MOV    (SP)+,R2
+013206: 012601   MOV    (SP)+,R1
+013210: 012604   MOV    (SP)+,R4
+013212: 000137   JMP    @#5710
+
+; --- Sprite animation helpers (013216..013523) ---
+
+SPRITE_HELPERS:
+013216: 122715   CMPB   #14,(R5)
+013222: 001517   BEQ    13462
+013224: 122715   CMPB   #21,(R5)
+013230: 003330   BGT    13112
+013232: 122715   CMPB   #24,(R5)
+013236: 002725   BLT    13112
+013240: 111505   MOVB   (R5),R5
+013242: 042705   BIC    #177400,R5
+013246: 162705   SUB    #21,R5
+013252: 006305   ASL    R5
+013254: 066405   ADD    16(R4),R5
+013260: 062705   ADD    #12410,R5
+013264: 011402   MOV    (R4),R2
+013266: 016401   MOV    2(R4),R1
+013272: 061302   ADD    (R3),R2
+013274: 061301   ADD    (R3),R1
+013276: 111512   MOVB   (R5),(R2)
+013300: 004737   JSR    PC,@#14302
+013304: 005715   TST    (R5)
+013306: 001301   BNE    13112
+013310: 005064   CLR    4(R4)
+013314: 052762   BIS    #2000,177700(R2)
+013322: 042762   BIC    #4000,177700(R2)
+013330: 122762   CMPB   #10,177700(R2)
+013336: 001003   BNE    13346
+013340: 052762   BIS    #14000,177700(R2)
+013346: 052762   BIS    #101000,177776(R2)
+013354: 052762   BIS    #40400,2(R2)
+013362: 042712   BIC    #4000,(R2)
+013366: 122762   CMPB   #10,100(R2)
+013374: 001004   BNE    13406
+013376: 052762   BIS    #20000,100(R2)
+013404: 000411   BR     13430
+013406: 122762   CMPB   #7,100(R2)
+013414: 003401   BLE    13420
+013416: 000207   RTS    PC
+013420: 122762   CMPB   #14,100(R2)
+013426: 002403   BLT    13436
+013430: 052712   BIS    #4000,(R2)
+013434: 000207   RTS    PC
+013436: 122762   CMPB   #17,100(R2)
+013444: 003401   BLE    13450
+013446: 000770   BR     13430
+013450: 000137   JMP    @#12276
+013454: 000100   JMP    R0
+013456: 002764   BLT    13430
+013460: 000207   RTS    PC
+013462: 022764   CMP    #12,16(R4)
+013470: 001012   BNE    13516
+013472: 112715   MOVB   #21,(R5)
+013476: 010502   MOV    R5,R2
+013500: 016401   MOV    2(R4),R1
+013504: 061301   ADD    (R3),R1
+013506: 004737   JSR    PC,@#14302
+013512: 000167   JMP    13112
+013516: 112715   MOVB   #23,(R5)
+013522: 000765   BR     13476
+
+; --- COLLISION_MAP_BUILD (013524) ---
+
+COLLISION_MAP_BUILD:
+013524: 012702   MOV    #14550,R2  ; MOV #014550, R2 — R2 → working tile buffer
+013530: 010203   MOV    R2,R3  ; MOV R2, R3
+013532: 062703   ADD    #2576,R3  ; ADD #002576, R3 — R3 = buffer end
+CMAP_UNPACK:
+013536: 111412   MOVB   (R4),(R2)  ; MOVB (R4), (R2) — copy tile byte (packed)
+013540: 042722   BIC    #177760,(R2)+  ; BIC #177760, (R2)+ — keep low nibble (left tile), advance
+013544: 112412   MOVB   (R4)+,(R2)  ; MOVB (R4)+, (R2) — copy high nibble byte, advance source
+013546: 042712   BIC    #177417,(R2)  ; BIC #177417, (R2) — keep high nibble
+013552: 006212   ASR    (R2)  ; ASR (R2) — shift right ×4 to normalize tile index
+013554: 006212   ASR    (R2)  ; ASR (R2)
+013556: 006212   ASR    (R2)  ; ASR (R2)
+013560: 006222   ASR    (R2)+  ; ASR (R2)+ — advance R2
+013562: 020302   CMP    R3,R2  ; CMP R3, R2
+013564: 000240   NOP
+013566: 100363   BPL    13536  ; BPL CMAP_UNPACK — continue until end
+CMAP_FLAGS:
+013570: 012702   MOV    #14550,R2
+013574: 122762   CMPB   #10,2(R2)
+013602: 100402   BMI    13610
+013604: 052712   BIS    #1000,(R2)
+013610: 122762   CMPB   #10,177776(R2)
+013616: 100402   BMI    13624
+013620: 052712   BIS    #400,(R2)
+013624: 122712   CMPB   #10,(R2)
+013630: 001002   BNE    13636
+013632: 052712   BIS    #4000,(R2)
+013636: 122762   CMPB   #6,100(R2)
+013644: 100002   BPL    13652
+013646: 052712   BIS    #4000,(R2)
+013652: 122762   CMPB   #11,2(R2)
+013660: 100402   BMI    13666
+013662: 052712   BIS    #100000,(R2)
+013666: 122762   CMPB   #11,177776(R2)
+013674: 100402   BMI    13702
+013676: 052712   BIS    #40000,(R2)
+013702: 122712   CMPB   #10,(R2)
+013706: 001006   BNE    13724
+013710: 122762   CMPB   #10,177700(R2)
+013716: 100402   BMI    13724
+013720: 052712   BIS    #20000,(R2)
+013724: 122762   CMPB   #10,100(R2)
+013732: 001002   BNE    13740
+013734: 052712   BIS    #10000,(R2)
+013740: 122712   CMPB   #10,(R2)
+013744: 001006   BNE    13762
+013746: 122762   CMPB   #6,100(R2)
+013754: 100402   BMI    13762
+013756: 052712   BIS    #10000,(R2)
+013762: 122762   CMPB   #7,100(R2)
+013770: 100402   BMI    13776
+013772: 052712   BIS    #2000,(R2)
+013776: 122762   CMPB   #15,100(R2)
+014004: 003004   BGT    14016
+014006: 052712   BIS    #2000,(R2)
+014012: 042712   BIC    #4000,(R2)
+014016: 062702   ADD    #2,R2
+014022: 020302   CMP    R3,R2
+014024: 100263   BPL    13574
+014026: 000207   RTS    PC
+
+; --- SPRITE_DRAW (014030) ---
+
+SPRITE_DRAW:
+014030: 010246   MOV    R2,-(SP)  ; MOV R2, -(SP)
+014032: 016402   MOV    2(R4),R2  ; MOV 2(R4), R2 — player X position
+014036: 016401   MOV    6(R4),R1  ; JSR PC, TILE_BLIT_REV — blit left tile
+014042: 004767   JSR    PC,14302
+014046: 011403   MOV    (R4),R3
+014050: 006303   ASL    R3
+014052: 006303   ASL    R3
+014054: 062703   ADD    #20270,R3
+014060: 066302   ADD    2(R3),R2
+014064: 066301   ADD    4(R3),R1
+014070: 022764   CMP    #24,4(R4)
+014076: 003410   BLE    14120
+014100: 166302   SUB    2(R3),R2
+014104: 166302   SUB    2(R3),R2
+014110: 166301   SUB    4(R3),R1
+014114: 166301   SUB    4(R3),R1
+SDRAW_BLIT2:
+014120: 004767   JSR    PC,14302
+014124: 011602   MOV    (SP),R2
+014126: 010003   MOV    R0,R3
+014130: 006303   ASL    R3
+014132: 006303   ASL    R3
+014134: 062703   ADD    #20270,R3
+014140: 020014   CMP    R0,(R4)
+014142: 001404   BEQ    14154
+014144: 012764   MOV    #24,4(R4)
+014152: 000423   BR     14222
+014154: 022764   CMP    #24,4(R4)
+014162: 002014   BGE    14214
+014164: 031374   BIT    (R3),@2(R4)
+014170: 001414   BEQ    14222
+014172: 005064   CLR    4(R4)
+014176: 066364   ADD    2(R3),2(R4)
+014204: 066364   ADD    4(R3),6(R4)
+014212: 000403   BR     14222
+014214: 062764   ADD    #12,4(R4)
+014222: 010014   MOV    R0,(R4)
+014224: 061402   ADD    (R4),R2
+014226: 066402   ADD    4(R4),R2
+014232: 016401   MOV    6(R4),R1
+014236: 004767   JSR    PC,14354
+014242: 066301   ADD    4(R3),R1
+014246: 022764   CMP    #24,4(R4)
+014254: 003404   BLE    14266
+014256: 166301   SUB    4(R3),R1
+014262: 166301   SUB    4(R3),R1
+014266: 062702   ADD    #50,R2
+014272: 004767   JSR    PC,14354
+014276: 012602   MOV    (SP)+,R2
+014300: 000207   RTS    PC
+
+; --- TILE_BLIT_REV (014302) ---
+; [УКНЦ DIFF] inner loop: JSR to display port instead of direct 046000(R1) write
+
+TILE_BLIT_REV:
+014302: 010546   MOV    R5,-(SP)
+014304: 010146   MOV    R1,-(SP)
+014306: 111203   MOVB   (R2),R3
+014310: 042703   BIC    #177400,R3
+014314: 006303   ASL    R3
+014316: 006303   ASL    R3
+014320: 006303   ASL    R3
+014322: 006303   ASL    R3
+014324: 062703   ADD    #17450,R3
+014330: 012705   MOV    #10,R5
+TBREV_ROW:
+        ; [УКНЦ DIFF]
+014334: 004737   JSR    PC,@#41040  ; [УКНЦ DIFF] JSR PC → display port (not MOV to 046000(R1))
+014340: 004737   JSR    PC,@#40140
+014344: 000240   NOP
+014346: 012601   MOV    (SP)+,R1
+014350: 012605   MOV    (SP)+,R5
+014352: 000207   RTS    PC
+014354: 010546   MOV    R5,-(SP)
+014356: 010446   MOV    R4,-(SP)
+014360: 010346   MOV    R3,-(SP)
+014362: 010146   MOV    R1,-(SP)
+014364: 012705   MOV    #10,R5
+014370: 011203   MOV    (R2),R3
+014372: 004737   JSR    PC,@#41040
+014376: 004737   JSR    PC,@#40220
+014402: 000240   NOP
+014404: 000240   NOP
+014406: 012601   MOV    (SP)+,R1
+014410: 012603   MOV    (SP)+,R3
+014412: 012604   MOV    (SP)+,R4
+014414: 012605   MOV    (SP)+,R5
+014416: 000207   RTS    PC
 
 ; =============================================================================
-; ENTITY RECORDS + WORKING BUFFER (014420–017777) — [УКНЦ DIFF: init values]
-; Same addresses as BK-0010. Initial values in SAV image differ (not zeroed).
-; PLAYER_STATE (014420..014422): different initial values in this snapshot
-; Working tile buffer (014550+): different content in SAV image
-; TILE_BANK (017450): tile pixel data — УКНЦ format (may differ from BK-0010)
+; SECTION 2: ENTITY RECORDS + DATA (014420–037677)
 ; =============================================================================
 
-; =============================================================================
-; SECTION 2: LEVEL MAPS + DATA (022100–037677)
-; Level format: 22 rows × 16 bytes, 2 tiles/byte — IDENTICAL to BK-0010
-; 10 level maps × 352 bytes each starting at 022100.
-; Levels confirmed by COLLISION_MAP_BUILD reading same format.
-; =============================================================================
+PLAYER_STATE_WORD:
+        ; [УКНЦ DIFF]
+014420: 000010   .WORD  10
+PLAYER_TILE_PTR:
+        ; [УКНЦ DIFF]
+014422: 017274   MOV    @0(R2),@25024(R4)
+ENEMY1_STATE_WORD:
+        ; [УКНЦ DIFF]
+014430: 000002   RTI
+ENEMY1_TILE_PTR:
+        ; [УКНЦ DIFF]
+014432: 015000   MOV    @-(R0),R0
+ENEMY1_X:
+014434: 000000   HALT
+ENEMY1_Y:
+        ; [УКНЦ DIFF]
+014436: 002030   BGE    14520
+ENEMY2_STATE_WORD:
+        ; [УКНЦ DIFF]
+014440: 000000   HALT
+ENEMY2_TILE_PTR:
+        ; [УКНЦ DIFF]
+014442: 000000   HALT
+ENEMY2_X:
+        ; [УКНЦ DIFF]
+014444: 000024   .WORD  24
+ENEMY2_Y:
+        ; [УКНЦ DIFF]
+014446: 000000   HALT
+014450: 014000   MOV    -(R0),R0
+014452: 014000   MOV    -(R0),R0
+014454: 014000   MOV    -(R0),R0
+014456: 014000   MOV    -(R0),R0
+014460: 014000   MOV    -(R0),R0
+014462: 014000   MOV    -(R0),R0
+014464: 014000   MOV    -(R0),R0
+014466: 014000   MOV    -(R0),R0
+014470: 014000   MOV    -(R0),R0
+014472: 014000   MOV    -(R0),R0
+014474: 014000   MOV    -(R0),R0
+014476: 014000   MOV    -(R0),R0
+014500: 014000   MOV    -(R0),R0
+014502: 014000   MOV    -(R0),R0
+014504: 014000   MOV    -(R0),R0
+014506: 014000   MOV    -(R0),R0
+014510: 014000   MOV    -(R0),R0
+014512: 014000   MOV    -(R0),R0
+014514: 014000   MOV    -(R0),R0
+014516: 014000   MOV    -(R0),R0
+014520: 014000   MOV    -(R0),R0
+014522: 014000   MOV    -(R0),R0
+014524: 014000   MOV    -(R0),R0
+014526: 014000   MOV    -(R0),R0
+014530: 014000   MOV    -(R0),R0
+014532: 014000   MOV    -(R0),R0
+014534: 014000   MOV    -(R0),R0
+014536: 014000   MOV    -(R0),R0
+014540: 014000   MOV    -(R0),R0
+014542: 014000   MOV    -(R0),R0
+014544: 014000   MOV    -(R0),R0
+014546: 114000   MOVB   -(R0),R0
+TILE_WORK_BUF:
+        ; [УКНЦ DIFF]
+014550: 044413   BIC    -(R4),(R3)
+014552: 105013   CLRB   (R3)
+014554: 002000   BGE    14556
+014556: 044413   BIC    -(R4),(R3)
+014560: 002014   BGE    14612
+014562: 002014   BGE    14614
+014564: 002014   BGE    14616
+014566: 002014   BGE    14620
+014570: 002014   BGE    14622
+014572: 002014   BGE    14624
+014574: 002014   BGE    14626
+014576: 002014   BGE    14630
+014600: 002014   BGE    14632
+014602: 002014   BGE    14634
+014604: 002014   BGE    14636
+014606: 002014   BGE    14640
+014610: 002014   BGE    14642
+014612: 002014   BGE    14644
+014614: 002014   BGE    14646
+014616: 002014   BGE    14650
+014620: 002014   BGE    14652
+014622: 002014   BGE    14654
+014624: 002014   BGE    14656
+014626: 002014   BGE    14660
+014630: 002014   BGE    14662
+014632: 002014   BGE    14664
+014634: 002014   BGE    14666
+014636: 103014   BCC    14670
+014640: 014001   MOV    -(R0),R1
+014642: 042414   BIC    (R4)+,(R4)
+014644: 004013   JSR    R0,(R3)
+014646: 004013   JSR    R0,(R3)
+014650: 004013   JSR    R0,(R3)
+014652: 105013   CLRB   (R3)
+014654: 002000   BGE    14656
+014656: 145413   BICB   @-(R4),(R3)
+014660: 115000   MOVB   @-(R0),R0
+014662: 145400   BICB   @-(R4),R0
+014664: 145400   BICB   @-(R4),R0
+014666: 143400   BICB   @(R4)+,R0
+014670: 143400   BICB   @(R4)+,R0
+014672: 155400   BISB   @-(R4),R0
+014674: 145400   BICB   @-(R4),R0
+014676: 145400   BICB   @-(R4),R0
+014700: 143400   BICB   @(R4)+,R0
+014702: 143400   BICB   @(R4)+,R0
+014704: 143400   BICB   @(R4)+,R0
+014706: 143400   BICB   @(R4)+,R0
+014710: 143400   BICB   @(R4)+,R0
+014712: 143400   BICB   @(R4)+,R0
+014714: 143400   BICB   @(R4)+,R0
+014716: 155400   BISB   @-(R4),R0
+014720: 145400   BICB   @-(R4),R0
+014722: 145400   BICB   @-(R4),R0
+014724: 145400   BICB   @-(R4),R0
+014726: 145400   BICB   @-(R4),R0
+014730: 145400   BICB   @-(R4),R0
+014732: 143400   BICB   @(R4)+,R0
+014734: 143400   BICB   @(R4)+,R0
+014736: 143400   BICB   @(R4)+,R0
+014740: 175410   .WORD  175410
+014742: 042400   BIC    (R4)+,R0
+014744: 044413   BIC    -(R4),(R3)
+014746: 004013   JSR    R0,(R3)
+014750: 004013   JSR    R0,(R3)
+014752: 105013   CLRB   (R3)
+014754: 002000   BGE    14756
+014756: 145413   BICB   @-(R4),(R3)
+014760: 034010   BIT    -(R0),(R0)
+014762: 044414   BIC    -(R4),(R4)
+014764: 105014   CLRB   (R4)
+014766: 103000   BCC    14770
+014770: 143400   BICB   @(R4)+,R0
+014772: 074410   XOR    R4,(R0)
+014774: 044414   BIC    -(R4),(R4)
+014776: 105014   CLRB   (R4)
+015000: 107000   .WORD  107000
+015002: 145400   BICB   @-(R4),R0
+015004: 155400   BISB   @-(R4),R0
+015006: 145400   BICB   @-(R4),R0
+015010: 145402   BICB   @-(R4),R2
+015012: 145400   BICB   @-(R4),R0
+015014: 145400   BICB   @-(R4),R0
+015016: 064410   ADD    -(R4),(R0)
+015020: 044414   BIC    -(R4),(R4)
+015022: 004014   JSR    R0,(R4)
+015024: 004014   JSR    R0,(R4)
+015026: 004014   JSR    R0,(R4)
+015030: 105014   CLRB   (R4)
+015032: 107000   .WORD  107000
+015034: 145400   BICB   @-(R4),R0
+015036: 145400   BICB   @-(R4),R0
+015040: 175410   .WORD  175410
+015042: 044400   BIC    -(R4),R0
+015044: 044413   BIC    -(R4),(R3)
+015046: 004013   JSR    R0,(R3)
+015050: 004013   JSR    R0,(R3)
+015052: 105013   CLRB   (R3)
+015054: 002000   BGE    15056
+015056: 145413   BICB   @-(R4),(R3)
+015060: 034010   BIT    -(R0),(R0)
+015062: 044414   BIC    -(R4),(R4)
+015064: 105014   CLRB   (R4)
+015066: 107000   .WORD  107000
+015070: 145400   BICB   @-(R4),R0
+015072: 074410   XOR    R4,(R0)
+015074: 042414   BIC    (R4)+,(R4)
+015076: 103014   BCC    15130
+015100: 002007   BGE    15120
+015102: 143414   BICB   @(R4)+,(R4)
+015104: 034010   BIT    -(R0),(R0)
+015106: 042414   BIC    (R4)+,(R4)
+015110: 002014   BGE    15142
+015112: 002014   BGE    15144
+015114: 002014   BGE    15146
+015116: 002014   BGE    15150
+015120: 002014   BGE    15152
+015122: 002014   BGE    15154
+015124: 002014   BGE    15156
+015126: 002014   BGE    15160
+015130: 105014   CLRB   (R4)
+015132: 002007   BGE    15152
+015134: 042414   BIC    (R4)+,(R4)
+015136: 103014   BCC    15170
+015140: 034010   BIT    -(R0),(R0)
+015142: 042414   BIC    (R4)+,(R4)
+015144: 004013   JSR    R0,(R3)
+015146: 004013   JSR    R0,(R3)
+015150: 004013   JSR    R0,(R3)
+015152: 105013   CLRB   (R3)
+015154: 002000   BGE    15156
+015156: 145413   BICB   @-(R4),(R3)
+015160: 034010   BIT    -(R0),(R0)
+015162: 042414   BIC    (R4)+,(R4)
+015164: 103014   BCC    15216
+015166: 002007   BGE    15206
+015170: 143414   BICB   @(R4)+,(R4)
+015172: 135010   BITB   @-(R0),(R0)
+015174: 143400   BICB   @(R4)+,R0
+015176: 143400   BICB   @(R4)+,R0
+015200: 143400   BICB   @(R4)+,R0
+015202: 143400   BICB   @(R4)+,R0
+015204: 175410   .WORD  175410
+015206: 143400   BICB   @(R4)+,R0
+015210: 143400   BICB   @(R4)+,R0
+015212: 143400   BICB   @(R4)+,R0
+015214: 143400   BICB   @(R4)+,R0
+015216: 143400   BICB   @(R4)+,R0
+015220: 143400   BICB   @(R4)+,R0
+015222: 143400   BICB   @(R4)+,R0
+015224: 155400   BISB   @-(R4),R0
+015226: 044400   BIC    -(R4),R0
+015230: 145412   BICB   @-(R4),(R2)
+015232: 105000   CLRB   R0
+015234: 145400   BICB   @-(R4),R0
+015236: 145400   BICB   @-(R4),R0
+015240: 165410   SUB    @-(R4),(R0)
+015242: 042400   BIC    (R4)+,R0
+015244: 044413   BIC    -(R4),(R3)
+015246: 004013   JSR    R0,(R3)
+015250: 004013   JSR    R0,(R3)
+015252: 105013   CLRB   (R3)
+015254: 002000   BGE    15256
+015256: 145413   BICB   @-(R4),(R3)
+015260: 135010   BITB   @-(R0),(R0)
+015262: 143400   BICB   @(R4)+,R0
+015264: 143400   BICB   @(R4)+,R0
+015266: 143400   BICB   @(R4)+,R0
+015270: 143400   BICB   @(R4)+,R0
+015272: 175410   .WORD  175410
+015274: 143400   BICB   @(R4)+,R0
+015276: 143400   BICB   @(R4)+,R0
+015300: 143400   BICB   @(R4)+,R0
+015302: 145404   BICB   @-(R4),R4
+015304: 165410   SUB    @-(R4),(R0)
+015306: 145400   BICB   @-(R4),R0
+015310: 145400   BICB   @-(R4),R0
+015312: 145400   BICB   @-(R4),R0
+015314: 145400   BICB   @-(R4),R0
+015316: 145400   BICB   @-(R4),R0
+015320: 145400   BICB   @-(R4),R0
+015322: 145400   BICB   @-(R4),R0
+015324: 074410   XOR    R4,(R0)
+015326: 042414   BIC    (R4)+,(R4)
+015330: 002014   BGE    15362
+015332: 002014   BGE    15364
+015334: 002014   BGE    15366
+015336: 002014   BGE    15370
+015340: 115014   MOVB   @-(R0),(R4)
+015342: 002000   BGE    15344
+015344: 044413   BIC    -(R4),(R3)
+015346: 004013   JSR    R0,(R3)
+015350: 004013   JSR    R0,(R3)
+015352: 105013   CLRB   (R3)
+015354: 002000   BGE    15356
+015356: 145413   BICB   @-(R4),(R3)
+015360: 135010   BITB   @-(R0),(R0)
+015362: 143400   BICB   @(R4)+,R0
+015364: 143400   BICB   @(R4)+,R0
+015366: 143400   BICB   @(R4)+,R0
+015370: 143400   BICB   @(R4)+,R0
+015372: 175410   .WORD  175410
+015374: 143400   BICB   @(R4)+,R0
+015376: 143400   BICB   @(R4)+,R0
+015400: 042400   BIC    (R4)+,R0
+015402: 042414   BIC    (R4)+,(R4)
+015404: 002014   BGE    15436
+015406: 002014   BGE    15440
+015410: 002014   BGE    15442
+015412: 002014   BGE    15444
+015414: 002014   BGE    15446
+015416: 002014   BGE    15450
+015420: 002014   BGE    15452
+015422: 105014   CLRB   (R4)
+015424: 125010   CMPB   @-(R0),(R0)
+015426: 145400   BICB   @-(R4),R0
+015430: 155400   BISB   @-(R4),R0
+015432: 143400   BICB   @(R4)+,R0
+015434: 143400   BICB   @(R4)+,R0
+015436: 143400   BICB   @(R4)+,R0
+015440: 155410   BISB   @-(R4),(R0)
+015442: 042400   BIC    (R4)+,R0
+015444: 044413   BIC    -(R4),(R3)
+015446: 004013   JSR    R0,(R3)
+015450: 004013   JSR    R0,(R3)
+015452: 105013   CLRB   (R3)
+015454: 002000   BGE    15456
+015456: 145413   BICB   @-(R4),(R3)
+015460: 135010   BITB   @-(R0),(R0)
+015462: 143400   BICB   @(R4)+,R0
+015464: 145400   BICB   @-(R4),R0
+015466: 145400   BICB   @-(R4),R0
+015470: 145400   BICB   @-(R4),R0
+015472: 175410   .WORD  175410
+015474: 145400   BICB   @-(R4),R0
+015476: 145400   BICB   @-(R4),R0
+015500: 147400   BICB   @145400(R4),R0
+015504: 145400   BICB   @-(R4),R0
+015506: 143400   BICB   @(R4)+,R0
+015510: 143400   BICB   @(R4)+,R0
+015512: 143400   BICB   @(R4)+,R0
+015514: 143400   BICB   @(R4)+,R0
+015516: 143400   BICB   @(R4)+,R0
+015520: 042400   BIC    (R4)+,R0
+015522: 042414   BIC    (R4)+,(R4)
+015524: 002014   BGE    15556
+015526: 103014   BCC    15560
+015530: 135010   BITB   @-(R0),(R0)
+015532: 147400   BICB   @147400(R4),R0
+015536: 147400   BICB   @175410(R4),R0
+015542: 042400   BIC    (R4)+,R0
+015544: 044413   BIC    -(R4),(R3)
+015546: 004013   JSR    R0,(R3)
+015550: 004013   JSR    R0,(R3)
+015552: 105013   CLRB   (R3)
+015554: 002000   BGE    15556
+015556: 145413   BICB   @-(R4),(R3)
+015560: 135010   BITB   @-(R0),(R0)
+015562: 042400   BIC    (R4)+,R0
+015564: 042414   BIC    (R4)+,(R4)
+015566: 002014   BGE    15620
+015570: 103014   BCC    15622
+015572: 034010   BIT    -(R0),(R0)
+015574: 042414   BIC    (R4)+,(R4)
+015576: 103014   BCC    15630
+015600: 002007   BGE    15620
+015602: 042414   BIC    (R4)+,(R4)
+015604: 105014   CLRB   (R4)
+015606: 105000   CLRB   R0
+015610: 145400   BICB   @-(R4),R0
+015612: 145406   BICB   @-(R4),SP
+015614: 145400   BICB   @-(R4),R0
+015616: 145400   BICB   @-(R4),R0
+015620: 145400   BICB   @-(R4),R0
+015622: 145400   BICB   @-(R4),R0
+015624: 143400   BICB   @(R4)+,R0
+015626: 143400   BICB   @(R4)+,R0
+015630: 175410   .WORD  175410
+015632: 143407   BICB   @(R4)+,PC
+015634: 143407   BICB   @(R4)+,PC
+015636: 143407   BICB   @(R4)+,PC
+015640: 175410   .WORD  175410
+015642: 042400   BIC    (R4)+,R0
+015644: 044413   BIC    -(R4),(R3)
+015646: 004013   JSR    R0,(R3)
+015650: 004013   JSR    R0,(R3)
+015652: 105013   CLRB   (R3)
+015654: 002000   BGE    15656
+015656: 145413   BICB   @-(R4),(R3)
+015660: 135010   BITB   @-(R0),(R0)
+015662: 143400   BICB   @(R4)+,R0
+015664: 143400   BICB   @(R4)+,R0
+015666: 143400   BICB   @(R4)+,R0
+015670: 143400   BICB   @(R4)+,R0
+015672: 175410   .WORD  175410
+015674: 143400   BICB   @(R4)+,R0
+015676: 143400   BICB   @(R4)+,R0
+015700: 143400   BICB   @(R4)+,R0
+015702: 042400   BIC    (R4)+,R0
+015704: 042414   BIC    (R4)+,(R4)
+015706: 002014   BGE    15740
+015710: 002014   BGE    15742
+015712: 002014   BGE    15744
+015714: 002014   BGE    15746
+015716: 002014   BGE    15750
+015720: 002014   BGE    15752
+015722: 103014   BCC    15754
+015724: 103000   BCC    15726
+015726: 143400   BICB   @(R4)+,R0
+015730: 175410   .WORD  175410
+015732: 143400   BICB   @(R4)+,R0
+015734: 143400   BICB   @(R4)+,R0
+015736: 143400   BICB   @(R4)+,R0
+015740: 175410   .WORD  175410
+015742: 042400   BIC    (R4)+,R0
+015744: 044413   BIC    -(R4),(R3)
+015746: 004013   JSR    R0,(R3)
+015750: 004013   JSR    R0,(R3)
+015752: 105013   CLRB   (R3)
+015754: 002000   BGE    15756
+015756: 145413   BICB   @-(R4),(R3)
+015760: 135010   BITB   @-(R0),(R0)
+015762: 143400   BICB   @(R4)+,R0
+015764: 143400   BICB   @(R4)+,R0
+015766: 145400   BICB   @-(R4),R0
+015770: 145400   BICB   @-(R4),R0
+015772: 165410   SUB    @-(R4),(R0)
+015774: 145400   BICB   @-(R4),R0
+015776: 145400   BICB   @-(R4),R0
+016000: 147400   BICB   @145400(R4),R0
+016004: 145400   BICB   @-(R4),R0
+016006: 155400   BISB   @-(R4),R0
+016010: 145400   BICB   @-(R4),R0
+016012: 145404   BICB   @-(R4),R4
+016014: 143400   BICB   @(R4)+,R0
+016016: 145404   BICB   @-(R4),R4
+016020: 145400   BICB   @-(R4),R0
+016022: 145400   BICB   @-(R4),R0
+016024: 145400   BICB   @-(R4),R0
+016026: 143400   BICB   @(R4)+,R0
+016030: 175410   .WORD  175410
+016032: 143400   BICB   @(R4)+,R0
+016034: 143400   BICB   @(R4)+,R0
+016036: 143400   BICB   @(R4)+,R0
+016040: 175410   .WORD  175410
+016042: 042400   BIC    (R4)+,R0
+016044: 044413   BIC    -(R4),(R3)
+016046: 004013   JSR    R0,(R3)
+016050: 004013   JSR    R0,(R3)
+016052: 105013   CLRB   (R3)
+016054: 002000   BGE    16056
+016056: 145413   BICB   @-(R4),(R3)
+016060: 135010   BITB   @-(R0),(R0)
+016062: 143400   BICB   @(R4)+,R0
+016064: 042400   BIC    (R4)+,R0
+016066: 042414   BIC    (R4)+,(R4)
+016070: 002014   BGE    16122
+016072: 002014   BGE    16124
+016074: 002014   BGE    16126
+016076: 103014   BCC    16130
+016100: 002007   BGE    16120
+016102: 042414   BIC    (R4)+,(R4)
+016104: 103014   BCC    16136
+016106: 034010   BIT    -(R0),(R0)
+016110: 042414   BIC    (R4)+,(R4)
+016112: 103014   BCC    16144
+016114: 002000   BGE    16116
+016116: 042414   BIC    (R4)+,(R4)
+016120: 002014   BGE    16152
+016122: 002014   BGE    16154
+016124: 103014   BCC    16156
+016126: 103000   BCC    16130
+016130: 175410   .WORD  175410
+016132: 143400   BICB   @(R4)+,R0
+016134: 143400   BICB   @(R4)+,R0
+016136: 143400   BICB   @(R4)+,R0
+016140: 175410   .WORD  175410
+016142: 042400   BIC    (R4)+,R0
+016144: 044413   BIC    -(R4),(R3)
+016146: 004013   JSR    R0,(R3)
+016150: 004013   JSR    R0,(R3)
+016152: 105013   CLRB   (R3)
+016154: 002000   BGE    16156
+016156: 145413   BICB   @-(R4),(R3)
+016160: 125010   CMPB   @-(R0),(R0)
+016162: 147400   BICB   @147400(R4),R0
+016166: 145400   BICB   @-(R4),R0
+016170: 145400   BICB   @-(R4),R0
+016172: 155400   BISB   @-(R4),R0
+016174: 143400   BICB   @(R4)+,R0
+016176: 143400   BICB   @(R4)+,R0
+016200: 143400   BICB   @(R4)+,R0
+016202: 143400   BICB   @(R4)+,R0
+016204: 143400   BICB   @(R4)+,R0
+016206: 175410   .WORD  175410
+016210: 143400   BICB   @(R4)+,R0
+016212: 143400   BICB   @(R4)+,R0
+016214: 143400   BICB   @(R4)+,R0
+016216: 145400   BICB   @-(R4),R0
+016220: 145400   BICB   @-(R4),R0
+016222: 145400   BICB   @-(R4),R0
+016224: 143400   BICB   @(R4)+,R0
+016226: 143400   BICB   @(R4)+,R0
+016230: 175410   .WORD  175410
+016232: 143400   BICB   @(R4)+,R0
+016234: 143400   BICB   @(R4)+,R0
+016236: 155400   BISB   @-(R4),R0
+016240: 165410   SUB    @-(R4),(R0)
+016242: 042400   BIC    (R4)+,R0
+016244: 044413   BIC    -(R4),(R3)
+016246: 004013   JSR    R0,(R3)
+016250: 004013   JSR    R0,(R3)
+016252: 105013   CLRB   (R3)
+016254: 002000   BGE    16256
+016256: 044413   BIC    -(R4),(R3)
+016260: 103014   BCC    16312
+016262: 103007   BCC    16302
+016264: 042407   BIC    (R4)+,PC
+016266: 042414   BIC    (R4)+,(R4)
+016270: 103014   BCC    16322
+016272: 135010   BITB   @-(R0),(R0)
+016274: 143400   BICB   @(R4)+,R0
+016276: 143400   BICB   @(R4)+,R0
+016300: 143400   BICB   @(R4)+,R0
+016302: 143400   BICB   @(R4)+,R0
+016304: 143400   BICB   @(R4)+,R0
+016306: 175410   .WORD  175410
+016310: 145400   BICB   @-(R4),R0
+016312: 145400   BICB   @-(R4),R0
+016314: 046400   BIC    44414(R4),R0
+016320: 004014   JSR    R0,(R4)
+016322: 105014   CLRB   (R4)
+016324: 107000   .WORD  107000
+016326: 145400   BICB   @-(R4),R0
+016330: 165410   SUB    @-(R4),(R0)
+016332: 143400   BICB   @(R4)+,R0
+016334: 143400   BICB   @(R4)+,R0
+016336: 074410   XOR    R4,(R0)
+016340: 143414   BICB   @(R4)+,(R4)
+016342: 002000   BGE    16344
+016344: 044413   BIC    -(R4),(R3)
+016346: 004013   JSR    R0,(R3)
+016350: 004013   JSR    R0,(R3)
+016352: 105013   CLRB   (R3)
+016354: 002000   BGE    16356
+016356: 145413   BICB   @-(R4),(R3)
+016360: 103000   BCC    16362
+016362: 143400   BICB   @(R4)+,R0
+016364: 143400   BICB   @(R4)+,R0
+016366: 143400   BICB   @(R4)+,R0
+016370: 145400   BICB   @-(R4),R0
+016372: 165410   SUB    @-(R4),(R0)
+016374: 145400   BICB   @-(R4),R0
+016376: 145400   BICB   @-(R4),R0
+016400: 145400   BICB   @-(R4),R0
+016402: 145400   BICB   @-(R4),R0
+016404: 147400   BICB   @74410(R4),R0
+016410: 042414   BIC    (R4)+,(R4)
+016412: 103014   BCC    16444
+016414: 002007   BGE    16434
+016416: 042414   BIC    (R4)+,(R4)
+016420: 002014   BGE    16452
+016422: 103014   BCC    16454
+016424: 002007   BGE    16444
+016426: 042414   BIC    (R4)+,(R4)
+016430: 103014   BCC    16462
+016432: 103000   BCC    16434
+016434: 143400   BICB   @(R4)+,R0
+016436: 175410   .WORD  175410
+016440: 143400   BICB   @(R4)+,R0
+016442: 042400   BIC    (R4)+,R0
+016444: 044413   BIC    -(R4),(R3)
+016446: 004013   JSR    R0,(R3)
+016450: 004013   JSR    R0,(R3)
+016452: 105013   CLRB   (R3)
+016454: 002000   BGE    16456
+016456: 145413   BICB   @-(R4),(R3)
+016460: 105005   CLRB   R5
+016462: 145400   BICB   @-(R4),R0
+016464: 143400   BICB   @(R4)+,R0
+016466: 042400   BIC    (R4)+,R0
+016470: 042414   BIC    (R4)+,(R4)
+016472: 002014   BGE    16524
+016474: 002014   BGE    16526
+016476: 002014   BGE    16530
+016500: 002014   BGE    16532
+016502: 103014   BCC    16534
+016504: 103007   BCC    16524
+016506: 175410   .WORD  175410
+016510: 143400   BICB   @(R4)+,R0
+016512: 143400   BICB   @(R4)+,R0
+016514: 143400   BICB   @(R4)+,R0
+016516: 143400   BICB   @(R4)+,R0
+016520: 143400   BICB   @(R4)+,R0
+016522: 143400   BICB   @(R4)+,R0
+016524: 143400   BICB   @(R4)+,R0
+016526: 145400   BICB   @-(R4),R0
+016530: 155400   BISB   @-(R4),R0
+016532: 145400   BICB   @-(R4),R0
+016534: 143400   BICB   @(R4)+,R0
+016536: 175410   .WORD  175410
+016540: 145400   BICB   @-(R4),R0
+016542: 044404   BIC    -(R4),R4
+016544: 044413   BIC    -(R4),(R3)
+016546: 004013   JSR    R0,(R3)
+016550: 004013   JSR    R0,(R3)
+016552: 105013   CLRB   (R3)
+016554: 002000   BGE    16556
+016556: 044413   BIC    -(R4),(R3)
+016560: 002014   BGE    16612
+016562: 103014   BCC    16614
+016564: 103000   BCC    16566
+016566: 143400   BICB   @(R4)+,R0
+016570: 145400   BICB   @-(R4),R0
+016572: 155400   BISB   @-(R4),R0
+016574: 145400   BICB   @-(R4),R0
+016576: 145400   BICB   @-(R4),R0
+016600: 145400   BICB   @-(R4),R0
+016602: 145400   BICB   @-(R4),R0
+016604: 145400   BICB   @-(R4),R0
+016606: 165410   SUB    @-(R4),(R0)
+016610: 145400   BICB   @-(R4),R0
+016612: 145400   BICB   @-(R4),R0
+016614: 147400   BICB   @145400(R4),R0
+016620: 145400   BICB   @-(R4),R0
+016622: 143400   BICB   @(R4)+,R0
+016624: 042400   BIC    (R4)+,R0
+016626: 143414   BICB   @(R4)+,(R4)
+016630: 034010   BIT    -(R0),(R0)
+016632: 143414   BICB   @(R4)+,(R4)
+016634: 103000   BCC    16636
+016636: 074410   XOR    R4,(R0)
+016640: 042414   BIC    (R4)+,(R4)
+016642: 004014   JSR    R0,(R4)
+016644: 004013   JSR    R0,(R3)
+016646: 004013   JSR    R0,(R3)
+016650: 004013   JSR    R0,(R3)
+016652: 105013   CLRB   (R3)
+016654: 002000   BGE    16656
+016656: 145413   BICB   @-(R4),(R3)
+016660: 105004   CLRB   R4
+016662: 145400   BICB   @-(R4),R0
+016664: 145400   BICB   @-(R4),R0
+016666: 042400   BIC    (R4)+,R0
+016670: 143414   BICB   @(R4)+,(R4)
+016672: 034010   BIT    -(R0),(R0)
+016674: 042414   BIC    (R4)+,(R4)
+016676: 002014   BGE    16730
+016700: 002014   BGE    16732
+016702: 002014   BGE    16734
+016704: 002014   BGE    16736
+016706: 002014   BGE    16740
+016710: 002014   BGE    16742
+016712: 103014   BCC    16744
+016714: 002007   BGE    16734
+016716: 042414   BIC    (R4)+,(R4)
+016720: 103014   BCC    16752
+016722: 103000   BCC    16724
+016724: 145400   BICB   @-(R4),R0
+016726: 145400   BICB   @-(R4),R0
+016730: 175410   .WORD  175410
+016732: 145400   BICB   @-(R4),R0
+016734: 145400   BICB   @-(R4),R0
+016736: 165410   SUB    @-(R4),(R0)
+016740: 042400   BIC    (R4)+,R0
+016742: 044414   BIC    -(R4),(R4)
+016744: 004013   JSR    R0,(R3)
+016746: 004013   JSR    R0,(R3)
+016750: 004013   JSR    R0,(R3)
+016752: 105013   CLRB   (R3)
+016754: 002000   BGE    16756
+016756: 044413   BIC    -(R4),(R3)
+016760: 002014   BGE    17012
+016762: 002014   BGE    17014
+016764: 103014   BCC    17016
+016766: 103000   BCC    16770
+016770: 143400   BICB   @(R4)+,R0
+016772: 175410   .WORD  175410
+016774: 145400   BICB   @-(R4),R0
+016776: 145400   BICB   @-(R4),R0
+017000: 145400   BICB   @-(R4),R0
+017002: 145400   BICB   @-(R4),R0
+017004: 145400   BICB   @-(R4),R0
+017006: 145400   BICB   @-(R4),R0
+017010: 145400   BICB   @-(R4),R0
+017012: 145400   BICB   @-(R4),R0
+017014: 147400   BICB   @145400(R4),R0
+017020: 143400   BICB   @(R4)+,R0
+017022: 042400   BIC    (R4)+,R0
+017024: 042414   BIC    (R4)+,(R4)
+017026: 103014   BCC    17060
+017030: 034010   BIT    -(R0),(R0)
+017032: 042414   BIC    (R4)+,(R4)
+017034: 002014   BGE    17066
+017036: 103014   BCC    17070
+017040: 002000   BGE    17042
+017042: 044414   BIC    -(R4),(R4)
+017044: 004013   JSR    R0,(R3)
+017046: 004013   JSR    R0,(R3)
+017050: 004013   JSR    R0,(R3)
+017052: 105013   CLRB   (R3)
+017054: 002000   BGE    17056
+017056: 143413   BICB   @(R4)+,(R3)
+017060: 103000   BCC    17062
+017062: 143400   BICB   @(R4)+,R0
+017064: 143400   BICB   @(R4)+,R0
+017066: 143400   BICB   @(R4)+,R0
+017070: 143400   BICB   @(R4)+,R0
+017072: 074410   XOR    R4,(R0)
+017074: 042414   BIC    (R4)+,(R4)
+017076: 002014   BGE    17130
+017100: 002014   BGE    17132
+017102: 002014   BGE    17134
+017104: 002014   BGE    17136
+017106: 002014   BGE    17140
+017110: 002014   BGE    17142
+017112: 103014   BCC    17144
+017114: 002007   BGE    17134
+017116: 143414   BICB   @(R4)+,(R4)
+017120: 103000   BCC    17122
+017122: 143400   BICB   @(R4)+,R0
+017124: 143400   BICB   @(R4)+,R0
+017126: 143400   BICB   @(R4)+,R0
+017130: 175410   .WORD  175410
+017132: 143400   BICB   @(R4)+,R0
+017134: 143400   BICB   @(R4)+,R0
+017136: 145400   BICB   @-(R4),R0
+017140: 044404   BIC    -(R4),R4
+017142: 044414   BIC    -(R4),(R4)
+017144: 004013   JSR    R0,(R3)
+017146: 004013   JSR    R0,(R3)
+017150: 004013   JSR    R0,(R3)
+017152: 105013   CLRB   (R3)
+017154: 105000   CLRB   R0
+017156: 145400   BICB   @-(R4),R0
+017160: 145400   BICB   @-(R4),R0
+017162: 145400   BICB   @-(R4),R0
+017164: 145400   BICB   @-(R4),R0
+017166: 145400   BICB   @-(R4),R0
+017170: 145400   BICB   @-(R4),R0
+017172: 165410   SUB    @-(R4),(R0)
+017174: 143400   BICB   @(R4)+,R0
+017176: 143400   BICB   @(R4)+,R0
+017200: 143400   BICB   @(R4)+,R0
+017202: 143400   BICB   @(R4)+,R0
+017204: 143400   BICB   @(R4)+,R0
+017206: 143400   BICB   @(R4)+,R0
+017210: 143400   BICB   @(R4)+,R0
+017212: 143400   BICB   @(R4)+,R0
+017214: 143400   BICB   @(R4)+,R0
+017216: 143400   BICB   @(R4)+,R0
+017220: 143400   BICB   @(R4)+,R0
+017222: 143400   BICB   @(R4)+,R0
+017224: 143400   BICB   @(R4)+,R0
+017226: 143400   BICB   @(R4)+,R0
+017230: 165410   SUB    @-(R4),(R0)
+017232: 145400   BICB   @-(R4),R0
+017234: 044400   BIC    -(R4),R0
+017236: 044414   BIC    -(R4),(R4)
+017240: 004014   JSR    R0,(R4)
+017242: 004014   JSR    R0,(R4)
+017244: 004013   JSR    R0,(R3)
+017246: 004013   JSR    R0,(R3)
+017250: 006013   ROR    (R3)
+017252: 002013   BGE    17302
+017254: 002013   BGE    17304
+017256: 002013   BGE    17306
+017260: 002013   BGE    17310
+017262: 002013   BGE    17312
+017264: 002013   BGE    17314
+017266: 002013   BGE    17316
+017270: 002013   BGE    17320
+017272: 002013   BGE    17322
+017274: 002015   BGE    17330
+017276: 002015   BGE    17332
+017300: 002015   BGE    17334
+017302: 002015   BGE    17336
+017304: 002015   BGE    17340
+017306: 002015   BGE    17342
+017310: 002015   BGE    17344
+017312: 002015   BGE    17346
+017314: 002015   BGE    17350
+017316: 002015   BGE    17352
+017320: 002015   BGE    17354
+017322: 002015   BGE    17356
+017324: 002015   BGE    17360
+017326: 002015   BGE    17362
+017330: 002013   BGE    17360
+017332: 002013   BGE    17362
+017334: 002013   BGE    17364
+017336: 002013   BGE    17366
+017340: 002013   BGE    17370
+017342: 002013   BGE    17372
+017344: 002013   BGE    17374
+017346: 103013   BCC    17376
+017350: 002007   BGE    17370
+017352: 143417   BICB   @(R4)+,(PC)
+017354: 103000   BCC    17356
+017356: 143400   BICB   @(R4)+,R0
+017360: 000401   BR     17364
+017362: 000000   HALT
+017364: 000000   HALT
+017366: 000000   HALT
+017370: 000000   HALT
+017372: 000002   RTI
+017374: 000000   HALT
+017376: 000000   HALT
+017400: 011224   MOV    (R2),(R4)+
+017402: 012400   MOV    (R4)+,R0
+017404: 013426   MOV    @(R4)+,(SP)+
+017406: 013025   MOV    @(R0)+,(R5)+
+017410: 006027   ROR    #0
+017414: 143400   BICB   @(R4)+,R0
+017416: 143402   BICB   @(R4)+,R2
+017420: 000524   BR     17672
+017422: 022100   CMP    (R1)+,R0
+017424: 015230   MOV    @-(R2),@(R0)+
+017426: 014550   MOV    -(R5),@-(R0)
+GAME_STATE:
+017430: 010404   MOV    R4,R4
+017432: 143402   BICB   @(R4)+,R2
+017434: 042400   BIC    (R4)+,R0
+LIVES:
+017436: 000005   RESET
+SCORE:
+017440: 000000   HALT
+017442: 143416   BICB   @(R4)+,(SP)
+017444: 002002   BGE    17452
+017446: 143417   BICB   @(R4)+,(PC)
+
+; --- TILE_BANK (017450) — 16 tiles × 16 bytes (8×8 px @ 2bpp) ---
+
+TILE_BANK:
+017450: 000000   HALT
+017452: 000000   HALT
+017454: 000000   HALT
+017456: 000000   HALT
+017460: 000000   HALT
+017462: 000000   HALT
+017464: 000000   HALT
+017466: 000000   HALT
+017470: 036074   BIT    177777(R0),@36074(R4)
+017476: 036074   BIT    36074(R0),@177777(R4)
+017504: 036074   BIT    36074(R0),@0(R4)
+017512: 000000   HALT
+017514: 000000   HALT
+017516: 000000   HALT
+017520: 000000   HALT
+017522: 000000   HALT
+017524: 000000   HALT
+017526: 000000   HALT
+017530: 000000   HALT
+017532: 000000   HALT
+017534: 000000   HALT
+017536: 000000   HALT
+017540: 000000   HALT
+017542: 000000   HALT
+017544: 000000   HALT
+017546: 000000   HALT
+017550: 000000   HALT
+017552: 000000   HALT
+017554: 000000   HALT
+017556: 000000   HALT
+017560: 037774   BIT    @45034,@37774(R4)
+017566: 037774   BIT    @17572,@0(R4)
+017574: 000000   HALT
+017576: 000000   HALT
+017600: 037774   BIT    @45054,@37774(R4)
+017606: 037774   BIT    @17612,@0(R4)
+017614: 000000   HALT
+017616: 000000   HALT
+017620: 037774   BIT    @45074,@37774(R4)
+017626: 037774   BIT    @17632,@177777(R4)
+017634: 146314   BICB   0(R3),(R4)
+017640: 000000   HALT
+017642: 000000   HALT
+017644: 000000   HALT
+017646: 000000   HALT
+017650: 036074   BIT    177777(R0),@36074(R4)
+017656: 036074   BIT    36074(R0),@177777(R4)
+017664: 036074   BIT    36074(R0),@124(R4)
+017672: 000120   JMP    (R0)+
+017674: 000124   JMP    (R4)+
+017676: 000120   JMP    (R0)+
+017700: 000124   JMP    (R4)+
+017702: 000120   JMP    (R0)+
+017704: 000124   JMP    (R4)+
+017706: 000120   JMP    (R0)+
+017710: 000124   JMP    (R4)+
+017712: 000120   JMP    (R0)+
+017714: 000124   JMP    (R4)+
+017716: 000120   JMP    (R0)+
+017720: 000124   JMP    (R4)+
+017722: 000120   JMP    (R0)+
+017724: 000124   JMP    (R4)+
+017726: 000120   JMP    (R0)+
+017730: 120252   CMPB   R2,@-(R2)
+017732: 105052   CLRB   @-(R2)
+017734: 025212   CMP    @-(R2),(R2)
+017736: 025210   CMP    @-(R2),(R0)
+017740: 125242   CMPB   @-(R2),-(R2)
+017742: 025210   CMP    @-(R2),(R0)
+017744: 105052   CLRB   @-(R2)
+017746: 120252   CMPB   R2,@-(R2)
+017750: 025052   CMP    @-(R0),@-(R2)
+017752: 124250   CMPB   -(R2),@-(R0)
+017754: 021042   CMP    (R0),-(R2)
+017756: 105212   INCB   (R2)
+017760: 121242   CMPB   (R2),-(R2)
+017762: 104210   EMT    210
+017764: 025052   CMP    @-(R0),@-(R2)
+017766: 124210   CMPB   -(R2),(R0)
+017770: 000000   HALT
+017772: 050120   BIS    R1,(R0)+
+017774: 012024   MOV    (R0)+,(R4)+
+017776: 052525   BIS    (R5)+,(R5)+
+020000: 000000   HALT
+020002: 052525   BIS    (R5)+,(R5)+
+020004: 000000   HALT
+020006: 052525   BIS    (R5)+,(R5)+
+020010: 000000   HALT
+020012: 052525   BIS    (R5)+,(R5)+
+020014: 000000   HALT
+020016: 052525   BIS    (R5)+,(R5)+
+020020: 000000   HALT
+020022: 052525   BIS    (R5)+,(R5)+
+020024: 000000   HALT
+020026: 052525   BIS    (R5)+,(R5)+
+020030: 177774   .WORD  177774
+020032: 052524   BIS    (R5)+,(R4)+
+020034: 177774   .WORD  177774
+020036: 052524   BIS    (R5)+,(R4)+
+020040: 177774   .WORD  177774
+020042: 052524   BIS    (R5)+,(R4)+
+020044: 177774   .WORD  177774
+020046: 052524   BIS    (R5)+,(R4)+
+020050: 000000   HALT
+020052: 037400   BIT    @31400(R4),R0
+020056: 037700   BIT    @20442,R0
+020062: 000074   .WORD  74
+020064: 000377   SWAB   @20153
+020070: 025050   CMP    @-(R0),@-(R0)
+020072: 124240   CMPB   -(R2),-(R0)
+020074: 021000   CMP    (R0),R0
+020076: 105000   CLRB   R0
+020100: 121000   CMPB   (R0),R0
+020102: 104000   EMT    0
+020104: 025040   CMP    @-(R0),-(R0)
+020106: 124210   CMPB   -(R2),(R0)
+020110: 025000   CMP    @-(R0),R0
+020112: 124000   CMPB   -(R0),R0
+020114: 020000   CMP    R0,R0
+020116: 100000   BPL    20120
+020120: 120000   CMPB   R0,R0
+020122: 100000   BPL    20124
+020124: 025000   CMP    @-(R0),R0
+020126: 124200   CMPB   -(R2),R0
+020130: 025052   CMP    @-(R0),@-(R2)
+020132: 004250   JSR    R2,@-(R0)
+020134: 001042   BNE    20242
+020136: 001212   BNE    17564
+020140: 001242   BNE    17646
+020142: 000210   .WORD  210
+020144: 005052   CLR    @-(R2)
+020146: 024210   CMP    -(R2),(R0)
+020150: 001052   BNE    20276
+020152: 000050   .WORD  50
+020154: 000002   RTI
+020156: 000002   RTI
+020160: 000002   RTI
+020162: 000000   HALT
+020164: 001052   BNE    20312
+020166: 004210   JSR    R2,(R0)
+020170: 025050   CMP    @-(R0),@-(R0)
+020172: 024240   CMP    -(R2),-(R0)
+020174: 000000   HALT
+020176: 000000   HALT
+020200: 000000   HALT
+020202: 000000   HALT
+020204: 005040   CLR    -(R0)
+020206: 024210   CMP    -(R2),(R0)
+020210: 025052   CMP    @-(R0),@-(R2)
+020212: 124240   CMPB   -(R2),-(R0)
+020214: 021040   CMP    (R0),-(R0)
+020216: 000000   HALT
+020220: 000000   HALT
+020222: 004210   JSR    R2,(R0)
+020224: 025052   CMP    @-(R0),@-(R2)
+020226: 024210   CMP    -(R2),(R0)
+020230: 025052   CMP    @-(R0),@-(R2)
+020232: 124240   CMPB   -(R2),-(R0)
+020234: 021042   CMP    (R0),-(R2)
+020236: 005210   INC    (R0)
+020240: 000000   HALT
+020242: 004210   JSR    R2,(R0)
+020244: 025052   CMP    @-(R0),@-(R2)
+020246: 024210   CMP    -(R2),(R0)
+020250: 000000   HALT
+020252: 000000   HALT
+020254: 000000   HALT
+020256: 000000   HALT
+020260: 007760   .WORD  7760
+020262: 000000   HALT
+020264: 000000   HALT
+020266: 000000   HALT
+020270: 100000   BPL    20272
+020272: 000002   RTI
+020274: 000002   RTI
+020276: 000000   HALT
+020300: 040000   BIC    R0,R0
+020302: 177776   .WORD  177776
+020304: 177776   .WORD  177776
+020306: 000000   HALT
+020310: 020000   CMP    R0,R0
+020312: 177700   .WORD  177700
+020314: 177000   .WORD  177000
+020316: 000000   HALT
+020320: 010000   MOV    R0,R0
+020322: 000100   JMP    R0
+020324: 001000   BNE    20326
+020326: 000000   HALT
+020330: 002000   BGE    20332
+020332: 000100   JMP    R0
+020334: 001000   BNE    20336
+020336: 000000   HALT
+020340: 005000   CLR    R0
+020342: 005000   CLR    R0
+020344: 001240   BNE    20046
+020346: 025210   CMP    @-(R2),(R0)
+020350: 001210   BNE    17772
+020352: 005200   INC    R0
+020354: 004200   JSR    R2,R0
+020356: 001040   BNE    20460
+020360: 120000   CMPB   R0,R0
+020362: 120000   CMPB   R0,R0
+020364: 025200   CMP    @-(R2),R0
+020366: 124240   CMPB   -(R2),-(R0)
+020370: 025000   CMP    @-(R0),R0
+020372: 121240   CMPB   (R2),-(R0)
+020374: 100000   BPL    20376
+020376: 100000   BPL    20400
+020400: 000000   HALT
+020402: 000000   HALT
+020404: 000002   RTI
+020406: 000002   RTI
+020410: 000000   HALT
+020412: 000000   HALT
+020414: 000000   HALT
+020416: 000002   RTI
+020420: 000000   HALT
+020422: 000000   HALT
+020424: 120000   CMPB   R0,R0
+020426: 104000   EMT    0
+020430: 104000   EMT    0
+020432: 100000   BPL    20434
+020434: 100000   BPL    20436
+020436: 020000   CMP    R0,R0
+020440: 000012   .WORD  12
+020442: 000012   .WORD  12
+020444: 000002   RTI
+020446: 000052   .WORD  52
+020450: 000002   RTI
+020452: 000012   .WORD  12
+020454: 000010   .WORD  10
+020456: 000002   RTI
+020460: 000240   NOP
+020462: 000240   NOP
+020464: 000050   .WORD  50
+020466: 000052   .WORD  52
+020470: 000050   .WORD  50
+020472: 000240   NOP
+020474: 000252   .WORD  252
+020476: 000050   .WORD  50
+020500: 000240   NOP
+020502: 000240   NOP
+020504: 005200   INC    R0
+020506: 021250   CMP    (R2),@-(R0)
+020510: 021200   CMP    (R2),R0
+020512: 001240   BNE    20214
+020514: 001040   BNE    20616
+020516: 004200   JSR    R2,R0
+020520: 000000   HALT
+020522: 000000   HALT
+020524: 100000   BPL    20526
+020526: 100000   BPL    20530
+020530: 000000   HALT
+020532: 000000   HALT
+020534: 000000   HALT
+020536: 100000   BPL    20540
+020540: 000012   .WORD  12
+020542: 000012   .WORD  12
+020544: 001250   BNE    20266
+020546: 005052   CLR    @-(R2)
+020550: 000250   CLN
+020552: 005212   INC    (R2)
+020554: 000002   RTI
+020556: 000002   RTI
+020560: 120000   CMPB   R0,R0
+020562: 120000   CMPB   R0,R0
+020564: 100000   BPL    20566
+020566: 124000   CMPB   -(R0),R0
+020570: 100000   BPL    20572
+020572: 120000   CMPB   R0,R0
+020574: 020000   CMP    R0,R0
+020576: 100000   BPL    20600
+020600: 000000   HALT
+020602: 000000   HALT
+020604: 000012   .WORD  12
+020606: 000042   .WORD  42
+020610: 000042   .WORD  42
+020612: 000002   RTI
+020614: 000002   RTI
+020616: 000010   .WORD  10
+020620: 005000   CLR    R0
+020622: 005000   CLR    R0
+020624: 024000   CMP    -(R0),R0
+020626: 124000   CMPB   -(R0),R0
+020630: 024000   CMP    -(R0),R0
+020632: 005000   CLR    R0
+020634: 125000   CMPB   @-(R0),R0
+020636: 024000   CMP    -(R0),R0
+020640: 007400   .WORD  7400
+020642: 007400   .WORD  7400
+020644: 001760   BEQ    20606
+020646: 037714   BIT    @22566,(R4)
+020652: 007700   .WORD  7700
+020654: 006300   ASL    R0
+020656: 001460   BEQ    21020
+020660: 170000   .WORD  170000
+020662: 170000   .WORD  170000
+020664: 037700   BIT    @17250,R0
+020670: 037400   BIT    @171760(R4),R0
+020674: 140000   BICB   R0,R0
+020676: 140000   BICB   R0,R0
+020700: 000000   HALT
+020702: 000000   HALT
+020704: 000003   BPT
+020706: 000003   BPT
+020710: 000000   HALT
+020712: 000000   HALT
+020714: 000000   HALT
+020716: 000003   BPT
+020720: 000000   HALT
+020722: 000000   HALT
+020724: 170000   .WORD  170000
+020726: 146000   BICB   146000(R0),R0
+020732: 140000   BICB   R0,R0
+020734: 140000   BICB   R0,R0
+020736: 030000   BIT    R0,R0
+020740: 000017   .WORD  17
+020742: 000017   .WORD  17
+020744: 000003   BPT
+020746: 000077   .WORD  77
+020750: 000003   BPT
+020752: 000017   .WORD  17
+020754: 000014   .WORD  14
+020756: 000003   BPT
+020760: 000360   SWAB   360(R0)
+020764: 000074   .WORD  74
+020766: 000077   .WORD  77
+020770: 000074   .WORD  74
+020772: 000360   SWAB   377(R0)
+020776: 000074   .WORD  74
+021000: 000360   SWAB   360(R0)
+021004: 007700   .WORD  7700
+021006: 031774   BIT    (PC),@31700(R4)
+021012: 001760   BEQ    20754
+021014: 001460   BEQ    21156
+021016: 006300   ASL    R0
+021020: 000000   HALT
+021022: 000000   HALT
+021024: 140000   BICB   R0,R0
+021026: 140000   BICB   R0,R0
+021030: 000000   HALT
+021032: 000000   HALT
+021034: 000000   HALT
+021036: 140000   BICB   R0,R0
+021040: 000017   .WORD  17
+021042: 000017   .WORD  17
+021044: 001774   BEQ    21036
+021046: 007477   .WORD  7477
+021050: 000374   SWAB   @7717(R4)
+021054: 000003   BPT
+021056: 000003   BPT
+021060: 170000   .WORD  170000
+021062: 170000   .WORD  170000
+021064: 140000   BICB   R0,R0
+021066: 176000   .WORD  176000
+021070: 140000   BICB   R0,R0
+021072: 170000   .WORD  170000
+021074: 030000   BIT    R0,R0
+021076: 140000   BICB   R0,R0
+021100: 000000   HALT
+021102: 000000   HALT
+021104: 000017   .WORD  17
+021106: 000063   .WORD  63
+021110: 000063   .WORD  63
+021112: 000003   BPT
+021114: 000003   BPT
+021116: 000014   .WORD  14
+021120: 007400   .WORD  7400
+021122: 007400   .WORD  7400
+021124: 036000   BIT    176000(R0),R0
+021130: 036000   BIT    7400(R0),R0
+021134: 177400   .WORD  177400
+021136: 036000   BIT    1714(R0),R0
+021142: 001714   BEQ    20774
+021144: 031414   BIT    (R4),(R4)
+021146: 037760   BIT    @23052,1460(R0)
+021154: 001460   BEQ    21316
+021156: 001400   BEQ    21160
+021160: 031414   BIT    (R4),(R4)
+021162: 007774   .WORD  7774
+021164: 001700   BEQ    20766
+021166: 006300   ASL    R0
+021170: 006300   ASL    R0
+021172: 000300   SWAB   R0
+021174: 000000   HALT
+021176: 000000   HALT
+021200: 000000   HALT
+021202: 000000   HALT
+021204: 000000   HALT
+021206: 000000   HALT
+021210: 000000   HALT
+021212: 000000   HALT
+021214: 031700   BIT    (PC),R0
+021216: 031700   BIT    (PC),R0
+021220: 001700   BEQ    21022
+021222: 001460   BEQ    21364
+021224: 001460   BEQ    21366
+021226: 001400   BEQ    21230
+021230: 000000   HALT
+021232: 000000   HALT
+021234: 000000   HALT
+021236: 000000   HALT
+021240: 000000   HALT
+021242: 000000   HALT
+021244: 000000   HALT
+021246: 000000   HALT
+021250: 001714   BEQ    21102
+021252: 001714   BEQ    21104
+021254: 031414   BIT    (R4),(R4)
+021256: 037760   BIT    @27562,300(R0)
+021264: 000000   HALT
+021266: 000000   HALT
+021270: 000000   HALT
+021272: 000000   HALT
+021274: 000000   HALT
+021276: 000000   HALT
+021300: 000000   HALT
+021302: 000000   HALT
+021304: 031700   BIT    (PC),R0
+021306: 031700   BIT    (PC),R0
+021310: 031414   BIT    (R4),(R4)
+021312: 007774   .WORD  7774
+021314: 001700   BEQ    21116
+021316: 006300   ASL    R0
+021320: 031700   BIT    (PC),R0
+021322: 031700   BIT    (PC),R0
+021324: 031414   BIT    (R4),(R4)
+021326: 007774   .WORD  7774
+021330: 001700   BEQ    21132
+021332: 006300   ASL    R0
+021334: 006300   ASL    R0
+021336: 000300   SWAB   R0
+021340: 001700   BEQ    21142
+021342: 006300   ASL    R0
+021344: 006300   ASL    R0
+021346: 000300   SWAB   R0
+021350: 000000   HALT
+021352: 000000   HALT
+021354: 000000   HALT
+021356: 000000   HALT
+021360: 000000   HALT
+021362: 000000   HALT
+021364: 000000   HALT
+021366: 000000   HALT
+021370: 031700   BIT    (PC),R0
+021372: 031700   BIT    (PC),R0
+021374: 031414   BIT    (R4),(R4)
+021376: 007774   .WORD  7774
+021400: 001210   BNE    21022
+021402: 001210   BNE    21024
+021404: 021010   CMP    (R0),(R0)
+021406: 025240   CMP    @-(R2),-(R0)
+021410: 001200   BNE    21012
+021412: 001040   BNE    21514
+021414: 001040   BNE    21516
+021416: 001000   BNE    21420
+021420: 021010   CMP    (R0),(R0)
+021422: 005250   INC    @-(R0)
+021424: 001200   BNE    21026
+021426: 004200   JSR    R2,R0
+021430: 004200   JSR    R2,R0
+021432: 000200   RTS    R0
+021434: 000000   HALT
+021436: 000000   HALT
+021440: 000000   HALT
+021442: 000000   HALT
+021444: 000000   HALT
+021446: 000000   HALT
+021450: 000000   HALT
+021452: 000000   HALT
+021454: 021200   CMP    (R2),R0
+021456: 021200   CMP    (R2),R0
+021460: 001200   BNE    21062
+021462: 001040   BNE    21564
+021464: 001040   BNE    21566
+021466: 001000   BNE    21470
+021470: 000000   HALT
+021472: 000000   HALT
+021474: 000000   HALT
+021476: 000000   HALT
+021500: 000000   HALT
+021502: 000000   HALT
+021504: 000000   HALT
+021506: 000000   HALT
+021510: 001210   BNE    21132
+021512: 001210   BNE    21134
+021514: 021010   CMP    (R0),(R0)
+021516: 025240   CMP    @-(R2),-(R0)
+021520: 004200   JSR    R2,R0
+021522: 000200   RTS    R0
+021524: 000000   HALT
+021526: 000000   HALT
+021530: 000000   HALT
+021532: 000000   HALT
+021534: 000000   HALT
+021536: 000000   HALT
+021540: 000000   HALT
+021542: 000000   HALT
+021544: 021200   CMP    (R2),R0
+021546: 021200   CMP    (R2),R0
+021550: 021010   CMP    (R0),(R0)
+021552: 005250   INC    @-(R0)
+021554: 001200   BNE    21156
+021556: 004200   JSR    R2,R0
+021560: 021200   CMP    (R2),R0
+021562: 021200   CMP    (R2),R0
+021564: 021010   CMP    (R0),(R0)
+021566: 005250   INC    @-(R0)
+021570: 001200   BNE    21172
+021572: 004200   JSR    R2,R0
+021574: 004200   JSR    R2,R0
+021576: 000200   RTS    R0
+021600: 001200   BNE    21202
+021602: 004200   JSR    R2,R0
+021604: 004200   JSR    R2,R0
+021606: 000200   RTS    R0
+021610: 000000   HALT
+021612: 000000   HALT
+021614: 000000   HALT
+021616: 000000   HALT
+021620: 000000   HALT
+021622: 000000   HALT
+021624: 000000   HALT
+021626: 000000   HALT
+021630: 021200   CMP    (R2),R0
+021632: 021200   CMP    (R2),R0
+021634: 021010   CMP    (R0),(R0)
+021636: 005250   INC    @-(R0)
+SPRITE_WS_PLAYER:
+021640: 020740   CMP    PC,-(R0)
+021642: 021060   CMP    (R0),21240(R0)
+021646: 021220   CMP    (R2),(R0)+
+021650: 021340   CMP    (R3),-(R0)
+021652: 020760   CMP    PC,21120(R0)
+021656: 021300   CMP    (R3),R0
+021660: 021160   CMP    (R1),21160(R0)
+021664: 020640   CMP    SP,-(R0)
+021666: 021000   CMP    (R0),R0
+021670: 021140   CMP    (R1),-(R0)
+021672: 021140   CMP    (R1),-(R0)
+021674: 021320   CMP    (R3),(R0)+
+021676: 020660   CMP    SP,21040(R0)
+021702: 021160   CMP    (R1),21300(R0)
+021706: 021300   CMP    (R3),R0
+021710: 020720   CMP    PC,(R0)+
+021712: 021100   CMP    (R1),R0
+021714: 021220   CMP    (R2),(R0)+
+021716: 021240   CMP    (R2),-(R0)
+021720: 021360   CMP    (R3),17450(R0)
+021724: 017450   MOV    @21260(R4),@-(R0)
+021730: 021200   CMP    (R2),R0
+021732: 021200   CMP    (R2),R0
+021734: 017450   MOV    @17450(R4),@-(R0)
+021740: 017450   MOV    @17450(R4),@-(R0)
+021744: 017450   MOV    @20700(R4),@-(R0)
+021750: 021020   CMP    (R0),(R0)+
+021752: 021200   CMP    (R2),R0
+021754: 021260   CMP    (R2),21260(R0)
+SPRITE_WS_ENEMY:
+021760: 020440   CMP    R4,-(R0)
+021762: 020560   CMP    R5,21500(R0)
+021766: 021460   CMP    (R4),21600(R0)
+021772: 020460   CMP    R4,20620(R0)
+021776: 021540   CMP    (R5),-(R0)
+022000: 021420   CMP    (R4),(R0)+
+022002: 021420   CMP    (R4),(R0)+
+022004: 020340   CMP    R3,-(R0)
+022006: 020500   CMP    R5,R0
+022010: 021400   CMP    (R4),R0
+022012: 021400   CMP    (R4),R0
+022014: 021560   CMP    (R5),20360(R0)
+022020: 020540   CMP    R5,-(R0)
+022022: 021420   CMP    (R4),(R0)+
+022024: 021540   CMP    (R5),-(R0)
+022026: 021540   CMP    (R5),-(R0)
+022030: 020420   CMP    R4,(R0)+
+022032: 020600   CMP    SP,R0
+022034: 021460   CMP    (R4),21500(R0)
+022040: 021620   CMP    (SP),(R0)+
+022042: 017450   MOV    @17450(R4),@-(R0)
+022046: 021520   CMP    (R5),(R0)+
+022050: 021440   CMP    (R4),-(R0)
+022052: 021440   CMP    (R4),-(R0)
+022054: 017450   MOV    @17450(R4),@-(R0)
+022060: 017450   MOV    @17450(R4),@-(R0)
+022064: 017450   MOV    @20400(R4),@-(R0)
+022070: 020520   CMP    R5,(R0)+
+022072: 021440   CMP    (R4),-(R0)
+022074: 021520   CMP    (R5),(R0)+
+022076: 021520   CMP    (R5),(R0)+
+
+; --- LEVEL_MAPS (022100) — 10 levels × 352 bytes ---
+
+LEVEL_MAPS:
+022100: 130273   BITB   R2,@146314(R3)
+022104: 146314   BICB   146314(R3),(R4)
+022110: 146314   BICB   146314(R3),(R4)
+022114: 146314   BICB   135701(R3),(R4)
+022120: 130273   BITB   R2,@0(R3)
+022124: 000000   HALT
+022126: 000000   HALT
+022130: 000000   HALT
+022132: 000000   HALT
+022134: 000000   HALT
+022136: 135410   BITB   @-(R4),(R0)
+022140: 130273   BITB   R2,@6310(R3)
+022144: 146200   BICB   0(R2),R0
+022150: 100002   BPL    22156
+022152: 146314   BICB   14(R3),(R4)
+022156: 135410   BITB   @-(R4),(R0)
+022160: 130273   BITB   R2,@6310(R3)
+022164: 146200   BICB   144307(R2),R0
+022170: 146314   BICB   146314(R3),(R4)
+022174: 146174   BICB   135710(R1),@130273(R4)
+022202: 076310   .WORD  76310
+022204: 000214   .WORD  214
+022206: 004000   JSR    R0,R0
+022210: 000000   HALT
+022212: 000000   HALT
+022214: 000012   .WORD  12
+022216: 135410   BITB   @-(R4),(R0)
+022220: 130273   BITB   R2,@10(R3)
+022224: 000200   RTS    R0
+022226: 004100   JSR    R1,R0
+022230: 000000   HALT
+022232: 144000   BICB   -(R0),R0
+022234: 146314   BICB   135414(R3),(R4)
+022240: 130273   BITB   R2,@10(R3)
+022244: 000200   RTS    R0
+022246: 146300   BICB   146314(R3),R0
+022252: 004314   JSR    R3,(R4)
+022254: 000000   HALT
+022256: 135410   BITB   @-(R4),(R0)
+022260: 130273   BITB   R2,@10(R3)
+022264: 000200   RTS    R0
+022266: 000000   HALT
+022270: 000000   HALT
+022272: 146300   BICB   10(R3),R0
+022276: 135410   BITB   @-(R4),(R0)
+022300: 130273   BITB   R2,@146010(R3)
+022304: 146214   BICB   6307(R2),(R4)
+022310: 000140   JMP    -(R0)
+022312: 000000   HALT
+022314: 073570   ASHC   @135410(R0),R5
+022320: 130273   BITB   R2,@10(R3)
+022324: 000200   RTS    R0
+022326: 146000   BICB   146314(R0),R0
+022332: 000314   SWAB   (R4)
+022334: 000010   .WORD  10
+022336: 135410   BITB   @-(R4),(R0)
+022340: 130273   BITB   R2,@10(R3)
+022344: 000200   RTS    R0
+022346: 000000   HALT
+022350: 040100   BIC    R1,R0
+022352: 000000   HALT
+022354: 000010   .WORD  10
+022356: 135410   BITB   @-(R4),(R0)
+022360: 130273   BITB   R2,@140010(R3)
+022364: 146314   BICB   106307(R3),(R4)
+022370: 140314   BICB   R3,(R4)
+022372: 006314   ASL    (R4)
+022374: 000010   .WORD  10
+022376: 135410   BITB   @-(R4),(R0)
+022400: 130273   BITB   R2,@10(R3)
+022404: 000000   HALT
+022406: 100000   BPL    22410
+022410: 000000   HALT
+022412: 000000   HALT
+022414: 000010   .WORD  10
+022416: 135410   BITB   @-(R4),(R0)
+022420: 130273   BITB   R2,@143574(R3)
+022424: 000214   .WORD  214
+022426: 100000   BPL    22430
+022430: 140000   BICB   R0,R0
+022432: 000314   SWAB   (R4)
+022434: 100010   BPL    22456
+022436: 135414   BITB   @-(R4),(R4)
+022440: 130273   BITB   R2,@0(R3)
+022444: 000200   RTS    R0
+022446: 100000   BPL    22450
+022450: 143714   BICB   @#143714,(R4)
+022454: 100014   BPL    22506
+022456: 135400   BITB   @-(R4),R0
+022460: 130273   BITB   R2,@5(R3)
+022464: 146314   BICB   103714(R3),(R4)
+022470: 000000   HALT
+022472: 000000   HALT
+022474: 100000   BPL    22476
+022476: 135500   BITB   @-(R5),R0
+022500: 130273   BITB   R2,@314(R3)
+022504: 000000   HALT
+022506: 100000   BPL    22510
+022510: 000000   HALT
+022512: 140000   BICB   R0,R0
+022514: 100310   BPL    22336
+022516: 135714   BITB   @-(PC),(R4)
+022520: 130273   BITB   R2,@4(R3)
+022524: 146214   BICB   146314(R2),(R4)
+022530: 143714   BICB   @#14,(R4)
+022534: 100010   BPL    22556
+022536: 135700   BITB   @-(PC),R0
+022540: 130273   BITB   R2,@6314(R3)
+022544: 000200   RTS    R0
+022546: 000000   HALT
+022550: 000000   HALT
+022552: 146000   BICB   146310(R0),R0
+022556: 135700   BITB   @-(PC),R0
+022560: 130273   BITB   R2,@0(R3)
+022564: 146200   BICB   146314(R2),R0
+022570: 143714   BICB   @#0,(R4)
+022574: 000010   .WORD  10
+022576: 135704   BITB   @-(PC),R4
+022600: 000273   .WORD  273
+022602: 000000   HALT
+022604: 000200   RTS    R0
+022606: 000000   HALT
+022610: 000000   HALT
+022612: 000000   HALT
+022614: 140010   BICB   R0,(R0)
+022616: 135714   BITB   @-(PC),(R4)
+022620: 135673   BITB   @-(SP),@135673(R3)
+022624: 156673   BISB   156735(SP),@156735(R3)
+022632: 156735   BISB   160531,@(R5)+
+022636: 135673   BITB   @-(SP),@146273(R3)
+022642: 146314   BICB   146314(R3),(R4)
+022646: 146314   BICB   146314(R3),(R4)
+022652: 026314   CMP    140714(R3),(R4)
+022656: 135714   BITB   @-(PC),(R4)
+022660: 000273   .WORD  273
+022662: 000000   HALT
+022664: 000000   HALT
+022666: 000000   HALT
+022670: 000005   RESET
+022672: 000000   HALT
+022674: 004000   JSR    R0,R0
+022676: 135400   BITB   @-(R4),R0
+022700: 000273   .WORD  273
+022702: 146200   BICB   73714(R2),R0
+022706: 146307   BICB   76314(R3),PC
+022712: 146167   BICB   6314(R1),160320
+022720: 000273   .WORD  273
+022722: 000200   RTS    R0
+022724: 000000   HALT
+022726: 000000   HALT
+022730: 000000   HALT
+022732: 000000   HALT
+022734: 000000   HALT
+022736: 135400   BITB   @-(R4),R0
+022740: 002273   BGE    22530
+022742: 000200   RTS    R0
+022744: 000000   HALT
+022746: 000000   HALT
+022750: 000000   HALT
+022752: 000000   HALT
+022754: 000000   HALT
+022756: 135400   BITB   @-(R4),R0
+022760: 106273   ASRB   @314(R3)
+022764: 144300   BICB   -(R3),R0
+022766: 076314   .WORD  76314
+022770: 073567   ASHC   171310,R5
+022774: 000214   .WORD  214
+022776: 135400   BITB   @-(R4),R0
+023000: 100273   BPL    22570
+023002: 000000   HALT
+023004: 004000   JSR    R0,R0
+023006: 000000   HALT
+023010: 000000   HALT
+023012: 000000   HALT
+023014: 000200   RTS    R0
+023016: 135400   BITB   @-(R4),R0
+023020: 100273   BPL    22610
+023022: 000000   HALT
+023024: 004000   JSR    R0,R0
+023026: 000000   HALT
+023030: 000000   HALT
+023032: 000000   HALT
+023034: 000200   RTS    R0
+023036: 135400   BITB   @-(R4),R0
+023040: 100273   BPL    22630
+023042: 000100   JMP    R0
+023044: 004000   JSR    R0,R0
+023046: 040000   BIC    R0,R0
+023050: 000000   HALT
+023052: 000000   HALT
+023054: 000204   RTS    R4
+023056: 135400   BITB   @-(R4),R0
+023060: 100273   BPL    22650
+023062: 144300   BICB   -(R3),R0
+023064: 006314   ASL    (R4)
+023066: 144000   BICB   -(R0),R0
+023070: 106314   ASLB   (R4)
+023072: 000014   .WORD  14
+023074: 106314   ASLB   (R4)
+023076: 135400   BITB   @-(R4),R0
+023100: 100273   BPL    22670
+023102: 004000   JSR    R0,R0
+023104: 000000   HALT
+023106: 004000   JSR    R0,R0
+023110: 100000   BPL    23112
+023112: 000000   HALT
+023114: 100000   BPL    23116
+023116: 135400   BITB   @-(R4),R0
+023120: 100273   BPL    22710
+023122: 004000   JSR    R0,R0
+023124: 000000   HALT
+023126: 004000   JSR    R0,R0
+023130: 100000   BPL    23132
+023132: 000000   HALT
+023134: 100000   BPL    23136
+023136: 135400   BITB   @-(R4),R0
+023140: 100273   BPL    22730
+023142: 004000   JSR    R0,R0
+023144: 000000   HALT
+023146: 004000   JSR    R0,R0
+023150: 100000   BPL    23152
+023152: 000000   HALT
+023154: 100000   BPL    23156
+023156: 135400   BITB   @-(R4),R0
+023160: 146273   BICB   6314(R2),@144000(R3)
+023166: 006314   ASL    (R4)
+023170: 100000   BPL    23172
+023172: 146314   BICB   100010(R3),(R4)
+023176: 135400   BITB   @-(R4),R0
+023200: 000273   .WORD  273
+023202: 000000   HALT
+023204: 004000   JSR    R0,R0
+023206: 000000   HALT
+023210: 100000   BPL    23212
+023212: 000000   HALT
+023214: 100010   BPL    23236
+023216: 135400   BITB   @-(R4),R0
+023220: 000273   .WORD  273
+023222: 000000   HALT
+023224: 004000   JSR    R0,R0
+023226: 000000   HALT
+023230: 100000   BPL    23232
+023232: 000000   HALT
+023234: 100010   BPL    23256
+023236: 135400   BITB   @-(R4),R0
+023240: 000273   .WORD  273
+023242: 000100   JMP    R0
+023244: 004000   JSR    R0,R0
+023246: 040000   BIC    R0,R0
+023250: 100000   BPL    23252
+023252: 000000   HALT
+023254: 100010   BPL    23276
+023256: 135400   BITB   @-(R4),R0
+023260: 000273   .WORD  273
+023262: 106300   ASLB   R0
+023264: 146314   BICB   140014(R3),(R4)
+023270: 146314   BICB   14(R3),(R4)
+023274: 146314   BICB   135400(R3),(R4)
+023300: 000273   .WORD  273
+023302: 100000   BPL    23304
+023304: 000000   HALT
+023306: 000000   HALT
+023310: 000000   HALT
+023312: 000000   HALT
+023314: 000000   HALT
+023316: 135400   BITB   @-(R4),R0
+023320: 000273   .WORD  273
+023322: 100000   BPL    23324
+023324: 000000   HALT
+023326: 000000   HALT
+023330: 000000   HALT
+023332: 000000   HALT
+023334: 000000   HALT
+023336: 135400   BITB   @-(R4),R0
+023340: 000273   .WORD  273
+023342: 100000   BPL    23344
+023344: 000000   HALT
+023346: 000000   HALT
+023350: 000000   HALT
+023352: 000000   HALT
+023354: 000000   HALT
+023356: 135400   BITB   @-(R4),R0
+023360: 135673   BITB   @-(SP),@135673(R3)
+023364: 156733   BISB   2325,@(R3)+
+023370: 156735   BISB   2331,@(R5)+
+023374: 156735   BISB   161335,@(R5)+
+023400: 146273   BICB   146314(R2),@146314(R3)
+023406: 026314   CMP    146314(R3),(R4)
+023412: 146314   BICB   146314(R3),(R4)
+023416: 135701   BITB   @-(PC),R1
+023420: 000273   .WORD  273
+023422: 000000   HALT
+023424: 000000   HALT
+023426: 000000   HALT
+023430: 000000   HALT
+023432: 002000   BGE    23434
+023434: 005014   CLR    (R4)
+023436: 135410   BITB   @-(R4),(R0)
+023440: 000273   .WORD  273
+023442: 146200   BICB   146314(R2),R0
+023446: 146214   BICB   146314(R2),(R4)
+023452: 006314   ASL    (R4)
+023454: 146214   BICB   135714(R2),(R4)
+023460: 040273   BIC    R2,@207(R3)
+023464: 060000   ADD    R0,R0
+023466: 000200   RTS    R0
+023470: 000000   HALT
+023472: 000200   RTS    R0
+023474: 106200   ASRB   R0
+023476: 135534   BITB   @-(R5),@(R4)+
+023500: 140273   BICB   R2,@6200(R3)
+023504: 146314   BICB   140314(R3),(R4)
+023510: 146200   BICB   76214(R2),R0
+023514: 100314   BPL    23346
+023516: 135714   BITB   @-(PC),(R4)
+023520: 140273   BICB   R2,@200(R3)
+023524: 000000   HALT
+023526: 000000   HALT
+023530: 000200   RTS    R0
+023532: 000300   SWAB   R0
+023534: 100000   BPL    23536
+023536: 135414   BITB   @-(R4),(R4)
+023540: 140273   BICB   R2,@200(R3)
+023544: 146160   BICB   143714(R1),146307(R0)
+023552: 074314   XOR    R3,(R4)
+023554: 006167   ROL    161174
+023560: 140273   BICB   R2,@76200(R3)
+023564: 000010   .WORD  10
+023566: 140000   BICB   R0,R0
+023570: 000000   HALT
+023572: 004000   JSR    R0,R0
+023574: 000000   HALT
+023576: 135400   BITB   @-(R4),R0
+023600: 140273   BICB   R2,@0(R3)
+023604: 146170   BICB   140314(R1),@146200(R0)
+023612: 076314   .WORD  76314
+023614: 146174   BICB   135714(R1),@140273(R4)
+023622: 006167   ROL    63636
+023626: 140300   BICB   R3,R0
+023630: 000200   RTS    R0
+023632: 000000   HALT
+023634: 000000   HALT
+023636: 135400   BITB   @-(R4),R0
+023640: 140273   BICB   R2,@6000(R3)
+023644: 146310   BICB   300(R3),(R0)
+023650: 073660   ASHC   76314(R0),SP
+023654: 146174   BICB   135410(R1),@140273(R4)
+023662: 006004   ROR    R4
+023664: 140010   BICB   R0,(R0)
+023666: 146300   BICB   156660(R3),R0
+023672: 040275   BIC    R2,@146014(R5)
+023676: 135410   BITB   @-(R4),(R0)
+023700: 140273   BICB   R2,@6014(R3)
+023704: 000010   .WORD  10
+023706: 140000   BICB   R0,R0
+023710: 135660   BITB   @-(SP),140273(R0)
+023714: 000014   .WORD  14
+023716: 135410   BITB   @-(R4),(R0)
+023720: 140273   BICB   R2,@155414(R3)
+023724: 144313   BICB   -(R3),(R3)
+023726: 000307   SWAB   PC
+023730: 000000   HALT
+023732: 140000   BICB   R0,R0
+023734: 146174   BICB   135410(R1),@140273(R4)
+023742: 135414   BITB   @-(R4),(R4)
+023744: 144313   BICB   -(R3),(R3)
+023746: 146300   BICB   146307(R3),R0
+023752: 000014   .WORD  14
+023754: 146000   BICB   135410(R0),R0
+023760: 140273   BICB   R2,@114(R3)
+023764: 004000   JSR    R0,R0
+023766: 000000   HALT
+023770: 000000   HALT
+023772: 143574   BICB   @(R5)+,@146014(R4)
+023776: 135410   BITB   @-(R4),(R0)
+024000: 140273   BICB   R2,@140314(R3)
+024004: 146310   BICB   146307(R3),(R0)
+024010: 006314   ASL    (R4)
+024012: 000000   HALT
+024014: 146000   BICB   135410(R0),R0
+024020: 140273   BICB   R2,@314(R3)
+024024: 000010   .WORD  10
+024026: 040000   BIC    R0,R0
+024030: 000000   HALT
+024032: 143613   BICB   @(SP)+,(R3)
+024034: 000000   HALT
+024036: 135410   BITB   @-(R4),(R0)
+024040: 140273   BICB   R2,@146314(R3)
+024044: 146310   BICB   146167(R3),(R0)
+024050: 073714   ASHC   (R4),PC
+024052: 140213   BICB   R2,(R3)
+024054: 006174   ROL    @135410(R4)
+024060: 000273   .WORD  273
+024062: 000000   HALT
+024064: 000010   .WORD  10
+024066: 000000   HALT
+024070: 000000   HALT
+024072: 140204   BICB   R2,R4
+024074: 006014   ROR    (R4)
+024076: 135410   BITB   @-(R4),(R0)
+024100: 000273   .WORD  273
+024102: 000000   HALT
+024104: 156670   BISB   156735(SP),@156735(R0)
+024112: 156673   BISB   135735(SP),@135673(R3)
+024120: 135673   BITB   @-(SP),@135673(R3)
+024124: 167273   SUB    @167356(R2),@167356(R3)
+024132: 167356   SUB    @135756(R3),@-(SP)
+024136: 135673   BITB   @-(SP),@273(R3)
+024142: 000001   WAIT
+024144: 000000   HALT
+024146: 000000   HALT
+024150: 000000   HALT
+024152: 000000   HALT
+024154: 000000   HALT
+024156: 135400   BITB   @-(R4),R0
+024160: 000273   .WORD  273
+024162: 000010   .WORD  10
+024164: 000000   HALT
+024166: 002000   BGE    24170
+024170: 073400   ASHC   R0,R4
+024172: 073567   ASHC   117765,R5
+024176: 135410   BITB   @-(R4),(R0)
+024200: 020273   CMP    R2,@200(R3)
+024204: 000000   HALT
+024206: 073400   ASHC   R0,R4
+024210: 000010   .WORD  10
+024212: 000000   HALT
+024214: 000000   HALT
+024216: 135410   BITB   @-(R4),(R0)
+024220: 140273   BICB   R2,@4014(R3)
+024224: 000000   HALT
+024226: 000000   HALT
+024230: 040010   BIC    R0,(R0)
+024232: 073567   ASHC   24246,R5
+024236: 135410   BITB   @-(R4),(R0)
+024240: 140273   BICB   R2,@100014(R3)
+024244: 000000   HALT
+024246: 100000   BPL    24250
+024250: 000000   HALT
+024252: 000000   HALT
+024254: 000200   RTS    R0
+024256: 135410   BITB   @-(R4),(R0)
+024260: 000273   .WORD  273
+024262: 000012   .WORD  12
+024264: 000010   .WORD  10
+024266: 004000   JSR    R0,R0
+024270: 100000   BPL    24272
+024272: 073567   ASHC   24505,R5
+024276: 135410   BITB   @-(R4),(R0)
+024300: 100273   BPL    24070
+024302: 073574   ASHC   @207(R4),R5
+024306: 004000   JSR    R0,R0
+024310: 100000   BPL    24312
+024312: 000000   HALT
+024314: 000000   HALT
+024316: 135410   BITB   @-(R4),(R0)
+024320: 100273   BPL    24110
+024322: 000000   HALT
+024324: 004000   JSR    R0,R0
+024326: 100000   BPL    24330
+024330: 100000   BPL    24332
+024332: 073567   ASHC   26346,R5
+024336: 135410   BITB   @-(R4),(R0)
+024340: 100273   BPL    24130
+024342: 000006   RTT
+024344: 100000   BPL    24346
+024346: 000000   HALT
+024350: 000010   .WORD  10
+024352: 000000   HALT
+024354: 000010   .WORD  10
+024356: 135410   BITB   @-(R4),(R0)
+024360: 100273   BPL    24150
+024362: 000014   .WORD  14
+024364: 000000   HALT
+024366: 000010   .WORD  10
+024370: 100010   BPL    24412
+024372: 073567   ASHC   26406,R5
+024376: 135410   BITB   @-(R4),(R0)
+024400: 100273   BPL    24170
+024402: 042100   BIC    (R1)+,R0
+024404: 002104   BGE    24616
+024406: 004200   JSR    R2,R0
+024410: 100200   BPL    24012
+024412: 000000   HALT
+024414: 000000   HALT
+024416: 135410   BITB   @-(R4),(R0)
+024420: 100273   BPL    24210
+024422: 073700   ASHC   R0,PC
+024424: 003567   BLE    25004
+024426: 100204   BPL    24040
+024430: 100200   BPL    24032
+024432: 073567   ASHC   26446,R5
+024436: 135410   BITB   @-(R4),(R0)
+024440: 100273   BPL    24230
+024442: 042005   BIC    (R0)+,R5
+024444: 002104   BGE    24656
+024446: 000167   JMP    24652
+024452: 000000   HALT
+024454: 000010   .WORD  10
+024456: 135410   BITB   @-(R4),(R0)
+024460: 000273   .WORD  273
+024462: 076014   .WORD  76014
+024464: 073567   ASHC   30657,R5
+024470: 076010   .WORD  76010
+024472: 073567   ASHC   122506,R5
+024476: 135410   BITB   @-(R4),(R0)
+024500: 000273   .WORD  273
+024502: 000000   HALT
+024504: 000000   HALT
+024506: 100000   BPL    24510
+024510: 000000   HALT
+024512: 000000   HALT
+024514: 000000   HALT
+024516: 135410   BITB   @-(R4),(R0)
+024520: 000273   .WORD  273
+024522: 073600   ASHC   R0,SP
+024524: 073567   ASHC   24737,R5
+024530: 073600   ASHC   R0,SP
+024532: 073567   ASHC   120325,R5
+024536: 135410   BITB   @-(R4),(R0)
+024540: 000273   .WORD  273
+024542: 000200   RTS    R0
+024544: 000000   HALT
+024546: 073400   ASHC   R0,R4
+024550: 000007   .WORD  7
+024552: 000000   HALT
+024554: 000000   HALT
+024556: 135400   BITB   @-(R4),R0
+024560: 000273   .WORD  273
+024562: 073600   ASHC   R0,SP
+024564: 073567   ASHC   24600,R5
+024570: 074000   XOR    R0,R0
+024572: 073567   ASHC   120365,R5
+024576: 135410   BITB   @-(R4),(R0)
+024600: 000273   .WORD  273
+024602: 000000   HALT
+024604: 000000   HALT
+024606: 073560   ASHC   167(R0),R5
+024612: 000000   HALT
+024614: 000000   HALT
+024616: 135410   BITB   @-(R4),(R0)
+024620: 000273   .WORD  273
+024622: 073600   ASHC   R0,SP
+024624: 103567   BCS    25204
+024626: 000000   HALT
+024630: 100000   BPL    24632
+024632: 073567   ASHC   120425,R5
+024636: 135400   BITB   @-(R4),R0
+024640: 000273   .WORD  273
+024642: 000200   RTS    R0
+024644: 000000   HALT
+024646: 073567   ASHC   30441,R5
+024652: 000000   HALT
+024654: 000000   HALT
+024656: 135400   BITB   @-(R4),R0
+024660: 146273   BICB   156714(R2),@156735(R3)
+024666: 156735   BISB   3627,@(R5)+
+024672: 156735   BISB   3633,@(R5)+
+024676: 135735   BITB   @-(PC),@(R5)+
+024700: 000273   .WORD  273
+024702: 001000   BNE    24704
+024704: 000000   HALT
+024706: 000000   HALT
+024710: 000000   HALT
+024712: 000000   HALT
+024714: 000003   BPT
+024716: 135433   BITB   @-(R4),@(R3)+
+024720: 000273   .WORD  273
+024722: 000000   HALT
+024724: 000000   HALT
+024726: 000000   HALT
+024730: 000000   HALT
+024732: 000000   HALT
+024734: 000000   HALT
+024736: 135613   BITB   @-(SP),(R3)
+024740: 040273   BIC    R2,@104210(R3)
+024744: 104110   EMT    110
+024746: 064210   ADD    -(R2),(R0)
+024750: 104210   EMT    210
+024752: 104110   EMT    110
+024754: 054210   BIS    -(R2),(R0)
+024756: 135612   BITB   @-(SP),(R2)
+024760: 100273   BPL    24550
+024762: 004000   JSR    R0,R0
+024764: 000200   RTS    R0
+024766: 100010   BPL    25010
+024770: 004000   JSR    R0,R0
+024772: 000200   RTS    R0
+024774: 100010   BPL    25016
+024776: 135673   BITB   @-(SP),@100273(R3)
+025002: 004000   JSR    R0,R0
+025004: 000200   RTS    R0
+025006: 100010   BPL    25030
+025010: 004000   JSR    R0,R0
+025012: 000200   RTS    R0
+025014: 100010   BPL    25036
+025016: 135660   BITB   @-(SP),100273(R0)
+025022: 102210   BVC    24444
+025024: 104210   EMT    210
+025026: 104204   EMT    204
+025030: 102210   BVC    24452
+025032: 104210   EMT    210
+025034: 104204   EMT    204
+025036: 135660   BITB   @-(SP),100273(R0)
+025042: 004000   JSR    R0,R0
+025044: 000200   RTS    R0
+025046: 100010   BPL    25070
+025050: 004000   JSR    R0,R0
+025052: 000200   RTS    R0
+025054: 100010   BPL    25076
+025056: 135660   BITB   @-(SP),100273(R0)
+025062: 004000   JSR    R0,R0
+025064: 000200   RTS    R0
+025066: 100010   BPL    25110
+025070: 004000   JSR    R0,R0
+025072: 000200   RTS    R0
+025074: 100010   BPL    25116
+025076: 135660   BITB   @-(SP),40273(R0)
+025102: 104210   EMT    210
+025104: 104110   EMT    110
+025106: 044210   BIC    -(R2),(R0)
+025110: 104210   EMT    210
+025112: 104110   EMT    110
+025114: 044210   BIC    -(R2),(R0)
+025116: 135660   BITB   @-(SP),100273(R0)
+025122: 004000   JSR    R0,R0
+025124: 000200   RTS    R0
+025126: 100010   BPL    25150
+025130: 004000   JSR    R0,R0
+025132: 000200   RTS    R0
+025134: 100010   BPL    25156
+025136: 135660   BITB   @-(SP),100273(R0)
+025142: 004000   JSR    R0,R0
+025144: 000200   RTS    R0
+025146: 100010   BPL    25170
+025150: 004000   JSR    R0,R0
+025152: 000200   RTS    R0
+025154: 100010   BPL    25176
+025156: 135660   BITB   @-(SP),100273(R0)
+025162: 102210   BVC    24604
+025164: 104210   EMT    210
+025166: 104204   EMT    204
+025170: 102210   BVC    24612
+025172: 104210   EMT    210
+025174: 104204   EMT    204
+025176: 135660   BITB   @-(SP),100273(R0)
+025202: 004000   JSR    R0,R0
+025204: 000200   RTS    R0
+025206: 100010   BPL    25230
+025210: 004000   JSR    R0,R0
+025212: 000200   RTS    R0
+025214: 100010   BPL    25236
+025216: 135660   BITB   @-(SP),100273(R0)
+025222: 004000   JSR    R0,R0
+025224: 000200   RTS    R0
+025226: 100010   BPL    25250
+025230: 004000   JSR    R0,R0
+025232: 000200   RTS    R0
+025234: 100010   BPL    25256
+025236: 135660   BITB   @-(SP),40273(R0)
+025242: 104210   EMT    210
+025244: 104110   EMT    110
+025246: 044210   BIC    -(R2),(R0)
+025250: 104210   EMT    210
+025252: 104110   EMT    110
+025254: 044210   BIC    -(R2),(R0)
+025256: 135660   BITB   @-(SP),100273(R0)
+025262: 004000   JSR    R0,R0
+025264: 000200   RTS    R0
+025266: 100010   BPL    25310
+025270: 004000   JSR    R0,R0
+025272: 000200   RTS    R0
+025274: 100010   BPL    25316
+025276: 135660   BITB   @-(SP),100273(R0)
+025302: 004000   JSR    R0,R0
+025304: 000200   RTS    R0
+025306: 100010   BPL    25330
+025310: 004000   JSR    R0,R0
+025312: 000200   RTS    R0
+025314: 100010   BPL    25336
+025316: 135660   BITB   @-(SP),100273(R0)
+025322: 102210   BVC    24744
+025324: 104210   EMT    210
+025326: 104204   EMT    204
+025330: 102210   BVC    24752
+025332: 104210   EMT    210
+025334: 104204   EMT    204
+025336: 135660   BITB   @-(SP),100273(R0)
+025342: 004000   JSR    R0,R0
+025344: 000200   RTS    R0
+025346: 100010   BPL    25370
+025350: 004000   JSR    R0,R0
+025352: 000200   RTS    R0
+025354: 100010   BPL    25376
+025356: 135660   BITB   @-(SP),100273(R0)
+025362: 004000   JSR    R0,R0
+025364: 000200   RTS    R0
+025366: 100010   BPL    25410
+025370: 004000   JSR    R0,R0
+025372: 000200   RTS    R0
+025374: 100010   BPL    25416
+025376: 135660   BITB   @-(SP),135673(R0)
+025402: 155735   BISB   @-(PC),@(R5)+
+025404: 156675   BISB   136733(SP),@155735(R5)
+025412: 156675   BISB   136733(SP),@135675(R5)
+025420: 135673   BITB   @-(SP),@167356(R3)
+025424: 167356   SUB    @167356(R3),@-(SP)
+025430: 167356   SUB    @167356(R3),@-(SP)
+025434: 167356   SUB    @135676(R3),@-(SP)
+025440: 000273   .WORD  273
+025442: 020000   CMP    R0,R0
+025444: 000000   HALT
+025446: 000000   HALT
+025450: 000000   HALT
+025452: 000000   HALT
+025454: 000003   BPT
+025456: 130400   BITB   R4,R0
+025460: 000273   .WORD  273
+025462: 146314   BICB   146314(R3),(R4)
+025466: 073607   ASHC   PC,SP
+025470: 074167   XOR    R1,174010
+025474: 146314   BICB   134000(R3),(R4)
+025500: 000273   .WORD  273
+025502: 040014   BIC    R0,(R4)
+025504: 140004   BICB   R0,R4
+025506: 000200   RTS    R0
+025510: 004000   JSR    R0,R0
+025512: 040014   BIC    R0,(R4)
+025514: 140004   BICB   R0,R4
+025516: 134000   BITB   -(R0),R0
+025520: 000273   .WORD  273
+025522: 146300   BICB   6314(R3),R0
+025526: 000200   RTS    R0
+025530: 004000   JSR    R0,R0
+025532: 146300   BICB   6314(R3),R0
+025536: 134000   BITB   -(R0),R0
+025540: 000273   .WORD  273
+025542: 040014   BIC    R0,(R4)
+025544: 140004   BICB   R0,R4
+025546: 000200   RTS    R0
+025550: 004000   JSR    R0,R0
+025552: 040014   BIC    R0,(R4)
+025554: 140004   BICB   R0,R4
+025556: 134000   BITB   -(R0),R0
+025560: 000273   .WORD  273
+025562: 146300   BICB   6314(R3),R0
+025566: 000200   RTS    R0
+025570: 004000   JSR    R0,R0
+025572: 146300   BICB   6314(R3),R0
+025576: 134000   BITB   -(R0),R0
+025600: 000273   .WORD  273
+025602: 040014   BIC    R0,(R4)
+025604: 140004   BICB   R0,R4
+025606: 000200   RTS    R0
+025610: 004000   JSR    R0,R0
+025612: 040014   BIC    R0,(R4)
+025614: 140004   BICB   R0,R4
+025616: 134000   BITB   -(R0),R0
+025620: 000273   .WORD  273
+025622: 146300   BICB   6314(R3),R0
+025626: 000200   RTS    R0
+025630: 004000   JSR    R0,R0
+025632: 146300   BICB   6314(R3),R0
+025636: 134000   BITB   -(R0),R0
+025640: 000273   .WORD  273
+025642: 040014   BIC    R0,(R4)
+025644: 140004   BICB   R0,R4
+025646: 000200   RTS    R0
+025650: 004000   JSR    R0,R0
+025652: 040014   BIC    R0,(R4)
+025654: 140004   BICB   R0,R4
+025656: 134000   BITB   -(R0),R0
+025660: 000273   .WORD  273
+025662: 146300   BICB   6314(R3),R0
+025666: 000200   RTS    R0
+025670: 004000   JSR    R0,R0
+025672: 146300   BICB   6314(R3),R0
+025676: 134000   BITB   -(R0),R0
+025700: 000273   .WORD  273
+025702: 040014   BIC    R0,(R4)
+025704: 140004   BICB   R0,R4
+025706: 000200   RTS    R0
+025710: 004000   JSR    R0,R0
+025712: 040014   BIC    R0,(R4)
+025714: 140004   BICB   R0,R4
+025716: 134000   BITB   -(R0),R0
+025720: 000273   .WORD  273
+025722: 146300   BICB   6314(R3),R0
+025726: 000200   RTS    R0
+025730: 004000   JSR    R0,R0
+025732: 146300   BICB   6314(R3),R0
+025736: 134000   BITB   -(R0),R0
+025740: 000273   .WORD  273
+025742: 040014   BIC    R0,(R4)
+025744: 140004   BICB   R0,R4
+025746: 000200   RTS    R0
+025750: 004000   JSR    R0,R0
+025752: 040014   BIC    R0,(R4)
+025754: 140004   BICB   R0,R4
+025756: 134000   BITB   -(R0),R0
+025760: 000273   .WORD  273
+025762: 146300   BICB   6314(R3),R0
+025766: 000200   RTS    R0
+025770: 004000   JSR    R0,R0
+025772: 146300   BICB   6314(R3),R0
+025776: 134000   BITB   -(R0),R0
+026000: 000273   .WORD  273
+026002: 040014   BIC    R0,(R4)
+026004: 140004   BICB   R0,R4
+026006: 000200   RTS    R0
+026010: 004000   JSR    R0,R0
+026012: 040014   BIC    R0,(R4)
+026014: 140004   BICB   R0,R4
+026016: 134000   BITB   -(R0),R0
+026020: 000273   .WORD  273
+026022: 146300   BICB   6314(R3),R0
+026026: 000200   RTS    R0
+026030: 004000   JSR    R0,R0
+026032: 146300   BICB   6314(R3),R0
+026036: 134000   BITB   -(R0),R0
+026040: 000273   .WORD  273
+026042: 040014   BIC    R0,(R4)
+026044: 140004   BICB   R0,R4
+026046: 000200   RTS    R0
+026050: 004000   JSR    R0,R0
+026052: 040014   BIC    R0,(R4)
+026054: 140004   BICB   R0,R4
+026056: 134000   BITB   -(R0),R0
+026060: 000273   .WORD  273
+026062: 146300   BICB   6314(R3),R0
+026066: 000200   RTS    R0
+026070: 004000   JSR    R0,R0
+026072: 146300   BICB   6314(R3),R0
+026076: 134000   BITB   -(R0),R0
+026100: 000273   .WORD  273
+026102: 060014   ADD    R0,(R4)
+026104: 140004   BICB   R0,R4
+026106: 000200   RTS    R0
+026110: 004000   JSR    R0,R0
+026112: 040014   BIC    R0,(R4)
+026114: 140005   BICB   R0,R5
+026116: 134000   BITB   -(R0),R0
+026120: 000273   .WORD  273
+026122: 146314   BICB   146314(R3),(R4)
+026126: 000200   RTS    R0
+026130: 004000   JSR    R0,R0
+026132: 146314   BICB   146314(R3),(R4)
+026136: 134260   BITB   -(R2),273(R0)
+026142: 000011   .WORD  11
+026144: 110000   MOVB   R0,R0
+026146: 000200   RTS    R0
+026150: 004000   JSR    R0,R0
+026152: 000011   .WORD  11
+026154: 110000   MOVB   R0,R0
+026156: 134240   BITB   -(R2),-(R0)
+026160: 135673   BITB   @-(SP),@135673(R3)
+026164: 135673   BITB   @-(SP),@156673(R3)
+026170: 135735   BITB   @-(PC),@(R5)+
+026172: 135673   BITB   @-(SP),@135673(R3)
+026176: 135673   BITB   @-(SP),@20273(R3)
+026202: 000000   HALT
+026204: 000000   HALT
+026206: 130000   BITB   R0,R0
+026210: 000261   SEC
+026212: 000000   HALT
+026214: 000000   HALT
+026216: 135403   BITB   @-(R4),R3
+026220: 000273   .WORD  273
+026222: 000000   HALT
+026224: 000000   HALT
+026226: 120000   CMPB   R0,R0
+026230: 000270   SEN
+026232: 000000   HALT
+026234: 000000   HALT
+026236: 135400   BITB   @-(R4),R0
+026240: 074273   XOR    R2,@73567(R3)
+026244: 073567   ASHC   162037,R5
+026250: 073673   ASHC   @73567(R3),SP
+026254: 073567   ASHC   164067,R5
+026260: 044273   BIC    -(R2),@42104(R3)
+026264: 042104   BIC    (R1)+,R4
+026266: 042104   BIC    (R1)+,R4
+026270: 042105   BIC    (R1)+,R5
+026272: 042104   BIC    (R1)+,R4
+026274: 042104   BIC    (R1)+,R4
+026276: 135604   BITB   @-(SP),R4
+026300: 074273   XOR    R2,@73567(R3)
+026304: 073567   ASHC   122077,R5
+026310: 073567   ASHC   122103,R5
+026314: 073567   ASHC   164127,R5
+026320: 044273   BIC    -(R2),@0(R3)
+026324: 000000   HALT
+026326: 000000   HALT
+026330: 000000   HALT
+026332: 000000   HALT
+026334: 000000   HALT
+026336: 135604   BITB   @-(SP),R4
+026340: 044273   BIC    -(R2),@156673(R3)
+026344: 135675   BITB   @-(SP),@136735(R5)
+026350: 156673   BISB   155675(SP),@136673(R3)
+026356: 135604   BITB   @-(SP),R4
+026360: 044273   BIC    -(R2),@167353(R3)
+026364: 165756   SUB    @-(PC),@-(SP)
+026366: 167356   SUB    @167353(R3),@-(SP)
+026372: 165756   SUB    @-(PC),@-(SP)
+026374: 137273   BITB   @135604(R2),@44273(R3)
+026402: 135753   BITB   @-(PC),@-(R3)
+026404: 165753   SUB    @-(PC),@-(R3)
+026406: 165673   SUB    @-(SP),@135753(R3)
+026412: 165753   SUB    @-(PC),@-(R3)
+026414: 137273   BITB   @135604(R2),@44273(R3)
+026422: 135753   BITB   @-(PC),@-(R3)
+026424: 165753   SUB    @-(PC),@-(R3)
+026426: 135673   BITB   @-(SP),@135753(R3)
+026432: 165673   SUB    @-(SP),@137273(R3)
+026436: 135604   BITB   @-(SP),R4
+026440: 044273   BIC    -(R2),@135753(R3)
+026444: 165753   SUB    @-(PC),@-(R3)
+026446: 167356   SUB    @135753(R3),@-(SP)
+026452: 165673   SUB    @-(SP),@137273(R3)
+026456: 135604   BITB   @-(SP),R4
+026460: 044273   BIC    -(R2),@167353(R3)
+026464: 135756   BITB   @-(PC),@-(SP)
+026466: 165673   SUB    @-(SP),@135753(R3)
+026472: 165673   SUB    @-(SP),@137273(R3)
+026476: 135604   BITB   @-(SP),R4
+026500: 044273   BIC    -(R2),@167353(R3)
+026504: 165756   SUB    @-(PC),@-(SP)
+026506: 165673   SUB    @-(SP),@135753(R3)
+026512: 165753   SUB    @-(PC),@-(R3)
+026514: 137273   BITB   @135604(R2),@44273(R3)
+026522: 135753   BITB   @-(PC),@-(R3)
+026524: 165753   SUB    @-(PC),@-(R3)
+026526: 167356   SUB    @167353(R3),@-(SP)
+026532: 165756   SUB    @-(PC),@-(SP)
+026534: 137273   BITB   @135604(R2),@44273(R3)
+026542: 135753   BITB   @-(PC),@-(R3)
+026544: 135753   BITB   @-(PC),@-(R3)
+026546: 137356   BITB   @167273(R3),@-(SP)
+026552: 165676   SUB    @-(SP),@137273(SP)
+026556: 135604   BITB   @-(SP),R4
+026560: 044273   BIC    -(R2),@135673(R3)
+026564: 135673   BITB   @-(SP),@135673(R3)
+026570: 135673   BITB   @-(SP),@135673(R3)
+026574: 135673   BITB   @-(SP),@135604(R3)
+026600: 044273   BIC    -(R2),@42104(R3)
+026604: 042104   BIC    (R1)+,R4
+026606: 042104   BIC    (R1)+,R4
+026610: 042106   BIC    (R1)+,SP
+026612: 042104   BIC    (R1)+,R4
+026614: 042104   BIC    (R1)+,R4
+026616: 135604   BITB   @-(SP),R4
+026620: 004273   JSR    R2,@4010(R3)
+026624: 004010   JSR    R0,(R0)
+026626: 004010   JSR    R0,(R0)
+026630: 004010   JSR    R0,(R0)
+026632: 004010   JSR    R0,(R0)
+026634: 004010   JSR    R0,(R0)
+026636: 135410   BITB   @-(R4),(R0)
+026640: 100273   BPL    26430
+026642: 100200   BPL    26244
+026644: 100200   BPL    26246
+026646: 100200   BPL    26250
+026650: 100200   BPL    26252
+026652: 100200   BPL    26254
+026654: 100200   BPL    26256
+026656: 135600   BITB   @-(SP),R0
+026660: 004273   JSR    R2,@4010(R3)
+026664: 004010   JSR    R0,(R0)
+026666: 004010   JSR    R0,(R0)
+026670: 004010   JSR    R0,(R0)
+026672: 004010   JSR    R0,(R0)
+026674: 004010   JSR    R0,(R0)
+026676: 135410   BITB   @-(R4),(R0)
+026700: 100273   BPL    26470
+026702: 100200   BPL    26304
+026704: 100200   BPL    26306
+026706: 100200   BPL    26310
+026710: 100200   BPL    26312
+026712: 100200   BPL    26314
+026714: 100200   BPL    26316
+026716: 135600   BITB   @-(SP),R0
+026720: 146273   BICB   146314(R2),@146314(R3)
+026726: 146314   BICB   146314(R3),(R4)
+026732: 146314   BICB   146314(R3),(R4)
+026736: 135714   BITB   @-(PC),(R4)
+026740: 135673   BITB   @-(SP),@135673(R3)
+026744: 135673   BITB   @-(SP),@25673(R3)
+026750: 135663   BITB   @-(SP),135673(R3)
+026754: 135673   BITB   @-(SP),@135661(R3)
+026760: 000273   .WORD  273
+026762: 140000   BICB   R0,R0
+026764: 060274   ADD    R2,@13(R4)
+026770: 000000   HALT
+026772: 146314   BICB   14(R3),(R4)
+026776: 135410   BITB   @-(R4),(R0)
+027000: 144273   BICB   -(R2),@314(R3)
+027004: 144300   BICB   -(R3),R0
+027006: 140113   BICB   R1,(R3)
+027010: 004314   JSR    R3,(R4)
+027012: 000000   HALT
+027014: 146214   BICB   135714(R2),(R4)
+027020: 144273   BICB   -(R2),@73704(R3)
+027024: 144300   BICB   -(R3),R0
+027026: 143560   BICB   @(R5)+,144314(R0)
+027032: 140314   BICB   R3,(R4)
+027034: 000214   .WORD  214
+027036: 135400   BITB   @-(R4),R0
+027040: 144273   BICB   -(R2),@70314(R3)
+027044: 004307   JSR    R3,PC
+027046: 000000   HALT
+027050: 144000   BICB   -(R0),R0
+027052: 120014   CMPB   R0,(R4)
+027054: 000200   RTS    R0
+027056: 135600   BITB   @-(SP),R0
+027060: 004273   JSR    R2,@100(R3)
+027064: 004260   JSR    R2,133567(R0)
+027070: 004010   JSR    R0,(R0)
+027072: 143714   BICB   @#146314,(R4)
+027076: 135600   BITB   @-(SP),R0
+027100: 004273   JSR    R2,@300(R3)
+027104: 004260   JSR    R2,130000(R0)
+027110: 004010   JSR    R0,(R0)
+027112: 000000   HALT
+027114: 000000   HALT
+027116: 135600   BITB   @-(SP),R0
+027120: 004273   JSR    R2,@0(R3)
+027124: 004260   JSR    R2,134260(R0)
+027130: 074010   XOR    R0,(R0)
+027132: 073567   ASHC   122725,R5
+027136: 135607   BITB   @-(SP),PC
+027140: 004273   JSR    R2,@3710(R3)
+027144: 146300   BICB   134007(R3),R0
+027150: 000010   .WORD  10
+027152: 000000   HALT
+027154: 000000   HALT
+027156: 135600   BITB   @-(SP),R0
+027160: 004273   JSR    R2,@10(R3)
+027164: 000000   HALT
+027166: 134000   BITB   -(R0),R0
+027170: 146010   BICB   144314(R0),(R0)
+027174: 136674   BITB   135607(SP),@4273(R4)
+027202: 140010   BICB   R0,(R0)
+027204: 146307   BICB   136307(R3),PC
+027210: 040010   BIC    R0,(R0)
+027212: 144274   BICB   -(R2),@135660(R4)
+027216: 135600   BITB   @-(SP),R0
+027220: 004273   JSR    R2,@10(R3)
+027224: 000000   HALT
+027226: 000000   HALT
+027230: 143410   BICB   @(R4)+,(R0)
+027232: 144314   BICB   -(R3),(R4)
+027234: 146300   BICB   135600(R3),R0
+027240: 004273   JSR    R2,@135410(R3)
+027244: 135667   BITB   @-(SP),165137
+027250: 140013   BICB   R0,(R3)
+027252: 144314   BICB   -(R3),(R4)
+027254: 142300   BICB   (R3)+,R0
+027256: 135600   BITB   @-(SP),R0
+027260: 004273   JSR    R2,@10(R3)
+027264: 000000   HALT
+027266: 000000   HALT
+027270: 000000   HALT
+027272: 144274   BICB   -(R2),@146307(R4)
+027276: 135600   BITB   @-(SP),R0
+027300: 004273   JSR    R2,@73574(R3)
+027304: 006314   ASL    (R4)
+027306: 146314   BICB   5574(R3),(R4)
+027312: 004000   JSR    R0,R0
+027314: 146300   BICB   135600(R3),R0
+027320: 004273   JSR    R2,@0(R3)
+027324: 000000   HALT
+027326: 000000   HALT
+027330: 005400   NEG    R0
+027332: 004005   JSR    R0,R5
+027334: 146014   BICB   135600(R0),(R4)
+027340: 134273   BITB   -(R2),@156673(R3)
+027344: 156735   BISB   6305,@(R5)+
+027350: 005735   TST    @(R5)+
+027352: 004013   JSR    R0,(R3)
+027354: 040314   BIC    R3,(R4)
+027356: 135600   BITB   @-(SP),R0
+027360: 134273   BITB   -(R2),@135673(R3)
+027364: 135673   BITB   @-(SP),@135673(R3)
+027370: 005673   SBC    @4013(R3)
+027374: 146314   BICB   135600(R3),(R4)
+027400: 004273   JSR    R2,@0(R3)
+027404: 000000   HALT
+027406: 000000   HALT
+027410: 000000   HALT
+027412: 004014   JSR    R0,(R4)
+027414: 000000   HALT
+027416: 135600   BITB   @-(SP),R0
+027420: 004273   JSR    R2,@146314(R3)
+027424: 106314   ASLB   (R4)
+027426: 146314   BICB   146314(R3),(R4)
+027432: 074314   XOR    R3,(R4)
+027434: 073567   ASHC   165247,R5
+027440: 004273   JSR    R2,@0(R3)
+027444: 005400   NEG    R0
+027446: 000000   HALT
+027450: 000000   HALT
+027452: 004000   JSR    R0,R0
+027454: 000000   HALT
+027456: 135600   BITB   @-(SP),R0
+027460: 146273   BICB   146314(R2),@146314(R3)
+027466: 146314   BICB   146314(R3),(R4)
+027472: 146314   BICB   156735(R3),(R4)
+027476: 135715   BITB   @-(PC),(R5)
+027500: 146273   BICB   146314(R2),@146314(R3)
+027506: 146314   BICB   146314(R3),(R4)
+027512: 146314   BICB   146314(R3),(R4)
+027516: 135433   BITB   @-(R4),@(R3)+
+027520: 146273   BICB   146314(R2),@146314(R3)
+027526: 146310   BICB   146314(R3),(R0)
+027532: 146310   BICB   106314(R3),(R0)
+027536: 135613   BITB   @-(SP),(R3)
+027540: 000273   .WORD  273
+027542: 073660   ASHC   73707(R0),SP
+027546: 073670   ASHC   @73707(R0),SP
+027552: 073670   ASHC   @103707(R0),SP
+027556: 135613   BITB   @-(SP),(R3)
+027560: 000273   .WORD  273
+027562: 000260   .WORD  260
+027564: 000260   .WORD  260
+027566: 000270   SEN
+027570: 002260   BGE    27332
+027572: 000270   SEN
+027574: 100260   BPL    27336
+027576: 135613   BITB   @-(SP),(R3)
+027600: 000273   .WORD  273
+027602: 042260   BIC    (R2)+,2304(R0)
+027606: 042310   BIC    (R3)+,(R0)
+027610: 006264   ASR    42310(R4)
+027614: 102264   BVC    27366
+027616: 135613   BITB   @-(SP),(R3)
+027620: 000273   .WORD  273
+027622: 135673   BITB   @-(SP),@73673(R3)
+027626: 135667   BITB   @-(SP),123525
+027632: 135667   BITB   @-(SP),135531
+027636: 135613   BITB   @-(SP),(R3)
+027640: 000273   .WORD  273
+027642: 000011   .WORD  11
+027644: 000000   HALT
+027646: 000000   HALT
+027650: 000000   HALT
+027652: 000000   HALT
+027654: 101400   BLOS   27656
+027656: 135613   BITB   @-(SP),(R3)
+027660: 130273   BITB   R2,@135673(R3)
+027664: 073673   ASHC   @135667(R3),SP
+027670: 003673   BLE    27460
+027672: 135667   BITB   @-(SP),135571
+027676: 135613   BITB   @-(SP),(R3)
+027700: 040273   BIC    R2,@224(R3)
+027704: 000040   .WORD  40
+027706: 000220   .WORD  220
+027710: 000000   HALT
+027712: 000220   .WORD  220
+027714: 100000   BPL    27716
+027716: 135612   BITB   @-(SP),(R2)
+027720: 136733   BITB   135617,@(R3)+
+027724: 135673   BITB   @-(SP),@135613(R3)
+027730: 075673   .WORD  75673
+027732: 135673   BITB   @-(SP),@135673(R3)
+027736: 135673   BITB   @-(SP),@137353(R3)
+027742: 100260   BPL    27504
+027744: 000260   .WORD  260
+027746: 000200   RTS    R0
+027750: 156660   BISB   275(SP),264(R0)
+027756: 135660   BITB   @-(SP),135673(R0)
+027762: 100260   BPL    27524
+027764: 000260   .WORD  260
+027766: 000273   .WORD  273
+027770: 135660   BITB   @-(SP),273(R0)
+027774: 000270   SEN
+027776: 135660   BITB   @-(SP),273(R0)
+030002: 100220   BPL    27444
+030004: 000220   .WORD  220
+030006: 000313   SWAB   (R3)
+030010: 040300   BIC    R3,R0
+030012: 000000   HALT
+030014: 050270   BIS    R2,@135660(R0)
+030020: 105673   SBCB   @135673(R3)
+030024: 135673   BITB   @-(SP),@146314(R3)
+030030: 146314   BICB   146314(R3),(R4)
+030034: 135670   BITB   @-(SP),@135670(R0)
+030040: 100273   BPL    27630
+030042: 000300   SWAB   R0
+030044: 000260   .WORD  260
+030046: 073660   ASHC   73667(R0),SP
+030052: 135667   BITB   @-(SP),30351
+030056: 135670   BITB   @-(SP),@103673(R0)
+030062: 100307   BPL    27702
+030064: 000260   .WORD  260
+030066: 156660   BISB   156675(SP),45675(R0)
+030074: 000314   SWAB   (R4)
+030076: 135670   BITB   @-(SP),@100273(R0)
+030102: 100300   BPL    27704
+030104: 000264   SEZ
+030106: 167264   SUB    @167276(R2),144276(R4)
+030114: 130310   BITB   R3,(R0)
+030116: 135670   BITB   @-(SP),@105673(R0)
+030122: 105673   SBCB   @134273(R3)
+030126: 135673   BITB   @-(SP),@135673(R3)
+030132: 134273   BITB   -(R2),@135670(R3)
+030136: 135670   BITB   @-(SP),@100273(R0)
+030142: 100300   BPL    27744
+030144: 004260   JSR    R2,0(R0)
+030150: 000266   .WORD  266
+030152: 134260   BITB   -(R2),270(R0)
+030156: 135670   BITB   @-(SP),@103673(R0)
+030162: 100307   BPL    30002
+030164: 070260   MUL    73567(R0),R2
+030170: 000260   .WORD  260
+030172: 134260   BITB   -(R2),270(R0)
+030176: 135670   BITB   @-(SP),@100273(R0)
+030202: 100220   BPL    27644
+030204: 140220   BICB   R2,(R0)+
+030206: 146314   BICB   314(R3),(R4)
+030212: 134300   BITB   -(R3),R0
+030214: 000230   .WORD  230
+030216: 135670   BITB   @-(SP),@135673(R0)
+030222: 135673   BITB   @-(SP),@135673(R3)
+030226: 135673   BITB   @-(SP),@135673(R3)
+030232: 135673   BITB   @-(SP),@135673(R3)
+030236: 135673   BITB   @-(SP),@135673(R3)
+030242: 135453   BITB   @-(R4),@-(R3)
+030244: 135673   BITB   @-(SP),@135673(R3)
+030250: 135673   BITB   @-(SP),@135673(R3)
+030254: 131673   BITB   (SP),@135433(R3)
+030260: 134273   BITB   -(R2),@42213(R3)
+030264: 105670   SBCB   @4273(R0)
+030270: 135600   BITB   @-(SP),R0
+030272: 102110   BVC    30514
+030274: 134273   BITB   -(R2),@135613(R3)
+030300: 134273   BITB   -(R2),@135613(R3)
+030304: 105670   SBCB   @134273(R0)
+030310: 135613   BITB   @-(SP),(R3)
+030312: 105670   SBCB   @134273(R0)
+030316: 135613   BITB   @-(SP),(R3)
+030320: 134273   BITB   -(R2),@135613(R3)
+030324: 105670   SBCB   @134273(R0)
+030330: 135613   BITB   @-(SP),(R3)
+030332: 105670   SBCB   @134273(R0)
+030336: 135613   BITB   @-(SP),(R3)
+030340: 004273   JSR    R2,@135600(R3)
+030344: 100010   BPL    30366
+030346: 134000   BITB   -(R0),R0
+030350: 000213   .WORD  213
+030352: 105670   SBCB   @134104(R0)
+030356: 135613   BITB   @-(SP),(R3)
+030360: 135673   BITB   @-(SP),@135613(R3)
+030364: 135673   BITB   @-(SP),@134273(R3)
+030370: 135673   BITB   @-(SP),@135670(R3)
+030374: 135673   BITB   @-(SP),@135613(R3)
+030400: 134273   BITB   -(R2),@135613(R3)
+030404: 105670   SBCB   @134273(R0)
+030410: 135613   BITB   @-(SP),(R3)
+030412: 105670   SBCB   @134273(R0)
+030416: 135613   BITB   @-(SP),(R3)
+030420: 134273   BITB   -(R2),@135613(R3)
+030424: 105670   SBCB   @134273(R0)
+030430: 135613   BITB   @-(SP),(R3)
+030432: 105670   SBCB   @134273(R0)
+030436: 135613   BITB   @-(SP),(R3)
+030440: 134273   BITB   -(R2),@213(R3)
+030444: 100010   BPL    30466
+030446: 044273   BIC    -(R2),@135604(R3)
+030452: 100010   BPL    30474
+030454: 134000   BITB   -(R0),R0
+030456: 135613   BITB   @-(SP),(R3)
+030460: 134273   BITB   -(R2),@135673(R3)
+030464: 105670   SBCB   @135673(R0)
+030470: 135673   BITB   @-(SP),@135670(R3)
+030474: 134273   BITB   -(R2),@135613(R3)
+030500: 134273   BITB   -(R2),@135613(R3)
+030504: 105670   SBCB   @134273(R0)
+030510: 135613   BITB   @-(SP),(R3)
+030512: 105670   SBCB   @134273(R0)
+030516: 135613   BITB   @-(SP),(R3)
+030520: 134273   BITB   -(R2),@135613(R3)
+030524: 105670   SBCB   @134273(R0)
+030530: 135613   BITB   @-(SP),(R3)
+030532: 105670   SBCB   @134273(R0)
+030536: 135613   BITB   @-(SP),(R3)
+030540: 044273   BIC    -(R2),@135604(R3)
+030544: 105670   SBCB   @134000(R0)
+030550: 042213   BIC    (R2)+,(R3)
+030552: 105670   SBCB   @134000(R0)
+030556: 135613   BITB   @-(SP),(R3)
+030560: 134273   BITB   -(R2),@135673(R3)
+030564: 105673   SBCB   @134273(R3)
+030570: 135673   BITB   @-(SP),@105673(R3)
+030574: 135673   BITB   @-(SP),@135613(R3)
+030600: 134273   BITB   -(R2),@135613(R3)
+030604: 105670   SBCB   @134273(R0)
+030610: 135613   BITB   @-(SP),(R3)
+030612: 105670   SBCB   @134273(R0)
+030616: 135613   BITB   @-(SP),(R3)
+030620: 134273   BITB   -(R2),@135613(R3)
+030624: 105670   SBCB   @134273(R0)
+030630: 135613   BITB   @-(SP),(R3)
+030632: 105670   SBCB   @134273(R0)
+030636: 135613   BITB   @-(SP),(R3)
+030640: 004273   JSR    R2,@135600(R3)
+030644: 100010   BPL    30666
+030646: 004013   JSR    R0,(R3)
+030650: 000200   RTS    R0
+030652: 105670   SBCB   @134000(R0)
+030656: 135613   BITB   @-(SP),(R3)
+030660: 134273   BITB   -(R2),@135673(R3)
+030664: 105670   SBCB   @134273(R0)
+030670: 135673   BITB   @-(SP),@135670(R3)
+030674: 134273   BITB   -(R2),@135613(R3)
+030700: 134273   BITB   -(R2),@135613(R3)
+030704: 105670   SBCB   @134273(R0)
+030710: 135613   BITB   @-(SP),(R3)
+030712: 105670   SBCB   @134273(R0)
+030716: 135613   BITB   @-(SP),(R3)
+030720: 134273   BITB   -(R2),@135613(R3)
+030724: 105670   SBCB   @134273(R0)
+030730: 135613   BITB   @-(SP),(R3)
+030732: 105670   SBCB   @134273(R0)
+030736: 135613   BITB   @-(SP),(R3)
+030740: 004273   JSR    R2,@200(R3)
+030744: 105670   SBCB   @4104(R0)
+030750: 135600   BITB   @-(SP),R0
+030752: 102110   BVC    31174
+030754: 044273   BIC    -(R2),@135605(R3)
+030760: 135673   BITB   @-(SP),@135673(R3)
+030764: 135673   BITB   @-(SP),@135673(R3)
+030770: 135673   BITB   @-(SP),@135673(R3)
+030774: 135673   BITB   @-(SP),@135673(R3)
+031000: 000273   .WORD  273
+031002: 000000   HALT
+031004: 000000   HALT
+031006: 000000   HALT
+031010: 000000   HALT
+031012: 000000   HALT
+031014: 000000   HALT
+031016: 135661   BITB   @-(SP),74273(R1)
+031022: 073567   ASHC   124615,R5
+031026: 143567   BICB   @(R5)+,31032
+031032: 000000   HALT
+031034: 000000   HALT
+031036: 135670   BITB   @-(SP),@4273(R0)
+031042: 000000   HALT
+031044: 000000   HALT
+031046: 140000   BICB   R0,R0
+031050: 000000   HALT
+031052: 000000   HALT
+031054: 000000   HALT
+031056: 135670   BITB   @-(SP),@4273(R0)
+031062: 000000   HALT
+031064: 000000   HALT
+031066: 146300   BICB   314(R3),R0
+031072: 000000   HALT
+031074: 000000   HALT
+031076: 135670   BITB   @-(SP),@4273(R0)
+031102: 000000   HALT
+031104: 000000   HALT
+031106: 006314   ASL    (R4)
+031110: 006314   ASL    (R4)
+031112: 000000   HALT
+031114: 000000   HALT
+031116: 135670   BITB   @-(SP),@4273(R0)
+031122: 000000   HALT
+031124: 000000   HALT
+031126: 046000   BIC    14(R0),R0
+031132: 000000   HALT
+031134: 000000   HALT
+031136: 135670   BITB   @-(SP),@4273(R0)
+031142: 000000   HALT
+031144: 000000   HALT
+031146: 106314   ASLB   (R4)
+031150: 006314   ASL    (R4)
+031152: 000000   HALT
+031154: 000000   HALT
+031156: 135670   BITB   @-(SP),@4273(R0)
+031162: 000000   HALT
+031164: 140000   BICB   R0,R0
+031166: 100314   BPL    31020
+031170: 146300   BICB   0(R3),R0
+031174: 000000   HALT
+031176: 135670   BITB   @-(SP),@4273(R0)
+031202: 000000   HALT
+031204: 000000   HALT
+031206: 102300   BVC    31010
+031210: 000304   SWAB   R4
+031212: 000000   HALT
+031214: 000000   HALT
+031216: 135670   BITB   @-(SP),@4273(R0)
+031222: 000000   HALT
+031224: 000000   HALT
+031226: 106314   ASLB   (R4)
+031230: 006314   ASL    (R4)
+031232: 000000   HALT
+031234: 000000   HALT
+031236: 135670   BITB   @-(SP),@4273(R0)
+031242: 000000   HALT
+031244: 140000   BICB   R0,R0
+031246: 100314   BPL    31100
+031250: 146300   BICB   0(R3),R0
+031254: 000000   HALT
+031256: 135670   BITB   @-(SP),@4273(R0)
+031262: 000000   HALT
+031264: 000000   HALT
+031266: 102300   BVC    31070
+031270: 000304   SWAB   R4
+031272: 000000   HALT
+031274: 000000   HALT
+031276: 135670   BITB   @-(SP),@4273(R0)
+031302: 000000   HALT
+031304: 140000   BICB   R0,R0
+031306: 106314   ASLB   (R4)
+031310: 146314   BICB   0(R3),(R4)
+031314: 000000   HALT
+031316: 135670   BITB   @-(SP),@4273(R0)
+031322: 000000   HALT
+031324: 146000   BICB   100314(R0),R0
+031330: 146300   BICB   14(R3),R0
+031334: 000000   HALT
+031336: 135670   BITB   @-(SP),@4273(R0)
+031342: 000000   HALT
+031344: 000000   HALT
+031346: 102300   BVC    31150
+031350: 000304   SWAB   R4
+031352: 000000   HALT
+031354: 000000   HALT
+031356: 135670   BITB   @-(SP),@4273(R0)
+031362: 000000   HALT
+031364: 146000   BICB   106314(R0),R0
+031370: 146314   BICB   14(R3),(R4)
+031374: 000000   HALT
+031376: 135670   BITB   @-(SP),@4273(R0)
+031402: 000000   HALT
+031404: 146300   BICB   100314(R3),R0
+031410: 146300   BICB   314(R3),R0
+031414: 000000   HALT
+031416: 135670   BITB   @-(SP),@4273(R0)
+031422: 000000   HALT
+031424: 000000   HALT
+031426: 100014   BPL    31460
+031430: 006000   ROR    R0
+031432: 000000   HALT
+031434: 130000   BITB   R0,R0
+031436: 135670   BITB   @-(SP),@4273(R0)
+031442: 000013   .WORD  13
+031444: 000000   HALT
+031446: 102454   BVS    31600
+031450: 006066   ROR    0(SP)
+031454: 120000   CMPB   R0,R0
+031456: 135670   BITB   @-(SP),@135673(R0)
+031462: 073573   ASHC   @146307(R3),R5
+031466: 146314   BICB   146314(R3),(R4)
+031472: 073714   ASHC   (R4),PC
+031474: 133567   BITB   @(R5)+,167373
+031500: 156673   BISB   156735(SP),@146315(R3)
+031506: 146314   BICB   146314(R3),(R4)
+031512: 156714   BISB   10453,(R4)
+031516: 135675   BITB   @-(SP),@167273(R5)
+031522: 167356   SUB    @146316(R3),@-(SP)
+031526: 146314   BICB   146314(R3),(R4)
+031532: 167314   SUB    @167356(R3),(R4)
+031536: 135676   BITB   @-(SP),@156735(SP)
+031542: 156735   BISB   10503,@(R5)+
+031546: 155453   BISB   @-(R4),@-(R3)
+031550: 136735   BITB   10437,@(R5)+
+031554: 136735   BITB   10441,@(R5)+
+031560: 135756   BITB   @-(PC),@-(SP)
+031562: 135673   BITB   @-(SP),@167353(R3)
+031566: 165413   SUB    @-(R4),(R3)
+031570: 137356   BITB   @135660(R3),@-(SP)
+031574: 137353   BITB   @167270(R3),@-(R3)
+031600: 045756   BIC    @-(PC),@-(SP)
+031602: 040000   BIC    R0,R0
+031604: 135753   BITB   @-(PC),@-(R3)
+031606: 135413   BITB   @-(R4),(R3)
+031610: 137353   BITB   @5(R3),@-(R3)
+031614: 137353   BITB   @167270(R3),@-(R3)
+031620: 135756   BITB   @-(PC),@-(SP)
+031622: 135670   BITB   @-(SP),@5753(R0)
+031626: 000200   RTS    R0
+031630: 137353   BITB   @105673(R3),@-(R3)
+031634: 135673   BITB   @-(SP),@165670(R3)
+031640: 137356   BITB   @167270(R3),@-(SP)
+031644: 105756   TSTB   @-(SP)
+031646: 105673   SBCB   @167353(R3)
+031652: 105756   TSTB   @-(SP)
+031654: 120000   CMPB   R0,R0
+031656: 165410   SUB    @-(R4),(R0)
+031660: 137356   BITB   @167270(R3),@-(SP)
+031664: 105756   TSTB   @-(SP)
+031666: 105753   TSTB   @-(R3)
+031670: 167353   SUB    @135756(R3),@-(R3)
+031674: 135670   BITB   @-(SP),@165673(R0)
+031700: 137356   BITB   @167270(R3),@-(SP)
+031704: 105756   TSTB   @-(SP)
+031706: 105753   TSTB   @-(R3)
+031710: 167353   SUB    @137356(R3),@-(R3)
+031714: 167270   SUB    @167356(R2),@137356(R0)
+031722: 135670   BITB   @-(SP),@105673(R0)
+031726: 105753   TSTB   @-(R3)
+031730: 135673   BITB   @-(SP),@137273(R3)
+031734: 135670   BITB   @-(SP),@165673(R0)
+031740: 137356   BITB   @10(R3),@-(SP)
+031744: 100000   BPL    31746
+031746: 105753   TSTB   @-(R3)
+031750: 000000   HALT
+031752: 137264   BITB   @10(R2),165404(R4)
+031760: 137356   BITB   @135670(R3),@-(SP)
+031764: 105673   SBCB   @105753(R3)
+031770: 135673   BITB   @-(SP),@137273(R3)
+031774: 135613   BITB   @-(SP),(R3)
+031776: 165733   SUB    @-(PC),@(R3)+
+032000: 137356   BITB   @167270(R3),@-(SP)
+032004: 105756   TSTB   @-(SP)
+032006: 105753   TSTB   @-(R3)
+032010: 167353   SUB    @167356(R3),@-(R3)
+032014: 165613   SUB    @-(SP),(R3)
+032016: 165673   SUB    @-(SP),@135676(R3)
+032022: 167270   SUB    @105756(R2),@105753(R0)
+032030: 135673   BITB   @-(SP),@167353(R3)
+032034: 165613   SUB    @-(SP),(R3)
+032036: 167356   SUB    @276(R3),@-(SP)
+032042: 167270   SUB    @105756(R2),@105753(R0)
+032050: 040000   BIC    R0,R0
+032052: 167353   SUB    @165613(R3),@-(R3)
+032056: 135673   BITB   @-(SP),@134276(R3)
+032062: 135673   BITB   @-(SP),@105673(R3)
+032066: 135673   BITB   @-(SP),@134273(R3)
+032072: 135753   BITB   @-(PC),@-(R3)
+032074: 165613   SUB    @-(SP),(R3)
+032076: 133013   BITB   @(R0)+,(R3)
+032100: 004276   JSR    R2,@0(SP)
+032104: 100000   BPL    32106
+032106: 165400   SUB    @-(R4),R0
+032110: 134276   BITB   -(R2),@5756(SP)
+032114: 165600   SUB    @-(SP),R0
+032116: 135613   BITB   @-(SP),(R3)
+032120: 134276   BITB   -(R2),@135673(SP)
+032124: 135673   BITB   @-(SP),@165673(R3)
+032130: 134276   BITB   -(R2),@105756(SP)
+032134: 165673   SUB    @-(SP),@165613(R3)
+032140: 134276   BITB   -(R2),@167356(SP)
+032144: 167356   SUB    @167356(R3),@-(SP)
+032150: 134276   BITB   -(R2),@105756(SP)
+032154: 167353   SUB    @165613(R3),@-(R3)
+032160: 134276   BITB   -(R2),@137356(SP)
+032164: 137273   BITB   @135673(R2),@134273(R3)
+032172: 105673   SBCB   @167273(R3)
+032176: 165613   SUB    @-(SP),(R3)
+032200: 134276   BITB   -(R2),@137356(SP)
+032204: 137264   BITB   @100(R2),4000(R4)
+032212: 100000   BPL    32214
+032214: 135660   BITB   @-(SP),165613(R0)
+032220: 134276   BITB   -(R2),@135673(SP)
+032224: 137270   BITB   @135675(R2),@135673(R0)
+032232: 135673   BITB   @-(SP),@10(R3)
+032236: 165600   SUB    @-(SP),R0
+032240: 004276   JSR    R2,@0(SP)
+032244: 137270   BITB   @167273(R2),@167356(R0)
+032252: 137356   BITB   @135673(R3),@-(SP)
+032256: 165673   SUB    @-(SP),@135676(R3)
+032262: 135673   BITB   @-(SP),@167273(R3)
+032266: 167356   SUB    @167356(R3),@-(SP)
+032272: 167356   SUB    @167356(R3),@-(SP)
+032276: 167356   SUB    @5673(R3),@-(SP)
+032302: 000000   HALT
+032304: 000000   HALT
+032306: 000000   HALT
+032310: 000000   HALT
+032312: 000000   HALT
+032314: 000000   HALT
+032316: 130400   BITB   R4,R0
+032320: 005673   SBC    @0(R3)
+032324: 000000   HALT
+032326: 140000   BICB   R0,R0
+032330: 073714   ASHC   (R4),PC
+032332: 073567   ASHC   126125,R5
+032336: 134010   BITB   -(R0),(R0)
+032340: 005673   SBC    @0(R3)
+032344: 000000   HALT
+032346: 140000   BICB   R0,R0
+032350: 000304   SWAB   R4
+032352: 000000   HALT
+032354: 000000   HALT
+032356: 134010   BITB   -(R0),(R0)
+032360: 005673   SBC    @0(R3)
+032364: 000000   HALT
+032366: 140000   BICB   R0,R0
+032370: 000304   SWAB   R4
+032372: 000000   HALT
+032374: 000000   HALT
+032376: 134010   BITB   -(R0),(R0)
+032400: 005673   SBC    @0(R3)
+032404: 000000   HALT
+032406: 140000   BICB   R0,R0
+032410: 000304   SWAB   R4
+032412: 000000   HALT
+032414: 000000   HALT
+032416: 134010   BITB   -(R0),(R0)
+032420: 005673   SBC    @0(R3)
+032424: 000000   HALT
+032426: 140000   BICB   R0,R0
+032430: 000304   SWAB   R4
+032432: 000000   HALT
+032434: 000000   HALT
+032436: 134010   BITB   -(R0),(R0)
+032440: 005673   SBC    @0(R3)
+032444: 000000   HALT
+032446: 140000   BICB   R0,R0
+032450: 020304   CMP    R3,R4
+032452: 001400   BEQ    32454
+032454: 000000   HALT
+032456: 134010   BITB   -(R0),(R0)
+032460: 005673   SBC    @0(R3)
+032464: 146000   BICB   146314(R0),R0
+032470: 146307   BICB   6314(R3),PC
+032474: 000000   HALT
+032476: 134010   BITB   -(R0),(R0)
+032500: 005673   SBC    @0(R3)
+032504: 046000   BIC    42104(R0),R0
+032510: 042104   BIC    (R1)+,R4
+032512: 006124   ROL    (R4)+
+032514: 000000   HALT
+032516: 134010   BITB   -(R0),(R0)
+032520: 005673   SBC    @0(R3)
+032524: 146000   BICB   146314(R0),R0
+032530: 146307   BICB   76314(R3),PC
+032534: 000167   JMP    166550
+032540: 005673   SBC    @0(R3)
+032544: 000000   HALT
+032546: 140000   BICB   R0,R0
+032550: 000306   SWAB   SP
+032552: 000000   HALT
+032554: 000000   HALT
+032556: 134010   BITB   -(R0),(R0)
+032560: 005673   SBC    @0(R3)
+032564: 000000   HALT
+032566: 140000   BICB   R0,R0
+032570: 000304   SWAB   R4
+032572: 000000   HALT
+032574: 073570   ASHC   @134007(R0),R5
+032600: 005673   SBC    @0(R3)
+032604: 000000   HALT
+032606: 140000   BICB   R0,R0
+032610: 000304   SWAB   R4
+032612: 000000   HALT
+032614: 000010   .WORD  10
+032616: 134000   BITB   -(R0),R0
+032620: 005673   SBC    @0(R3)
+032624: 000000   HALT
+032626: 140000   BICB   R0,R0
+032630: 000304   SWAB   R4
+032632: 000000   HALT
+032634: 133410   BITB   @(R4)+,(R0)
+032636: 134013   BITB   -(R0),(R3)
+032640: 005673   SBC    @0(R3)
+032644: 000000   HALT
+032646: 140000   BICB   R0,R0
+032650: 000304   SWAB   R4
+032652: 000000   HALT
+032654: 140010   BICB   R0,(R0)
+032656: 134012   BITB   -(R0),(R2)
+032660: 005673   SBC    @0(R3)
+032664: 000000   HALT
+032666: 140000   BICB   R0,R0
+032670: 000304   SWAB   R4
+032672: 000000   HALT
+032674: 135410   BITB   @-(R4),(R0)
+032676: 134173   BITB   -(R1),@5673(R3)
+032702: 000000   HALT
+032704: 000000   HALT
+032706: 140000   BICB   R0,R0
+032710: 000304   SWAB   R4
+032712: 000000   HALT
+032714: 000010   .WORD  10
+032716: 135400   BITB   @-(R4),R0
+032720: 005673   SBC    @0(R3)
+032724: 000000   HALT
+032726: 140000   BICB   R0,R0
+032730: 000304   SWAB   R4
+032732: 000000   HALT
+032734: 000010   .WORD  10
+032736: 135400   BITB   @-(R4),R0
+032740: 005673   SBC    @0(R3)
+032744: 000000   HALT
+032746: 140000   BICB   R0,R0
+032750: 000304   SWAB   R4
+032752: 000000   HALT
+032754: 000010   .WORD  10
+032756: 135400   BITB   @-(R4),R0
+032760: 002273   BGE    32550
+032762: 000000   HALT
+032764: 000000   HALT
+032766: 140000   BICB   R0,R0
+032770: 000304   SWAB   R4
+032772: 000000   HALT
+032774: 000010   .WORD  10
+032776: 135400   BITB   @-(R4),R0
+033000: 075673   .WORD  75673
+033002: 073567   ASHC   37175,R5
+033006: 140000   BICB   R0,R0
+033010: 000304   SWAB   R4
+033012: 074000   XOR    R0,R0
+033014: 000007   .WORD  7
+033016: 135400   BITB   @-(R4),R0
+033020: 155673   BISB   @-(SP),@156735(R3)
+033024: 135735   BITB   @-(PC),@(R5)+
+033026: 135673   BITB   @-(SP),@135673(R3)
+033032: 155673   BISB   @-(SP),@156735(R3)
+033036: 135735   BITB   @-(PC),@(R5)+
+033040: 135673   BITB   @-(SP),@135673(R3)
+033044: 131273   BITB   (R2),@135673(R3)
+033050: 135673   BITB   @-(SP),@131673(R3)
+033054: 135673   BITB   @-(SP),@135433(R3)
+033060: 000273   .WORD  273
+033062: 000000   HALT
+033064: 000000   HALT
+033066: 000000   HALT
+033070: 000000   HALT
+033072: 000000   HALT
+033074: 000000   HALT
+033076: 135613   BITB   @-(SP),(R3)
+033100: 000273   .WORD  273
+033102: 000000   HALT
+033104: 000000   HALT
+033106: 000000   HALT
+033110: 000000   HALT
+033112: 000000   HALT
+033114: 000000   HALT
+033116: 135613   BITB   @-(SP),(R3)
+033120: 000273   .WORD  273
+033122: 073600   ASHC   R0,SP
+033124: 103570   BCS    33506
+033126: 074167   XOR    R1,127326
+033132: 073607   ASHC   PC,SP
+033134: 103570   BCS    33516
+033136: 135613   BITB   @-(SP),(R3)
+033140: 000273   .WORD  273
+033142: 000200   RTS    R0
+033144: 100010   BPL    33166
+033146: 004000   JSR    R0,R0
+033150: 004014   JSR    R0,(R4)
+033152: 000200   RTS    R0
+033154: 100010   BPL    33176
+033156: 135613   BITB   @-(SP),(R3)
+033160: 000273   .WORD  273
+033162: 073600   ASHC   R0,SP
+033164: 103570   BCS    33546
+033166: 144167   BICB   -(R1),127472
+033172: 073607   ASHC   PC,SP
+033174: 103570   BCS    33556
+033176: 135613   BITB   @-(SP),(R3)
+033200: 000273   .WORD  273
+033202: 000200   RTS    R0
+033204: 100010   BPL    33226
+033206: 144000   BICB   -(R0),R0
+033210: 004304   JSR    R3,R4
+033212: 000200   RTS    R0
+033214: 100010   BPL    33236
+033216: 135613   BITB   @-(SP),(R3)
+033220: 000273   .WORD  273
+033222: 073600   ASHC   R0,SP
+033224: 103570   BCS    33606
+033226: 076167   .WORD  76167
+033230: 076167   .WORD  76167
+033232: 073607   ASHC   PC,SP
+033234: 103570   BCS    33616
+033236: 135613   BITB   @-(SP),(R3)
+033240: 000273   .WORD  273
+033242: 000200   RTS    R0
+033244: 100010   BPL    33266
+033246: 006000   ROR    R0
+033250: 006004   ROR    R4
+033252: 000200   RTS    R0
+033254: 100010   BPL    33276
+033256: 135613   BITB   @-(SP),(R3)
+033260: 000273   .WORD  273
+033262: 073600   ASHC   R0,SP
+033264: 100170   BPL    33646
+033266: 073700   ASHC   R0,PC
+033270: 143567   BICB   @(R5)+,123474
+033274: 103570   BCS    33656
+033276: 135613   BITB   @-(SP),(R3)
+033300: 000273   .WORD  273
+033302: 000200   RTS    R0
+033304: 100010   BPL    33326
+033306: 000000   HALT
+033310: 000004   IOT
+033312: 000200   RTS    R0
+033314: 100010   BPL    33336
+033316: 135613   BITB   @-(SP),(R3)
+033320: 000273   .WORD  273
+033322: 073600   ASHC   R0,SP
+033324: 100170   BPL    33706
+033326: 004014   JSR    R0,(R4)
+033330: 004167   JSR    R1,123550
+033334: 103570   BCS    33716
+033336: 135613   BITB   @-(SP),(R3)
+033340: 000273   .WORD  273
+033342: 000200   RTS    R0
+033344: 100010   BPL    33366
+033346: 004014   JSR    R0,(R4)
+033350: 004005   JSR    R0,R5
+033352: 000214   .WORD  214
+033354: 100010   BPL    33376
+033356: 135613   BITB   @-(SP),(R3)
+033360: 000273   .WORD  273
+033362: 073600   ASHC   R0,SP
+033364: 140170   BICB   R1,@74000(R0)
+033370: 004007   JSR    R0,PC
+033372: 070300   MUL    R0,R3
+033374: 103570   BCS    33756
+033376: 135613   BITB   @-(SP),(R3)
+033400: 000273   .WORD  273
+033402: 000200   RTS    R0
+033404: 110010   MOVB   R0,(R0)
+033406: 004160   JSR    R1,74006(R0)
+033412: 000220   .WORD  220
+033414: 100010   BPL    33436
+033416: 135613   BITB   @-(SP),(R3)
+033420: 000273   .WORD  273
+033422: 073600   ASHC   R0,SP
+033424: 146170   BICB   4014(R1),@4167(R0)
+033432: 076314   .WORD  76314
+033434: 103570   BCS    34016
+033436: 135613   BITB   @-(SP),(R3)
+033440: 000273   .WORD  273
+033442: 000200   RTS    R0
+033444: 000010   .WORD  10
+033446: 004000   JSR    R0,R0
+033450: 004004   JSR    R0,R4
+033452: 000000   HALT
+033454: 100010   BPL    33476
+033456: 135612   BITB   @-(SP),(R2)
+033460: 105673   SBCB   @73613(R3)
+033464: 006010   ROR    (R0)
+033466: 074160   XOR    R1,74007(R0)
+033472: 006000   ROR    R0
+033474: 103570   BCS    34056
+033476: 135673   BITB   @-(SP),@105673(R3)
+033502: 156733   BISB   2043,@(R3)+
+033506: 156734   BISB   12447,@(R4)+
+033512: 156314   BISB   156735(R3),(R4)
+033516: 135673   BITB   @-(SP),@100273(R3)
+033522: 167353   SUB    @167356(R3),@-(R3)
+033526: 167356   SUB    @167356(R3),@-(SP)
+033532: 167356   SUB    @167356(R3),@-(SP)
+033536: 135756   BITB   @-(PC),@-(SP)
+033540: 100273   BPL    33330
+033542: 167353   SUB    @167356(R3),@-(R3)
+033546: 167356   SUB    @167356(R3),@-(SP)
+033552: 167356   SUB    @167356(R3),@-(SP)
+033556: 135756   BITB   @-(PC),@-(SP)
+033560: 135673   BITB   @-(SP),@167353(R3)
+033564: 167356   SUB    @167356(R3),@-(SP)
+033570: 167356   SUB    @167356(R3),@-(SP)
+033574: 167356   SUB    @135756(R3),@-(SP)
+033600: 000273   .WORD  273
+033602: 000000   HALT
+033604: 000000   HALT
+033606: 001000   BNE    33610
+033610: 001400   BEQ    33612
+033612: 000000   HALT
+033614: 000000   HALT
+033616: 135420   BITB   @-(R4),(R0)+
+033620: 000273   .WORD  273
+033622: 000000   HALT
+033624: 000000   HALT
+033626: 000000   HALT
+033630: 000014   .WORD  14
+033632: 000000   HALT
+033634: 000000   HALT
+033636: 135600   BITB   @-(SP),R0
+033640: 000273   .WORD  273
+033642: 000000   HALT
+033644: 000000   HALT
+033646: 000000   HALT
+033650: 000000   HALT
+033652: 000000   HALT
+033654: 000000   HALT
+033656: 135600   BITB   @-(SP),R0
+033660: 100273   BPL    33450
+033662: 073567   ASHC   127455,R5
+033666: 143567   BICB   @(R5)+,34201
+033672: 000000   HALT
+033674: 000000   HALT
+033676: 135600   BITB   @-(SP),R0
+033700: 100273   BPL    33470
+033702: 000000   HALT
+033704: 000000   HALT
+033706: 040000   BIC    R0,R0
+033710: 000100   JMP    R0
+033712: 000000   HALT
+033714: 000000   HALT
+033716: 135600   BITB   @-(SP),R0
+033720: 100273   BPL    33510
+033722: 000000   HALT
+033724: 000000   HALT
+033726: 146000   BICB   6307(R0),R0
+033732: 000000   HALT
+033734: 000000   HALT
+033736: 135600   BITB   @-(SP),R0
+033740: 100273   BPL    33530
+033742: 000000   HALT
+033744: 000000   HALT
+033746: 040000   BIC    R0,R0
+033750: 000100   JMP    R0
+033752: 000000   HALT
+033754: 000000   HALT
+033756: 135600   BITB   @-(SP),R0
+033760: 100273   BPL    33550
+033762: 000000   HALT
+033764: 000000   HALT
+033766: 140300   BICB   R3,R0
+033770: 140300   BICB   R3,R0
+033772: 000000   HALT
+033774: 000000   HALT
+033776: 135600   BITB   @-(SP),R0
+034000: 100273   BPL    33570
+034002: 000000   HALT
+034004: 000000   HALT
+034006: 050000   BIS    R0,R0
+034010: 000140   JMP    -(R0)
+034012: 000000   HALT
+034014: 000000   HALT
+034016: 135600   BITB   @-(SP),R0
+034020: 100273   BPL    33610
+034022: 000000   HALT
+034024: 000000   HALT
+034026: 140314   BICB   R3,(R4)
+034030: 140300   BICB   R3,R0
+034032: 000014   .WORD  14
+034034: 000000   HALT
+034036: 135600   BITB   @-(SP),R0
+034040: 100273   BPL    33630
+034042: 000000   HALT
+034044: 000000   HALT
+034046: 040000   BIC    R0,R0
+034050: 000100   JMP    R0
+034052: 000000   HALT
+034054: 000000   HALT
+034056: 135600   BITB   @-(SP),R0
+034060: 100273   BPL    33650
+034062: 000000   HALT
+034064: 140000   BICB   R0,R0
+034066: 146014   BICB   6300(R0),(R4)
+034072: 000314   SWAB   (R4)
+034074: 000000   HALT
+034076: 135600   BITB   @-(SP),R0
+034100: 100273   BPL    33670
+034102: 000000   HALT
+034104: 000000   HALT
+034106: 040000   BIC    R0,R0
+034110: 000100   JMP    R0
+034112: 000000   HALT
+034114: 000000   HALT
+034116: 135600   BITB   @-(SP),R0
+034120: 100273   BPL    33710
+034122: 000000   HALT
+034124: 146000   BICB   146300(R0),R0
+034130: 146300   BICB   6300(R3),R0
+034134: 000000   HALT
+034136: 135600   BITB   @-(SP),R0
+034140: 100273   BPL    33730
+034142: 000000   HALT
+034144: 000000   HALT
+034146: 040000   BIC    R0,R0
+034150: 000100   JMP    R0
+034152: 000000   HALT
+034154: 000000   HALT
+034156: 135600   BITB   @-(SP),R0
+034160: 100273   BPL    33750
+034162: 000000   HALT
+034164: 006300   ASL    R0
+034166: 146314   BICB   146300(R3),(R4)
+034172: 146014   BICB   0(R0),(R4)
+034176: 135600   BITB   @-(SP),R0
+034200: 100273   BPL    33770
+034202: 000000   HALT
+034204: 000000   HALT
+034206: 040000   BIC    R0,R0
+034210: 000100   JMP    R0
+034212: 000000   HALT
+034214: 000000   HALT
+034216: 135600   BITB   @-(SP),R0
+034220: 100273   BPL    34010
+034222: 000000   HALT
+034224: 140314   BICB   R3,(R4)
+034226: 146314   BICB   146300(R3),(R4)
+034232: 140314   BICB   R3,(R4)
+034234: 000014   .WORD  14
+034236: 135600   BITB   @-(SP),R0
+034240: 100273   BPL    34030
+034242: 000000   HALT
+034244: 000000   HALT
+034246: 040000   BIC    R0,R0
+034250: 000100   JMP    R0
+034252: 000000   HALT
+034254: 000000   HALT
+034256: 135600   BITB   @-(SP),R0
+034260: 100273   BPL    34050
+034262: 140000   BICB   R0,R0
+034264: 146314   BICB   146314(R3),(R4)
+034270: 146300   BICB   146314(R3),R0
+034274: 000314   SWAB   (R4)
+034276: 135613   BITB   @-(SP),(R3)
+034300: 100273   BPL    34070
+034302: 000000   HALT
+034304: 000000   HALT
+034306: 000000   HALT
+034310: 000000   HALT
+034312: 000000   HALT
+034314: 000000   HALT
+034316: 135612   BITB   @-(SP),(R2)
+034320: 135673   BITB   @-(SP),@155673(R3)
+034324: 156735   BISB   13265,@(R5)+
+034330: 156735   BISB   13271,@(R5)+
+034334: 135735   BITB   @-(PC),@(R5)+
+034336: 135673   BITB   @-(SP),@273(R3)
+034342: 000000   HALT
+034344: 000000   HALT
+034346: 000000   HALT
+034350: 000000   HALT
+034352: 000000   HALT
+034354: 000000   HALT
+034356: 135433   BITB   @-(R4),@(R3)+
+034360: 000273   .WORD  273
+034362: 000000   HALT
+034364: 000000   HALT
+034366: 000000   HALT
+034370: 000000   HALT
+034372: 040010   BIC    R0,(R0)
+034374: 000110   JMP    (R0)
+034376: 135613   BITB   @-(SP),(R3)
+034400: 000273   .WORD  273
+034402: 146200   BICB   146314(R2),R0
+034406: 135674   BITB   @-(SP),@146273(R4)
+034412: 100010   BPL    34434
+034414: 000210   .WORD  210
+034416: 135613   BITB   @-(SP),(R3)
+034420: 040273   BIC    R2,@0(R3)
+034424: 002006   BGE    34442
+034426: 000264   SEZ
+034430: 000260   .WORD  260
+034432: 104010   EMT    10
+034434: 004200   JSR    R2,R0
+034436: 135613   BITB   @-(SP),(R3)
+034440: 100273   BPL    34230
+034442: 000000   HALT
+034444: 146174   BICB   134274(R1),@5670(R4)
+034452: 004010   JSR    R0,(R0)
+034454: 004000   JSR    R0,R0
+034456: 135613   BITB   @-(SP),(R3)
+034460: 100273   BPL    34250
+034462: 000000   HALT
+034464: 000000   HALT
+034466: 134000   BITB   -(R0),R0
+034470: 001110   BNE    34712
+034472: 005670   SBC    @135400(R0)
+034476: 135613   BITB   @-(SP),(R3)
+034500: 100273   BPL    34270
+034502: 073567   ASHC   130275,R5
+034506: 134007   BITB   -(R0),PC
+034510: 075673   .WORD  75673
+034512: 000000   HALT
+034514: 100000   BPL    34516
+034516: 135613   BITB   @-(SP),(R3)
+034520: 100273   BPL    34310
+034522: 000000   HALT
+034524: 000000   HALT
+034526: 004000   JSR    R0,R0
+034530: 000000   HALT
+034532: 073400   ASHC   R0,R4
+034534: 103567   BCS    35114
+034536: 135613   BITB   @-(SP),(R3)
+034540: 104273   EMT    273
+034542: 146300   BICB   146314(R3),R0
+034546: 006314   ASL    (R4)
+034550: 142120   BICB   (R1)+,(R0)+
+034552: 130267   BITB   R2,135036
+034556: 135613   BITB   @-(SP),(R3)
+034560: 004273   JSR    R2,@135400(R3)
+034564: 135673   BITB   @-(SP),@75673(R3)
+034570: 135667   BITB   @-(SP),165054
+034574: 100275   BPL    34370
+034576: 135613   BITB   @-(SP),(R3)
+034600: 004273   JSR    R2,@135400(R3)
+034604: 135673   BITB   @-(SP),@155673(R3)
+034610: 156675   BISB   130275(SP),@100273(R5)
+034616: 135613   BITB   @-(SP),(R3)
+034620: 004273   JSR    R2,@0(R3)
+034624: 000000   HALT
+034626: 135660   BITB   @-(SP),167356(R0)
+034632: 000273   .WORD  273
+034634: 100000   BPL    34636
+034636: 135613   BITB   @-(SP),(R3)
+034640: 004273   JSR    R2,@75660(R3)
+034644: 000000   HALT
+034646: 135400   BITB   @-(R4),R0
+034650: 135673   BITB   @-(SP),@6014(R3)
+034654: 100100   BPL    35056
+034656: 135613   BITB   @-(SP),(R3)
+034660: 134273   BITB   -(R2),@156735(R3)
+034664: 000173   JMP    @0(R3)
+034670: 006314   ASL    (R4)
+034672: 104260   EMT    260
+034674: 100174   BPL    35266
+034676: 135613   BITB   @-(SP),(R3)
+034700: 134273   BITB   -(R2),@167356(R3)
+034704: 042013   BIC    (R0)+,(R3)
+034706: 134104   BITB   -(R1),R4
+034710: 144270   BICB   -(R2),@144260(R0)
+034714: 100113   BPL    35144
+034716: 135613   BITB   @-(SP),(R3)
+034720: 134273   BITB   -(R2),@165673(R3)
+034724: 073413   ASHC   (R3),R4
+034726: 073567   ASHC   40742,R5
+034732: 000000   HALT
+034734: 100160   BPL    35276
+034736: 135613   BITB   @-(SP),(R3)
+034740: 004273   JSR    R2,@165400(R3)
+034744: 130013   BITB   R0,(R3)
+034746: 000000   HALT
+034750: 076174   .WORD  76174
+034752: 076174   .WORD  76174
+034754: 100014   BPL    35006
+034756: 135613   BITB   @-(SP),(R3)
+034760: 004273   JSR    R2,@165400(R3)
+034764: 130013   BITB   R0,(R3)
+034766: 135673   BITB   @-(SP),@144310(R3)
+034772: 144310   BICB   -(R3),(R0)
+034774: 100310   BPL    34616
+034776: 135613   BITB   @-(SP),(R3)
+035000: 104273   EMT    273
+035002: 165400   SUB    @-(R4),R0
+035004: 120013   CMPB   R0,(R3)
+035006: 032260   BIT    (R2)+,106214(R0)
+035012: 106214   ASRB   (R4)
+035014: 100214   BPL    34446
+035016: 135613   BITB   @-(SP),(R3)
+035020: 100273   BPL    34610
+035022: 165400   SUB    @-(R4),R0
+035024: 135733   BITB   @-(PC),@(R3)+
+035026: 135660   BITB   @-(SP),135673(R0)
+035032: 135673   BITB   @-(SP),@135673(R3)
+035036: 135613   BITB   @-(SP),(R3)
+035040: 100273   BPL    34630
+035042: 165400   SUB    @-(R4),R0
+035044: 005753   TST    @-(R3)
+035046: 000000   HALT
+035050: 000000   HALT
+035052: 000000   HALT
+035054: 000000   HALT
+035056: 135600   BITB   @-(SP),R0
+035060: 135673   BITB   @-(SP),@135673(R3)
+035064: 135673   BITB   @-(SP),@135673(R3)
+035070: 135673   BITB   @-(SP),@135673(R3)
+035074: 135673   BITB   @-(SP),@135673(R3)
+035100: 135673   BITB   @-(SP),@135673(R3)
+035104: 135673   BITB   @-(SP),@25673(R3)
+035110: 135473   BITB   @-(R4),@135673(R3)
+035114: 135673   BITB   @-(SP),@130673(R3)
+035120: 000013   .WORD  13
+035122: 000000   HALT
+035124: 000000   HALT
+035126: 000000   HALT
+035130: 000000   HALT
+035132: 000000   HALT
+035134: 000000   HALT
+035136: 134260   BITB   -(R2),73613(R0)
+035142: 073567   ASHC   130735,R5
+035146: 073567   ASHC   130741,R5
+035152: 073567   ASHC   130745,R5
+035156: 134270   BITB   -(R2),@213(R0)
+035162: 000000   HALT
+035164: 000000   HALT
+035166: 000000   HALT
+035170: 000014   .WORD  14
+035172: 000000   HALT
+035174: 000000   HALT
+035176: 134270   BITB   -(R2),@213(R0)
+035202: 000000   HALT
+035204: 000000   HALT
+035206: 000000   HALT
+035210: 000014   .WORD  14
+035212: 000000   HALT
+035214: 000000   HALT
+035216: 134270   BITB   -(R2),@213(R0)
+035222: 000000   HALT
+035224: 000000   HALT
+035226: 140000   BICB   R0,R0
+035230: 000314   SWAB   (R4)
+035232: 000000   HALT
+035234: 000000   HALT
+035236: 134270   BITB   -(R2),@100213(R0)
+035242: 073567   ASHC   131035,R5
+035246: 143567   BICB   @(R5)+,131166
+035252: 073567   ASHC   131045,R5
+035256: 134270   BITB   -(R2),@100213(R0)
+035262: 000000   HALT
+035264: 000000   HALT
+035266: 146000   BICB   6300(R0),R0
+035272: 000000   HALT
+035274: 000000   HALT
+035276: 134270   BITB   -(R2),@213(R0)
+035302: 073567   ASHC   35316,R5
+035306: 146000   BICB   6304(R0),R0
+035312: 000000   HALT
+035314: 073570   ASHC   @134260(R0),R5
+035320: 100213   BPL    34750
+035322: 073567   ASHC   35335,R5
+035326: 076300   .WORD  76300
+035330: 146167   BICB   0(R1),131125
+035336: 134270   BITB   -(R2),@100213(R0)
+035342: 000000   HALT
+035344: 000000   HALT
+035346: 006300   ASL    R0
+035350: 146004   BICB   0(R0),R4
+035354: 000000   HALT
+035356: 134270   BITB   -(R2),@70213(R0)
+035362: 073567   ASHC   131155,R5
+035366: 073714   ASHC   (R4),PC
+035370: 143567   BICB   @(R5)+,131170
+035374: 073567   ASHC   171667,R5
+035400: 000213   .WORD  213
+035402: 000000   HALT
+035404: 000000   HALT
+035406: 000314   SWAB   (R4)
+035410: 140006   BICB   R0,SP
+035412: 000014   .WORD  14
+035414: 000000   HALT
+035416: 134260   BITB   -(R2),213(R0)
+035422: 000000   HALT
+035424: 140000   BICB   R0,R0
+035426: 074174   XOR    R1,@74007(R4)
+035432: 000314   SWAB   (R4)
+035434: 000000   HALT
+035436: 134260   BITB   -(R2),213(R0)
+035442: 000000   HALT
+035444: 140000   BICB   R0,R0
+035446: 004014   JSR    R0,(R4)
+035450: 004005   JSR    R0,R5
+035452: 000314   SWAB   (R4)
+035454: 000000   HALT
+035456: 134260   BITB   -(R2),213(R0)
+035462: 000000   HALT
+035464: 146000   BICB   4160(R0),R0
+035470: 074167   XOR    R1,43774
+035474: 000000   HALT
+035476: 134260   BITB   -(R2),213(R0)
+035502: 000000   HALT
+035504: 006000   ROR    R0
+035506: 004000   JSR    R0,R0
+035510: 004004   JSR    R0,R4
+035512: 006000   ROR    R0
+035514: 000000   HALT
+035516: 134240   BITB   -(R2),-(R0)
+035520: 073673   ASHC   @73567(R3),SP
+035524: 006167   ROL    131724
+035530: 074007   XOR    R0,PC
+035532: 076014   .WORD  76014
+035534: 073567   ASHC   173427,R5
+035540: 156673   BISB   156735(SP),@146335(R3)
+035546: 156734   BISB   14507,@(R4)+
+035552: 156314   BISB   156735(R3),(R4)
+035556: 135675   BITB   @-(SP),@167273(R5)
+035562: 167356   SUB    @167356(R3),@-(SP)
+035566: 167356   SUB    @167356(R3),@-(SP)
+035572: 167356   SUB    @167356(R3),@-(SP)
+035576: 135676   BITB   @-(SP),@167273(SP)
+035602: 167356   SUB    @167356(R3),@-(SP)
+035606: 167356   SUB    @167356(R3),@-(SP)
+035612: 167356   SUB    @167356(R3),@-(SP)
+035616: 135676   BITB   @-(SP),@167273(SP)
+035622: 167356   SUB    @167356(R3),@-(SP)
+035626: 167356   SUB    @167356(R3),@-(SP)
+035632: 167356   SUB    @167356(R3),@-(SP)
+035636: 135676   BITB   @-(SP),@273(SP)
+035642: 000000   HALT
+035644: 000000   HALT
+035646: 001000   BNE    35650
+035650: 001400   BEQ    35652
+035652: 000000   HALT
+035654: 000000   HALT
+035656: 135420   BITB   @-(R4),(R0)+
+035660: 000273   .WORD  273
+035662: 000000   HALT
+035664: 000000   HALT
+035666: 000000   HALT
+035670: 000014   .WORD  14
+035672: 000000   HALT
+035674: 000000   HALT
+035676: 135600   BITB   @-(SP),R0
+035700: 000273   .WORD  273
+035702: 000000   HALT
+035704: 000000   HALT
+035706: 000000   HALT
+035710: 000000   HALT
+035712: 000000   HALT
+035714: 000000   HALT
+035716: 135600   BITB   @-(SP),R0
+035720: 000273   .WORD  273
+035722: 073600   ASHC   R0,SP
+035724: 073567   ASHC   1517,R5
+035730: 000314   SWAB   (R4)
+035732: 000000   HALT
+035734: 000000   HALT
+035736: 135600   BITB   @-(SP),R0
+035740: 000273   .WORD  273
+035742: 000200   RTS    R0
+035744: 000000   HALT
+035746: 000000   HALT
+035750: 000004   IOT
+035752: 000000   HALT
+035754: 000000   HALT
+035756: 135600   BITB   @-(SP),R0
+035760: 000273   .WORD  273
+035762: 000200   RTS    R0
+035764: 000000   HALT
+035766: 076000   .WORD  76000
+035770: 006174   ROL    @0(R4)
+035774: 000000   HALT
+035776: 135600   BITB   @-(SP),R0
+036000: 000273   .WORD  273
+036002: 000200   RTS    R0
+036004: 000000   HALT
+036006: 000000   HALT
+036010: 000000   HALT
+036012: 000000   HALT
+036014: 000000   HALT
+036016: 135600   BITB   @-(SP),R0
+036020: 000273   .WORD  273
+036022: 000200   RTS    R0
+036024: 000000   HALT
+036026: 140300   BICB   R3,R0
+036030: 140314   BICB   R3,(R4)
+036032: 000000   HALT
+036034: 000000   HALT
+036036: 135600   BITB   @-(SP),R0
+036040: 000273   .WORD  273
+036042: 000200   RTS    R0
+036044: 000000   HALT
+036046: 002000   BGE    36050
+036050: 002000   BGE    36052
+036052: 000000   HALT
+036054: 000000   HALT
+036056: 135600   BITB   @-(SP),R0
+036060: 000273   .WORD  273
+036062: 000200   RTS    R0
+036064: 000000   HALT
+036066: 146014   BICB   6300(R0),(R4)
+036072: 000014   .WORD  14
+036074: 000000   HALT
+036076: 135600   BITB   @-(SP),R0
+036100: 000273   .WORD  273
+036102: 000200   RTS    R0
+036104: 000000   HALT
+036106: 000100   JMP    R0
+036110: 040000   BIC    R0,R0
+036112: 000000   HALT
+036114: 000000   HALT
+036116: 135600   BITB   @-(SP),R0
+036120: 000273   .WORD  273
+036122: 000200   RTS    R0
+036124: 140000   BICB   R0,R0
+036126: 005560   ADC    145400(R0)
+036132: 000307   SWAB   PC
+036134: 000000   HALT
+036136: 135600   BITB   @-(SP),R0
+036140: 000273   .WORD  273
+036142: 000200   RTS    R0
+036144: 000000   HALT
+036146: 155400   BISB   @-(R4),R0
+036150: 005735   TST    @(R5)+
+036152: 000000   HALT
+036154: 000000   HALT
+036156: 135600   BITB   @-(SP),R0
+036160: 000273   .WORD  273
+036162: 000200   RTS    R0
+036164: 006000   ROR    R0
+036166: 135410   BITB   @-(R4),(R0)
+036170: 005673   SBC    @6010(R3)
+036174: 000000   HALT
+036176: 135600   BITB   @-(SP),R0
+036200: 000273   .WORD  273
+036202: 000200   RTS    R0
+036204: 040000   BIC    R0,R0
+036206: 000220   .WORD  220
+036210: 000000   HALT
+036212: 000100   JMP    R0
+036214: 000000   HALT
+036216: 135600   BITB   @-(SP),R0
+036220: 000273   .WORD  273
+036222: 000200   RTS    R0
+036224: 140300   BICB   R3,R0
+036226: 146167   BICB   146300(R1),176550
+036234: 000000   HALT
+036236: 135600   BITB   @-(SP),R0
+036240: 000273   .WORD  273
+036242: 000200   RTS    R0
+036244: 002000   BGE    36246
+036246: 060000   ADD    R0,R0
+036250: 000000   HALT
+036252: 002000   BGE    36254
+036254: 000000   HALT
+036256: 135600   BITB   @-(SP),R0
+036260: 000273   .WORD  273
+036262: 000200   RTS    R0
+036264: 146174   BICB   146300(R1),@146007(R4)
+036272: 076300   .WORD  76300
+036274: 000014   .WORD  14
+036276: 135600   BITB   @-(SP),R0
+036300: 000273   .WORD  273
+036302: 000010   .WORD  10
+036304: 000011   .WORD  11
+036306: 000000   HALT
+036310: 000120   JMP    (R0)+
+036312: 000000   HALT
+036314: 000000   HALT
+036316: 135600   BITB   @-(SP),R0
+036320: 000273   .WORD  273
+036322: 140010   BICB   R0,(R0)
+036324: 140314   BICB   R3,(R4)
+036326: 146014   BICB   146300(R0),(R4)
+036332: 146014   BICB   300(R0),(R4)
+036336: 135613   BITB   @-(SP),(R3)
+036340: 000273   .WORD  273
+036342: 000010   .WORD  10
+036344: 000000   HALT
+036346: 000000   HALT
+036350: 000000   HALT
+036352: 000000   HALT
+036354: 000000   HALT
+036356: 135612   BITB   @-(SP),(R2)
+036360: 135673   BITB   @-(SP),@135673(R3)
+036364: 135673   BITB   @-(SP),@135673(R3)
+036370: 135673   BITB   @-(SP),@135673(R3)
+036374: 135673   BITB   @-(SP),@135673(R3)
+036400: 000273   .WORD  273
+036402: 010000   MOV    R0,R0
+036404: 000122   JMP    (R2)+
+036406: 000000   HALT
+036410: 000000   HALT
+036412: 000000   HALT
+036414: 131660   BITB   (SP),135673(R0)
+036420: 000273   .WORD  273
+036422: 100100   BPL    36624
+036424: 073564   ASHC   73567(R4),R5
+036430: 073567   ASHC   144224,R5
+036434: 002220   BGE    36076
+036436: 135400   BITB   @-(R4),R0
+036440: 074273   XOR    R2,@70167(R3)
+036444: 073567   ASHC   132237,R5
+036450: 073567   ASHC   136463,R5
+036454: 144314   BICB   -(R3),(R4)
+036456: 135410   BITB   @-(R4),(R0)
+036460: 134273   BITB   -(R2),@0(R3)
+036464: 073400   ASHC   R0,R4
+036466: 073567   ASHC   132261,R5
+036472: 000207   RTS    PC
+036474: 002000   BGE    36476
+036476: 135410   BITB   @-(R4),(R0)
+036500: 134273   BITB   -(R2),@73570(R3)
+036504: 073567   ASHC   132277,R5
+036510: 003567   BLE    37070
+036512: 000200   RTS    R0
+036514: 144310   BICB   -(R3),(R0)
+036516: 135400   BITB   @-(R4),R0
+036520: 134273   BITB   -(R2),@132010(R3)
+036524: 000000   HALT
+036526: 040004   BIC    R0,R4
+036530: 040000   BIC    R0,R0
+036532: 000200   RTS    R0
+036534: 002010   BGE    36556
+036536: 135400   BITB   @-(R4),R0
+036540: 134273   BITB   -(R2),@133560(R3)
+036544: 073570   ASHC   @100007(R0),R5
+036550: 103567   BCS    37130
+036552: 000200   RTS    R0
+036554: 144300   BICB   -(R3),R0
+036556: 135410   BITB   @-(R4),(R0)
+036560: 134273   BITB   -(R2),@132010(R3)
+036564: 000010   .WORD  10
+036566: 002000   BGE    36570
+036570: 000004   IOT
+036572: 000200   RTS    R0
+036574: 002000   BGE    36576
+036576: 135410   BITB   @-(R4),(R0)
+036600: 134273   BITB   -(R2),@133570(R3)
+036604: 130010   BITB   R0,(R0)
+036606: 103570   BCS    37170
+036610: 000007   .WORD  7
+036612: 000200   RTS    R0
+036614: 144310   BICB   -(R3),(R0)
+036616: 135400   BITB   @-(R4),R0
+036620: 134273   BITB   -(R2),@0(R3)
+036624: 134167   BITB   -(R1),40640
+036630: 073600   ASHC   R0,SP
+036632: 000167   JMP    40646
+036636: 135400   BITB   @-(R4),R0
+036640: 134273   BITB   -(R2),@40000(R3)
+036644: 134000   BITB   -(R0),R0
+036646: 006010   ROR    (R0)
+036650: 000200   RTS    R0
+036652: 000000   HALT
+036654: 144300   BICB   -(R3),R0
+036656: 135410   BITB   @-(R4),(R0)
+036660: 134273   BITB   -(R2),@135500(R3)
+036664: 134000   BITB   -(R0),R0
+036666: 002010   BGE    36710
+036670: 100200   BPL    36272
+036672: 000107   JMP    PC
+036674: 002000   BGE    36676
+036676: 135410   BITB   @-(R4),(R0)
+036700: 134273   BITB   -(R2),@200(R3)
+036704: 134000   BITB   -(R0),R0
+036706: 006010   ROR    (R0)
+036710: 100200   BPL    36312
+036712: 000300   SWAB   R0
+036714: 144310   BICB   -(R3),(R0)
+036716: 135400   BITB   @-(R4),R0
+036720: 134273   BITB   -(R2),@134275(R3)
+036724: 073567   ASHC   36740,R5
+036730: 100200   BPL    36332
+036732: 000100   JMP    R0
+036734: 002010   BGE    36756
+036736: 135400   BITB   @-(R4),R0
+036740: 134273   BITB   -(R2),@134273(R3)
+036744: 135573   BITB   @-(R5),@74013(R3)
+036750: 130314   BITB   R3,(R4)
+036752: 073707   ASHC   PC,PC
+036754: 144314   BICB   -(R3),(R4)
+036756: 135400   BITB   @-(R4),R0
+036760: 134273   BITB   -(R2),@134000(R3)
+036764: 000000   HALT
+036766: 075600   .WORD  75600
+036770: 000167   JMP    37074
+036774: 000000   HALT
+036776: 135400   BITB   @-(R4),R0
+037000: 134273   BITB   -(R2),@135670(R3)
+037004: 000220   .WORD  220
+037006: 135600   BITB   @-(SP),R0
+037010: 133673   BITB   @(SP)+,@73707(R3)
+037014: 140310   BICB   R3,(R0)
+037016: 135410   BITB   @-(R4),(R0)
+037020: 134273   BITB   -(R2),@270(R3)
+037024: 073560   ASHC   113247(R0),R5
+037030: 000004   IOT
+037032: 000100   JMP    R0
+037034: 000220   .WORD  220
+037036: 135410   BITB   @-(R4),(R0)
+037040: 134273   BITB   -(R2),@70270(R3)
+037044: 073667   ASHC   173337,SP
+037050: 133673   BITB   @(SP)+,@307(R3)
+037054: 143600   BICB   @(SP)+,R0
+037056: 135414   BITB   @-(R4),(R4)
+037060: 134273   BITB   -(R2),@130010(R3)
+037064: 000004   IOT
+037066: 004000   JSR    R0,R0
+037070: 000000   HALT
+037072: 000000   HALT
+037074: 000200   RTS    R0
+037076: 135400   BITB   @-(R4),R0
+037100: 004273   JSR    R2,@133567(R3)
+037104: 073567   ASHC   132677,R5
+037110: 073567   ASHC   132703,R5
+037114: 073567   ASHC   174707,R5
+037120: 135673   BITB   @-(SP),@135673(R3)
+037124: 156735   BISB   16065,@(R5)+
+037130: 156735   BISB   16071,@(R5)+
+037134: 156735   BISB   175075,@(R5)+
+037140: 135673   BITB   @-(SP),@135673(R3)
+037144: 135673   BITB   @-(SP),@135673(R3)
+037150: 135661   BITB   @-(SP),135673(R1)
+037154: 135673   BITB   @-(SP),@135673(R3)
+037160: 005673   SBC    @0(R3)
+037164: 000000   HALT
+037166: 000002   RTI
+037170: 000010   .WORD  10
+037172: 000003   BPT
+037174: 000000   HALT
+037176: 135400   BITB   @-(R4),R0
+037200: 005673   SBC    @0(R3)
+037204: 000000   HALT
+037206: 000000   HALT
+037210: 000010   .WORD  10
+037212: 000000   HALT
+037214: 000000   HALT
+037216: 135400   BITB   @-(R4),R0
+037220: 105673   SBCB   @146314(R3)
+037224: 000010   .WORD  10
+037226: 000000   HALT
+037230: 000010   .WORD  10
+037232: 000000   HALT
+037234: 146310   BICB   135614(R3),(R0)
+037240: 105673   SBCB   @42113(R3)
+037244: 000013   .WORD  13
+037246: 000000   HALT
+037250: 000010   .WORD  10
+037252: 000000   HALT
+037254: 042113   BIC    (R1)+,(R3)
+037256: 135613   BITB   @-(SP),(R3)
+037260: 105673   SBCB   @42113(R3)
+037264: 000013   .WORD  13
+037266: 000000   HALT
+037270: 000010   .WORD  10
+037272: 000000   HALT
+037274: 042113   BIC    (R1)+,(R3)
+037276: 135613   BITB   @-(SP),(R3)
+037300: 105673   SBCB   @42113(R3)
+037304: 000014   .WORD  14
+037306: 000000   HALT
+037310: 000010   .WORD  10
+037312: 000000   HALT
+037314: 042114   BIC    (R1)+,(R4)
+037316: 135613   BITB   @-(SP),(R3)
+037320: 105673   SBCB   @146314(R3)
+037324: 073574   ASHC   @167(R4),R5
+037330: 070010   MUL    (R0),R0
+037332: 073567   ASHC   5652,R5
+037336: 135614   BITB   @-(SP),(R4)
+037340: 105673   SBCB   @73573(R3)
+037344: 006013   ROR    (R3)
+037346: 000000   HALT
+037350: 000010   .WORD  10
+037352: 006000   ROR    R0
+037354: 073573   ASHC   @135613(R3),R5
+037360: 105673   SBCB   @42113(R3)
+037364: 105413   NEGB   (R3)
+037366: 000000   HALT
+037370: 000010   .WORD  10
+037372: 005600   SBC    R0
+037374: 042113   BIC    (R1)+,(R3)
+037376: 135613   BITB   @-(SP),(R3)
+037400: 105673   SBCB   @42113(R3)
+037404: 105413   NEGB   (R3)
+037406: 000000   HALT
+037410: 000010   .WORD  10
+037412: 005600   SBC    R0
+037414: 042113   BIC    (R1)+,(R3)
+037416: 135613   BITB   @-(SP),(R3)
+037420: 105673   SBCB   @42113(R3)
+037424: 105413   NEGB   (R3)
+037426: 000000   HALT
+037430: 000010   .WORD  10
+037432: 005600   SBC    R0
+037434: 042113   BIC    (R1)+,(R3)
+037436: 135613   BITB   @-(SP),(R3)
+037440: 105673   SBCB   @0(R3)
+037444: 105400   NEGB   R0
+037446: 000273   .WORD  273
+037450: 130010   BITB   R0,(R0)
+037452: 005613   SBC    (R3)
+037454: 000000   HALT
+037456: 135600   BITB   @-(SP),R0
+037460: 105673   SBCB   @135600(R3)
+037464: 135673   BITB   @-(SP),@75673(R3)
+037470: 135570   BITB   @-(R5),@135673(R0)
+037474: 105673   SBCB   @135600(R3)
+037500: 075673   .WORD  75673
+037502: 155607   BISB   @-(SP),PC
+037504: 156735   BISB   16445,@(R5)+
+037510: 156733   BISB   16451,@(R3)+
+037514: 105735   TSTB   @(R5)+
+037516: 135567   BITB   @-(R5),45415
+037522: 165600   SUB    @-(SP),R0
+037524: 167356   SUB    @167356(R3),@-(SP)
+037530: 167356   SUB    @167356(R3),@-(SP)
+037534: 105756   TSTB   @-(SP)
+037536: 135400   BITB   @-(R4),R0
+037540: 005673   SBC    @165600(R3)
+037544: 167356   SUB    @167356(R3),@-(SP)
+037550: 167356   SUB    @167356(R3),@-(SP)
+037554: 105756   TSTB   @-(SP)
+037556: 135400   BITB   @-(R4),R0
+037560: 005673   SBC    @165600(R3)
+037564: 167356   SUB    @167356(R3),@-(SP)
+037570: 167356   SUB    @167356(R3),@-(SP)
+037574: 105756   TSTB   @-(SP)
+037576: 135400   BITB   @-(R4),R0
+037600: 005673   SBC    @165600(R3)
+037604: 167356   SUB    @167356(R3),@-(SP)
+037610: 167356   SUB    @167356(R3),@-(SP)
+037614: 105756   TSTB   @-(SP)
+037616: 135400   BITB   @-(R4),R0
+037620: 005673   SBC    @135600(R3)
+037624: 135673   BITB   @-(SP),@135673(R3)
+037630: 135673   BITB   @-(SP),@135673(R3)
+037634: 105673   SBCB   @135400(R3)
+037640: 005673   SBC    @200(R3)
+037644: 000000   HALT
+037646: 000000   HALT
+037650: 000000   HALT
+037652: 000000   HALT
+037654: 100000   BPL    37656
+037656: 135400   BITB   @-(R4),R0
+037660: 155673   BISB   @-(SP),@135675(R3)
+037664: 135673   BITB   @-(SP),@135673(R3)
+037670: 135673   BITB   @-(SP),@135673(R3)
+037674: 135673   BITB   @-(SP),@135735(R3)
+037700: 140714   BICB   PC,(R4)
+037702: 157304   BISB   @145711(R3),R4
+037706: 035301   BIT    @-(R3),R1
+037710: 040412   BIC    R4,(R2)
+037712: 026040   CMP    26440(R0),-(R0)
+037716: 164440   SUB    -(R4),-(R0)
+037720: 166040   SUB    41040(R0),-(R0)
+037724: 162040   SUB    (R0)+,-(R0)
+037726: 170040   .WORD  170040
+037730: 035440   BIT    @-(R4),-(R0)
+037732: 051040   BIS    (R0),-(R0)
+037734: 043440   BIC    @(R4)+,-(R0)
+037736: 175440   .WORD  175440
+037740: 052737   BIS    #100,@#177560
+037746: 000137   JMP    @#41000
+037752: 175040   .WORD  175040
+037754: 171440   .WORD  171440
+037756: 165440   SUB    @-(R4),-(R0)
+037760: 012737   MOV    #147552,@#30
+037766: 012700   MOV    #5,R0
+037772: 104052   EMT    52
+037774: 000137   JMP    @#1000
+040000: 012701   MOV    #40044,R1
+040004: 112100   MOVB   (R1)+,R0
+040006: 001406   BEQ    40024
+040010: 105737   TSTB   @#177564
+040014: 100375   BPL    40010
+040016: 110037   MOVB   R0,@#177566
+040022: 000770   BR     40004
+040024: 012700   MOV    #177777,R0
+040030: 077001   SOB    R0,40030
+040032: 004767   JSR    PC,400
+040036: 000240   NOP
+040040: 000432   BR     40126
+040042: 001000   BNE    40044
+040044: 022433   CMP    (R4)+,@(R3)+
+040046: 030441   BIT    R4,-(R1)
+040050: 055433   BIS    @-(R4),@(R3)+
+040052: 035460   BIT    @-(R4),71060(R0)
+040056: 000000   HALT
 
 ; =============================================================================
-; SECTION 3: УКНЦ-SPECIFIC I/O DRIVER (040060–042000)
+; SECTION 3: UKNC I/O DRIVER (040060-042000)
 ; This section does NOT exist in BK-0010 (that range is video RAM there).
-; The УКНЦ version embeds custom display, keyboard, and vsync routines
-; in the game image rather than using ROM traps (EMT).
-; =============================================================================
-
-; =============================================================================
-; Routine: disp_scanline_write  (040060)
-; Writes pixel data to УКНЦ display hardware registers.
-; Called from tile blit routines as second pass per tile column.
-; Updates @#176640 (pixel port) and @#176642 (colour register).
-; =============================================================================
-DISP_SCANLINE_WRITE: ; 040060
-        MOV     R1,@#176640     ; write pixel word to display pixel port
-        ; ... additional writes to 176640 with different offset
-        ; (see raw disassembly at 040060..040140 for full code)
-        ; pattern: writes R1 at different row offsets via @#176640
-
-; =============================================================================
-; Routine: disp_secondary_write  (040060+)
-; Second tile column blit pass: line/row register + pixel data
-; =============================================================================
-        ; 040100..040220: secondary blit writes (colour port + row updates)
-
-; =============================================================================
-; Routine: disp_xy_to_port  (040220)
-; Converts tile X/Y coordinates to УКНЦ video port writes.
-; Uses DIV #100 to split coordinates.
-; =============================================================================
-DISP_XY_TO_PORT: ; 040220
-        MOV     (R3)+,R4        ; get coordinate word
-        ; ... DIV #100, R0 converts row address to scanline number
-        ; writes results to 176640/176642/176676
-
-; =============================================================================
-; Routine: kbd_read  (040660)
-; УКНЦ keyboard read routine.
-; Reads key code from keyboard controller into R0.
-; Returns: R0 = key code (or 0 if no key)
-; =============================================================================
-KBD_READ:       ; 040660
-        MOV     R1,-(SP)
-        MOV     R2,-(SP)
-        MOV     #040712,R1      ; R1 → keyboard data register base
-        MOV     #1,R2           ; mode = 1 (read)
-        ; ... calls into keyboard controller I/O
-        MOVB    @#040546,R0     ; read key status register
-        ; (clears key-ready flag after read)
-        MOV     (SP)+,R2
-        MOV     (SP)+,R1
-        RTS     PC
-
-        ; 040700: MOVB @#040546, R0 — direct keyboard status read
-        ; 040546 low byte: bit 7 = key ready, bits 6-0 = key scan code
-
-; =============================================================================
-; Routine: kbd_poll  (041020)
-; Keyboard poll wrapper: checks if key is ready, reads it.
-; Returns: zero flag set = no key, cleared = key in R0.
-; Called from KBD_GAME_POLL at 004674.
-; =============================================================================
-KBD_POLL:       ; 041020
-        JSR     PC,@#040660     ; KBD_READ
-        BIT     #200,@#040546   ; bit 7 = key-ready flag still set?
-        ; (BIT sets Z=1 if bit clear = no key available)
-        RTS     PC
-
-; =============================================================================
-; Routine: disp_col_blit  (041040)
-; Writes one tile column to the УКНЦ display port.
-; Called from TILE_BLIT_FWD_UKNC (005122) and TILE_BLIT_REV (014334).
-; IN: R2 → source tile data (pixel word), R1 = screen column
-; Translates R1 (column offset) to УКНЦ port coordinates.
-; =============================================================================
-DISP_COL_BLIT:  ; 041040
-        MOV     R0,-(SP)
-        CLR     R0
-        DIV     #100,R0         ; divide column by 64 → row + column within row
-        MOV     R1,-(SP)
-        MOV     R1,R0
-        ; R0 = integer(R1 / 64) = tile row
-        ; R1 = R1 mod 64 = column within row
-        ; writes computed address to @#176640 (pixel data port)
-        ; writes colour to @#176642
-        ADD     (SP)+,R1        ; restore/add back column
-        MOV     (SP)+,R0
-        RTS     PC
-
-; =============================================================================
-; Routine: emt_text_display  (041100)
-; Handles EMT 020/024 text display calls for УКНЦ.
-; Wraps RT-11-style text output to УКНЦ display system.
-; =============================================================================
-EMT_TEXT:       ; 041100
-        EMT     020             ; RT-11 display string
-        ; ... additional text display handling
-
-; =============================================================================
-; Routine: display_init  (041140)
-; УКНЦ display initialization.
-; Sets up tile dimensions and display parameters.
-; =============================================================================
-DISP_INIT:      ; 041140
-        MOV     #024,R2         ; tile size / screen width parameter
-        ; ... initializes display registers
-
-; =============================================================================
-; Routine: display_mode_check  (041200)
-; Checks display mode (colour depth / screen mode).
-; =============================================================================
-DISP_MODE:      ; 041200
-        CMPB    R0,#4           ; mode check
-        CMPB    R0,#3
-        ; ... sets up 2-colour or 4-colour mode
-
-; =============================================================================
-; Routine: vsync_wait_loop  (041400)
-; УКНЦ software vsync: busy-loops for a fixed number of iterations.
-; Equivalent of BK-0010's EMT 016 r0=7 (wait for vertical blank).
-; Called from VSYNC_WAIT_UKNC (012326).
-; =============================================================================
-VSYNC_WAIT_LOOP: ; 041400
-        MOV     R3,-(SP)
-        MOV     R1,-(SP)
-        MOV     #050,R1         ; outer loop count = 40 dec
-        MOV     #100,R3         ; inner loop count = 64 dec
-        MOV     R2,R2           ; (nop)
-        JSR     PC,@#041740     ; DISP_WRITE_COL — write column to display
-        MOV     (SP)+,R2
-        MOV     (SP)+,R1
-        MOV     (SP)+,R3
-        RTS     PC
-
-; =============================================================================
-; Routine: disp_pixel_port_write  (041460)
-; Writes pixel data word to УКНЦ display hardware via port @#176642.
-; Also updates line register @#176676.
-; Called repeatedly to transfer scanlines to display controller.
-; =============================================================================
-DISP_PIXEL_PORT: ; 041460
-        MOVB    (R2),@#176642   ; write byte to colour/mode port
-        ; ... per-scanline write loop
-
-; =============================================================================
-; Routine: disp_line_advance  (041500)
-; Advances display line counter and signals end-of-line to video controller.
-; Uses @#177716 bit 7 toggle for display sync pulse.
-; =============================================================================
-DISP_LINE_ADV:  ; 041500
-        MOV     #2,R2
-        SOB     R2,041510       ; 2-cycle loop per scanline
-        ; ...
-        MOVB    R1,@#176676     ; write line number to row register
-        BIS     #200,@#177716   ; toggle bit 7 (display clock / sync)
-        SOB     R1,041640       ; count down display lines
-        ; ...
-
-; =============================================================================
-; Routine: disp_write_col  (041740)
-; Writes a full tile column (8 scanlines) to the УКНЦ display port.
-; Core of the planar-video blit path.
-; Stores R3 and R1 to display control words (041646, 041650),
-; then loops back through display pipeline.
-; =============================================================================
-DISP_WRITE_COL: ; 041740
-        MOV     R3,041646       ; store outer count
-        MOV     R1,041650       ; store inner count
-        BR      041500          ; jump into display line advance loop
-
-; =============================================================================
-; End of УКНЦ annotation.
-; =============================================================================
+; UKNC game embeds custom display, keyboard, and vsync routines here.
 ;
-; SUMMARY OF DIFFERENCES FROM BK-0010:
+; UKNC VIDEO HARDWARE:
+;   @#176640 -- pixel data port (word write = one scanline word)
+;   @#176642 -- colour/palette register
+;   @#176676 -- line/row register
+;   Tile writes go via DISP_COL_BLIT (041040) -> DISP_WRITE_COL (041740)
 ;
-; | Area                    | BK-0010                       | УКНЦ 1987              |
-; |-------------------------|-------------------------------|------------------------|
-; | Load format             | BK .BIN packed (LZ)           | RT-11 .SAV (flat)      |
-; | Framebuffer             | Linear 040000-077777, direct  | Port-based @#176640+   |
-; | Tile blit               | MOV (R2)+, 046000(R1)         | JSR DISP_COL_BLIT      |
-; | Keyboard (gameplay)     | BIT @#177716 + @#177714       | JSR KBD_POLL → @#40546 |
-; | Keyboard (menu)         | MOV @#177662, R0              | JSR KBD_READ           |
-; | Vsync                   | EMT 016 r0=7                  | JSR VSYNC_WAIT_LOOP    |
-; | Lives initial value     | 5                             | 0o333 (219 dec)        |
-; | Speed values            | 400/1000/2000/4000            | Different (УКНЦ clock) |
-; | Speaker                 | @#177716 bit 7 toggle         | @#177716 bit 7 toggle  |
-; | Key codes               | BK-0010 scan codes            | УКНЦ keyboard codes    |
-; | Text display            | BK EMT 020/024                | RT-11 EMT 020          |
-; | I/O driver address      | ROM traps (EMT)               | 040060-042000 (in-game)|
-; | Code similarity         | —                             | 83% identical          |
-;
-; IDENTICAL BETWEEN VERSIONS (83%):
-;   RESTART, GAME_OVER_SOFT, PLAYER_DEATH, LEVEL_COMPLETE
-;   ACT_DISPATCH, GAME_TICK, all enemy state machines (ENEMY1/2/3_TICK)
-;   ANIM_THROTTLE_PLAYER, SPRITE_ANIM_A/B/C/D
-;   COLLISION_MAP_BUILD, LEVEL_RESET, PLAYER_STATE_CHECK
-;   SPRITE_DRAW, NUM_RENDER, LEVEL_RENDER, LEVEL_RENDER_FULL
-;   KEY_DIFFICULTY, DELAY_SPIN, WATER_COLLISION, ENTITY1_RESTORE
-;   ENEMY_RESPAWN, PLAYER_MOVE_STEP
-;   All level map data (022100-037677): identical 10 levels
-;   All entity/game logic variables and constants
+; UKNC KEYBOARD HARDWARE:
+;   @#040546 -- keyboard status (bit 7 = key ready, bits 6-0 = scan code)
+;   KBD_READ (040660) -> reads @#040712, returns key in R0
+;   KBD_POLL (041020) -> wrapper: read + check bit 7
+; =============================================================================
+
+DISP_SCANLINE_WRITE:
+        ; [УКНЦ DIFF]
+040060: 010137   MOV    R1,@#176640  ; MOV R1, @#176640 — write pixel word to video pixel port
+040064: 062737   ADD    #106210,@#176640
+040072: 111237   MOVB   (R2),@#176642
+040076: 112237   MOVB   (R2)+,@#176643
+040102: 005237   INC    @#176640
+040106: 111237   MOVB   (R2),@#176642
+040112: 112237   MOVB   (R2)+,@#176643
+040116: 062701   ADD    #120,R1
+040122: 077522   SOB    R5,40060
+040124: 000207   RTS    PC
+040126: 042737   BIC    #100,@#177560
+040134: 000137   JMP    @#41260
+040140: 010137   MOV    R1,@#176640  ; MOV R1, @#176640 — second scanline write (offset row)
+040144: 062737   ADD    #106210,@#176640
+040152: 111337   MOVB   (R3),@#176642
+040156: 112337   MOVB   (R3)+,@#176643
+040162: 005237   INC    @#176640
+040166: 111337   MOVB   (R3),@#176642
+040172: 112337   MOVB   (R3)+,@#176643
+040176: 062701   ADD    #120,R1
+040202: 077522   SOB    R5,40140
+040204: 000207   RTS    PC
+040206: 000000   HALT
+040210: 000000   HALT
+040212: 000000   HALT
+040214: 000000   HALT
+040216: 000000   HALT
+DISP_XY_CONVERT:
+        ; [УКНЦ DIFF]
+040220: 012304   MOV    (R3)+,R4
+040222: 010137   MOV    R1,@#176640
+040226: 062737   ADD    #106210,@#176640
+040234: 010446   MOV    R4,-(SP)
+040236: 042704   BIC    #177400,R4
+040242: 010446   MOV    R4,-(SP)
+040244: 000304   SWAB   R4
+040246: 052604   BIS    (SP)+,R4
+040250: 074437   XOR    R4,@#176642
+040254: 005237   INC    @#176640
+040260: 012604   MOV    (SP)+,R4
+040262: 042704   BIC    #377,R4
+040266: 010446   MOV    R4,-(SP)
+040270: 000304   SWAB   R4
+040272: 052604   BIS    (SP)+,R4
+040274: 074437   XOR    R4,@#176642
+040300: 062701   ADD    #120,R1
+040304: 077533   SOB    R5,40220
+040306: 000207   RTS    PC
+040310: 000000   HALT
+040312: 000000   HALT
+040314: 000000   HALT
+040316: 000000   HALT
+DISP_COL_SETUP:
+        ; [УКНЦ DIFF]
+040320: 010046   MOV    R0,-(SP)
+040322: 010146   MOV    R1,-(SP)
+040324: 010246   MOV    R2,-(SP)
+040326: 010346   MOV    R3,-(SP)
+040330: 010446   MOV    R4,-(SP)
+040332: 010546   MOV    R5,-(SP)
+040334: 016605   MOV    14(SP),R5
+040340: 014546   MOV    -(R5),-(SP)
+040342: 112605   MOVB   (SP)+,R5
+040344: 016505   MOV    40370(R5),R5
+040350: 004715   JSR    PC,(R5)
+040352: 012605   MOV    (SP)+,R5
+040354: 012604   MOV    (SP)+,R4
+040356: 012603   MOV    (SP)+,R3
+040360: 012602   MOV    (SP)+,R2
+040362: 012601   MOV    (SP)+,R1
+040364: 012600   MOV    (SP)+,R0
+040366: 000002   RTI
+040370: 000000   HALT
+040372: 000000   HALT
+040374: 000000   HALT
+040376: 040762   BIC    PC,0(R2)
+040402: 000000   HALT
+040404: 000000   HALT
+040406: 040420   BIC    R4,(R0)+
+040410: 040434   BIC    R4,@(R4)+
+040412: 000000   HALT
+040414: 040466   BIC    R4,0(SP)
+DISP_SERIAL_WAIT:
+        ; [УКНЦ DIFF]
+040420: 105737   TSTB   @#177564
+040424: 100375   BPL    40420
+040426: 110037   MOVB   R0,@#177566
+040432: 000207   RTS    PC
+040434: 110203   MOVB   R2,R3
+040436: 001002   BNE    40444
+040440: 012703   MOV    #20000,R3
+040444: 000302   SWAB   R2
+040446: 112100   MOVB   (R1)+,R0
+040450: 120002   CMPB   R0,R2
+040452: 001402   BEQ    40460
+040454: 104016   EMT    16
+040456: 077305   SOB    R3,40446
+040460: 010166   MOV    R1,12(SP)
+040464: 000207   RTS    PC
+040466: 062701   ADD    #40,R1
+040472: 110167   MOVB   R1,40523
+040476: 062702   ADD    #40,R2
+040502: 110267   MOVB   R2,40522
+040506: 012701   MOV    #40520,R1
+040512: 005002   CLR    R2
+040514: 104020   EMT    20
+040516: 000207   RTS    PC
+DISP_BLIT_INNER:
+        ; [УКНЦ DIFF]
+040520: 054433   BIS    -(R4),@(R3)+
+040522: 020040   CMP    R0,-(R0)
+040524: 000000   HALT
+040526: 105737   TSTB   @#177560
+040532: 100375   BPL    40526
+040534: 113700   MOVB   @#177562,R0
+040540: 010066   MOV    R0,14(SP)
+040544: 000207   RTS    PC
+040546: 000334   SWAB   @(R4)+
+040550: 000000   HALT
+040552: 027000   CMP    @0(R0),R0
+040556: 000000   HALT
+DISP_COL_ADDR:
+        ; [УКНЦ DIFF]
+040560: 012701   MOV    #40610,R1
+040564: 012702   MOV    #3,R2
+040570: 004737   JSR    PC,@#41510
+040574: 012746   MOV    #177777,-(SP)
+DISP_COL_LOOP:
+        ; [УКНЦ DIFF]
+040600: 005316   DEC    (SP)
+040602: 001376   BNE    40600
+040604: 005726   TST    (SP)+
+040606: 000207   RTS    PC
+040610: 010000   MOV    R0,R0
+040612: 000032   .WORD  32
+040614: 026776   CMP    101466,@6(SP)
+040622: 004000   JSR    R0,R0
+040624: 000032   .WORD  32
+040626: 000300   SWAB   R0
+040630: 040550   BIC    R5,@-(R0)
+040632: 000001   WAIT
+040634: 010000   MOV    R0,R0
+040636: 000032   .WORD  32
+DISP_SWAP:
+        ; [УКНЦ DIFF]
+040640: 000300   SWAB   R0
+040642: 040552   BIC    R5,@-(R2)
+040644: 000001   WAIT
+040646: 000000   HALT
+040650: 113767   MOVB   @#177702,40646
+040656: 000002   RTI
+
+; --- KBD_READ (040660) — УКНЦ keyboard read routine ---
+
+KBD_READ:
+        ; [УКНЦ DIFF]
+040660: 010146   MOV    R1,-(SP)  ; MOV R1, -(SP) — save regs
+040662: 010246   MOV    R2,-(SP)  ; MOV R2, -(SP)
+040664: 012701   MOV    #40712,R1  ; MOV #040712, R1 — R1 → keyboard controller registers
+040670: 012702   MOV    #1,R2  ; MOV #1, R2 — read mode
+040674: 004737   JSR    PC,@#41510
+
+; --- KBD_STATUS_READ (040700) --- 
+
+KBD_STATUS_READ:
+        ; [УКНЦ DIFF]
+040700: 113700   MOVB   @#40546,R0  ; MOVB @#040546, R0 — read keyboard status byte
+040704: 012602   MOV    (SP)+,R2
+040706: 012601   MOV    (SP)+,R1
+040710: 000533   BR     41200
+040712: 004000   JSR    R0,R0
+040714: 000032   .WORD  32
+040716: 026776   CMP    101470,@1(SP)
+040724: 005737   TST    @#40550
+040730: 001406   BEQ    40746
+040732: 012701   MOV    #40750,R1
+040736: 012702   MOV    #1,R2
+040742: 004737   JSR    PC,@#41510
+040746: 000207   RTS    PC
+040750: 010000   MOV    R0,R0
+040752: 000032   .WORD  32
+040754: 000300   SWAB   R0
+040756: 040550   BIC    R5,@-(R0)
+KBD_WAIT:
+        ; [УКНЦ DIFF]
+040760: 000001   WAIT
+040762: 004737   JSR    PC,@#40724
+040766: 042737   BIC    #100,@#177560
+040774: 000654   BR     40526
+040776: 000000   HALT
+DISP_INIT_ENTRY:
+        ; [УКНЦ DIFF]
+041000: 004737   JSR    PC,@#40560
+041004: 000137   JMP    @#2250
+041010: 000000   HALT
+041012: 000000   HALT
+041014: 000000   HALT
+041016: 000000   HALT
+
+; --- KBD_POLL (041020) — keyboard poll wrapper, called from KBD_GAME_POLL ---
+
+KBD_POLL:
+        ; [УКНЦ DIFF]
+041020: 004737   JSR    PC,@#40660  ; JSR PC, @#KBD_READ — call keyboard read
+041024: 032737   BIT    #200,@#40546  ; BIT #200, @#040546 — bit 7 = key-ready flag
+041032: 000207   RTS    PC  ; RTS PC
+041034: 000000   HALT
+041036: 000000   HALT
+
+; --- DISP_COL_BLIT (041040) — write tile column to УКНЦ video port ---
+
+DISP_COL_BLIT:
+        ; [УКНЦ DIFF]
+041040: 010046   MOV    R0,-(SP)  ; MOV R0, -(SP)
+041042: 005000   CLR    R0  ; CLR R0
+041044: 071027   DIV    #100,R0  ; DIV #100, R0 — split column: R0=row, R1=col within row
+041050: 010146   MOV    R1,-(SP)  ; MOV R1, -(SP)
+041052: 010001   MOV    R0,R1  ; MOV R1, R0
+041054: 070127   MUL    #120,R1
+
+; --- DCOL_ADVANCE (041060) ---
+
+DCOL_ADVANCE:
+        ; [УКНЦ DIFF]
+041060: 062601   ADD    (SP)+,R1
+041062: 012600   MOV    (SP)+,R0
+041064: 000207   RTS    PC
+041066: 000000   HALT
+041070: 000000   HALT
+041072: 000000   HALT
+041074: 000000   HALT
+041076: 000000   HALT
+
+; --- EMT_TEXT (041100) — EMT 020 text display handler ---
+
+EMT_TEXT:
+        ; [УКНЦ DIFF]
+041100: 104020   EMT    20
+041102: 012701   MOV    #40,R1
+041106: 005002   CLR    R2
+041110: 104024   EMT    24
+041112: 012701   MOV    #2171,R1
+041116: 005002   CLR    R2
+EMT_TEXT2:
+        ; [УКНЦ DIFF]
+041120: 104020   EMT    20
+041122: 000207   RTS    PC
+041124: 000000   HALT
+041126: 000000   HALT
+041130: 000000   HALT
+041132: 000000   HALT
+041134: 000000   HALT
+041136: 000000   HALT
+
+; --- DISP_SETUP (041140) — display initialization ---
+
+DISP_SETUP:
+        ; [УКНЦ DIFF]
+041140: 012702   MOV    #24,R2
+041144: 012700   MOV    #40,R0
+041150: 104016   EMT    16
+041152: 077202   SOB    R2,41150
+041154: 112100   MOVB   (R1)+,R0
+041156: 001001   BNE    41162
+DISP_SETUP_RTS:
+        ; [УКНЦ DIFF]
+041160: 000207   RTS    PC
+041162: 104016   EMT    16
+041164: 120027   CMPB   R0,#15
+041170: 001371   BNE    41154
+041172: 000762   BR     41140
+041174: 000000   HALT
+041176: 000000   HALT
+
+; --- DISP_MODE_CHECK (041200) — check display colour mode ---
+
+DISP_MODE_CHECK:
+        ; [УКНЦ DIFF]
+041200: 120027   CMPB   R0,#4
+041204: 001401   BEQ    41210
+041206: 000207   RTS    PC
+041210: 012706   MOV    #1000,SP
+041214: 000137   JMP    @#40000
+041220: 120027   CMPB   R0,#3
+041224: 001030   BNE    41306
+041226: 012700   MOV    #14,R0
+041232: 104016   EMT    16
+041234: 012737   MOV    #102,@#100
+041242: 012737   MOV    #2,@#102
+041250: 013737   MOV    @#41176,@#30
+041256: 104350   EMT    350
+DISP_STATE_TST:
+        ; [УКНЦ DIFF]
+041260: 005737   TST    @#41176
+041264: 001003   BNE    41274
+041266: 013737   MOV    @#30,@#41176
+041274: 012737   MOV    #40320,@#30
+041302: 000137   JMP    @#1000
+041306: 120027   CMPB   R0,#15
+041312: 000207   RTS    PC
+041314: 010546   MOV    R5,-(SP)
+041316: 004737   JSR    PC,@#41040
+041322: 062701   ADD    #106710,R1
+041326: 010137   MOV    R1,@#176640
+041332: 010546   MOV    R5,-(SP)
+041334: 042705   BIC    #177400,R5
+
+; --- DISP_COL_RENDER (041340) --- 
+
+DISP_COL_RENDER:
+        ; [УКНЦ DIFF]
+041340: 010546   MOV    R5,-(SP)
+041342: 000305   SWAB   R5
+041344: 052605   BIS    (SP)+,R5
+041346: 074537   XOR    R5,@#176642
+041352: 005237   INC    @#176640
+041356: 012605   MOV    (SP)+,R5
+DISP_STRIP_COLOR:
+        ; [УКНЦ DIFF]
+041360: 042705   BIC    #377,R5
+041364: 010546   MOV    R5,-(SP)
+041366: 000305   SWAB   R5
+041370: 052605   BIS    (SP)+,R5
+041372: 074537   XOR    R5,@#176642
+041376: 000415   BR     41432
+
+; --- VSYNC_WAIT_LOOP (041400) ---
+; Software vsync: busy-loops for ~40x64 iterations, transferring frame data.
+; Equivalent of BK-0010 EMT 016 r0=7 (wait-for-vertical-blank).
+; Called from VSYNC_WAIT (012326).
+
+VSYNC_WAIT_LOOP:
+        ; [УКНЦ DIFF]
+041400: 010346   MOV    R3,-(SP)  ; MOV R3, -(SP)
+041402: 010146   MOV    R1,-(SP)  ; MOV R1, -(SP)
+041404: 012701   MOV    #50,R1  ; MOV #050, R1 — outer vsync loop count (40 dec)
+041410: 012703   MOV    #100,R3  ; MOV #100, R3 — inner loop count (64 dec)
+041414: 010246   MOV    R2,-(SP)
+041416: 004737   JSR    PC,@#41740  ; JSR PC, @#DISP_WRITE_COL — transfer frame data
+041422: 012602   MOV    (SP)+,R2  ; MOV (SP)+, R2
+041424: 012601   MOV    (SP)+,R1  ; MOV (SP)+, R1
+041426: 012603   MOV    (SP)+,R3  ; MOV (SP)+, R3
+041430: 000207   RTS    PC  ; RTS PC
+041432: 012605   MOV    (SP)+,R5
+041434: 000207   RTS    PC
+041436: 004737   JSR    PC,@#41040
+041442: 062701   ADD    #106710,R1
+041446: 010137   MOV    R1,@#176640
+041452: 010246   MOV    R2,-(SP)
+041454: 062702   ADD    #17640,R2
+
+; --- DISP_PIXEL_PORT (041460) — write to @#176642 colour port ---
+
+DISP_PIXEL_PORT:
+        ; [УКНЦ DIFF]
+041460: 111237   MOVB   (R2),@#176642  ; MOVB (R2), @#176642 — write pixel byte to colour port
+041464: 112237   MOVB   (R2)+,@#176643
+041470: 005237   INC    @#176640
+041474: 000526   BR     41752
+041476: 000000   HALT
+
+; --- DISP_LINE_ADV (041500) — advance display line counter ---
+
+DISP_LINE_ADV:
+        ; [УКНЦ DIFF]
+041500: 012702   MOV    #2,R2  ; MOV #2, R2
+041504: 012701   MOV    #41664,R1  ; SOB R2, 041510 — 2-cycle sync
+041510: 004767   JSR    PC,41524
+041514: 062701   ADD    #12,R1
+DLINE_INNER:
+        ; [УКНЦ DIFF]
+041520: 077205   SOB    R2,41510
+041522: 000207   RTS    PC
+041524: 010046   MOV    R0,-(SP)
+041526: 010146   MOV    R1,-(SP)
+041530: 004767   JSR    PC,41572
+041534: 000301   SWAB   R1
+041536: 004767   JSR    PC,41572
+041542: 012701   MOV    #377,R1
+041546: 004767   JSR    PC,41572
+041552: 004767   JSR    PC,41572
+041556: 105737   TSTB   @#176674
+041562: 100375   BPL    41556
+041564: 012601   MOV    (SP)+,R1
+041566: 012600   MOV    (SP)+,R0
+041570: 000207   RTS    PC
+041572: 105737   TSTB   @#176674
+041576: 100375   BPL    41572
+
+; --- DLINE_ROW_WRITE (041600) — write row to @#176676 ---
+
+DLINE_ROW_WRITE:
+        ; [УКНЦ DIFF]
+041600: 110137   MOVB   R1,@#176676  ; MOVB R1, @#176676 — write row number to line register
+041604: 000207   RTS    PC
+041606: 016705   MOV    41646,R5
+041612: 016700   MOV    41650,R0
+041616: 010001   MOV    R0,R1
+
+; --- DLINE_SYNC_BIT (041620) — toggle @#177716 bit 7 ---
+
+DLINE_SYNC_BIT:
+        ; [УКНЦ DIFF]
+041620: 052737   BIS    #200,@#177716  ; BIS #200, @#177716 — toggle speaker/sync bit
+041626: 077101   SOB    R1,41626
+041630: 010001   MOV    R0,R1
+041632: 042737   BIC    #200,@#177716
+DLINE_COUNT:
+        ; [УКНЦ DIFF]
+041640: 077101   SOB    R1,41640  ; SOB R1, 041640 — count display lines
+041642: 077513   SOB    R5,41616
+041644: 000207   RTS    PC
+041646: 000000   HALT
+041650: 000000   HALT
+041652: 000400   BR     41654
+041654: 000032   .WORD  32
+041656: 030000   BIT    R0,R0
+DLINE_DONE:
+        ; [УКНЦ DIFF]
+041660: 000400   BR     41662
+041662: 000000   HALT
+041664: 010000   MOV    R0,R0
+041666: 000032   .WORD  32
+041670: 030000   BIT    R0,R0
+041672: 041606   BIC    (SP),SP
+041674: 000400   BR     41676
+041676: 014000   MOV    -(R0),R0
+041700: 000032   .WORD  32
+041702: 030000   BIT    R0,R0
+041704: 000000   HALT
+041706: 000000   HALT
+041710: 001000   BNE    41712
+041712: 000032   .WORD  32
+041714: 030000   BIT    R0,R0
+041716: 000400   BR     41720
+041720: 000000   HALT
+041722: 177777   .WORD  177777
+041724: 000000   HALT
+041726: 000000   HALT
+041730: 000000   HALT
+041732: 000000   HALT
+041734: 000000   HALT
+041736: 000000   HALT
+
+; --- DISP_WRITE_COL (041740) — core column write, entry for vsync loop ---
+
+DISP_WRITE_COL:
+        ; [УКНЦ DIFF]
+041740: 010367   MOV    R3,41646  ; MOV R3, 041646 — store outer count
+041744: 010167   MOV    R1,41650  ; MOV R1, 041650 — store inner count
+041750: 000653   BR     41500  ; BR DISP_LINE_ADV — enter display pipeline
+041752: 111237   MOVB   (R2),@#176642
+041756: 112237   MOVB   (R2)+,@#176643
+041762: 012602   MOV    (SP)+,R2
+041764: 000207   RTS    PC
+041766: 000000   HALT
+041770: 000000   HALT
+041772: 000000   HALT
+041774: 000000   HALT
+041776: 000000   HALT
+
+; =============================================================================
+; END OF DISASSEMBLY
+; Generated by tools/gen_uknc_annotated.py
+; =============================================================================
