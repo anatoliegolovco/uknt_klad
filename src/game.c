@@ -224,10 +224,10 @@ static void update_player(float dt, Input in) {
 
 // ---- enemy update ----
 static void enemy_gravity(Enemy *e) {
-    // Enemies obey gravity: fall until floor or ladder
-    while (e->ty + 1 < LEVEL_ROWS
-           && !solid(e->tx, e->ty + 1)
-           && tile_at(e->tx, e->ty + 1) != T_LADDER) {
+    // Fall until floor, ladder, or water edge (enemies don't enter water)
+    while (e->ty + 1 < LEVEL_ROWS) {
+        Tile below = tile_at(e->tx, e->ty + 1);
+        if (below == T_WALL || below == T_LADDER || below == T_WATER) break;
         e->ty++;
     }
 }
@@ -237,8 +237,9 @@ static void enemy_step(Enemy *e) {
     int pty = (int)((py + TILE * 0.5f) / TILE);
     int dx = (ptx > e->tx) ? 1 : (ptx < e->tx) ? -1 : 0;
     int dy = (pty > e->ty) ? 1 : (pty < e->ty) ? -1 : 0;
-    // Prefer horizontal; use vertical (ladder) if blocked
-    if (dx && !solid(e->tx + dx, e->ty)) {
+    // Prefer horizontal; use vertical (ladder) if blocked; never enter water
+    Tile htile = tile_at(e->tx + dx, e->ty);
+    if (dx && !solid(e->tx + dx, e->ty) && htile != T_WATER) {
         e->tx += dx;
     } else if (dy && tile_at(e->tx, e->ty) == T_LADDER && !solid(e->tx, e->ty + dy)) {
         e->ty += dy;
