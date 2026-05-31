@@ -4,8 +4,8 @@
 // GAME_INIT (004000): MOV #0333, @#LIVES; CLR @#SCORE
 void score_init(Score *s) {
     s->score = 0;
-    s->lives = 9;   // 0o333 în original, afișat "9"
-    s->level = 0;
+    s->lives = 0333;   // 219 — VALOAREA REALĂ: emulatorul headless arată "Попытки 219"
+    s->level = 0;      //       (confirmat pixel-exact, vezi reference_emu/headless)
 }
 
 // SCORE_ADD (003764): JSR VSYNC_WAIT; ADD #012, @#017440

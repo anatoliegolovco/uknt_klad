@@ -12,8 +12,10 @@ enum {
     MAP_ROWS  = 22,
     TILE_W    = 16,   // lățime tile (px) — УКНЦ pixeli ne-pătrați (2:1)
     TILE_H    = 8,    // înălțime tile (px)
+    HUD_H     = 16,                       // bara de scor sus (Счет / Попытки) — ca originalul
+    PLAYFIELD_Y = HUD_H,                  // labirintul începe sub HUD
     VW        = MAP_COLS * TILE_W,        // 512
-    VH        = MAP_ROWS * TILE_H + 16,   // 176 + 16 HUD = 192
+    VH        = MAP_ROWS * TILE_H + HUD_H,// 176 + 16 = 192
 };
 
 // ── tile indices 0-15, din DAT_TILE_* symbols (017450–020030) ────────────────
@@ -54,6 +56,8 @@ static inline TileType tidx_to_type(TileIdx i) {
 
 // ── stări joc (reimplementare — originalul folosea flags disparate) ───────────
 typedef enum {
+    GS_TITLE,         // TITLE_SEQ (002072): ecran titlu КЛАД + credite
+    GS_SPEED_SELECT,  // DIFF_SELECT (003234): alege viteza 1-4
     GS_PLAYING,
     GS_DEAD,
     GS_LEVEL_WIN,

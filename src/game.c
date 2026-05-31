@@ -4,6 +4,9 @@
 #include "game.h"
 #include "level_data.h"
 #include <string.h>
+#include <stdlib.h>
+
+static void start_game(Game *g);   // fwd
 
 // ── input (KBD_GAME_POLL 004674) ─────────────────────────────────────────────
 // Originalul: polling non-blocking de taste УКНЦ, coduri mapate via KEY_CODE_TBL
@@ -45,13 +48,29 @@ static void load_level(Game *g) {
 }
 
 // ── GAME_INIT (004000) ────────────────────────────────────────────────────────
-// MOV #0333, @#LIVES; CLR @#SCORE; JMP @#HW_INIT → TITLE_SEQ
+// Fluxul original: HW_INIT → TITLE_SEQ (titlu) → DIFF_SELECT (viteză) → joc.
 void game_init(Game *g) {
     render_init(&g->renderer);
     score_init(&g->score);
-    g->state       = GS_PLAYING;
+    g->speed       = 2;          // viteză implicită (DIFF_SELECT, 1-4)
+    g->state       = GS_TITLE;   // pornim pe ecranul de titlu, ca originalul
     g->state_timer = 0.0f;
+    load_level(g);               // pregătim nivelul 1 (afișat după alegerea vitezei)
+
+    // hook de test (capturi side-by-side): KLAD_START=play|speed sare la ecranul cerut
+    const char *start = getenv("KLAD_START");
+    if (start) {
+        if      (!strcmp(start, "play"))  start_game(g);
+        else if (!strcmp(start, "speed")) g->state = GS_SPEED_SELECT;
+    }
+}
+
+// Start efectiv al jocului după DIFF_SELECT: GAME_INIT (lives 0o333, scor 0) + nivel 1.
+static void start_game(Game *g) {
+    score_init(&g->score);       // MOV #0333,@#LIVES ; CLR @#SCORE
+    g->score.level = 0;
     load_level(g);
+    g->state = GS_PLAYING;
 }
 
 // ── GAME_TICK (001602) ────────────────────────────────────────────────────────
@@ -127,6 +146,19 @@ void game_frame(Game *g, float dt) {
 
     // State machine joc
     switch (g->state) {
+        case GS_TITLE:
+            // TITLE_WAIT (002264): orice tastă → ecranul de alegere a vitezei
+            if (in.action) g->state = GS_SPEED_SELECT;
+            break;
+
+        case GS_SPEED_SELECT:
+            // KEY_DIFFICULTY (001142): tastele 1-4 aleg viteza, apoi pornește jocul
+            if      (IsKeyPressed(KEY_ONE)   || IsKeyPressed(KEY_KP_1)) { g->speed = 1; start_game(g); }
+            else if (IsKeyPressed(KEY_TWO)   || IsKeyPressed(KEY_KP_2)) { g->speed = 2; start_game(g); }
+            else if (IsKeyPressed(KEY_THREE) || IsKeyPressed(KEY_KP_3)) { g->speed = 3; start_game(g); }
+            else if (IsKeyPressed(KEY_FOUR)  || IsKeyPressed(KEY_KP_4)) { g->speed = 4; start_game(g); }
+            break;
+
         case GS_PLAYING:
             game_tick(g, in, dt);
             break;
@@ -146,11 +178,8 @@ void game_frame(Game *g, float dt) {
 
         case GS_GAME_OVER:
         case GS_ALL_WIN:
-            if (in.action) {
-                score_init(&g->score);
-                load_level(g);
-                g->state = GS_PLAYING;
-            }
+            // GAME_OVER_WAIT (003274): orice tastă → înapoi la ecranul de titlu
+            if (in.action) g->state = GS_TITLE;
             break;
     }
 
@@ -158,26 +187,30 @@ void game_frame(Game *g, float dt) {
     BeginTextureMode(g->renderer.target);
     ClearBackground(render_bg());
 
-    render_map(&g->renderer, &g->map);
-    for (int i = 0; i < MAX_ENEMIES; i++)
-        render_enemy(&g->renderer, &g->enemies[i]);
-    render_player(&g->renderer, &g->player, g->state, g->state_timer);
-    render_hud(&g->renderer, &g->score);
-    render_debug_player(&g->player);
+    if (g->state == GS_TITLE) {
+        render_title(&g->renderer);
+    } else if (g->state == GS_SPEED_SELECT) {
+        render_speed_select(&g->renderer, g->speed);
+    } else {
+        render_map(&g->renderer, &g->map);
+        for (int i = 0; i < MAX_ENEMIES; i++)
+            render_enemy(&g->renderer, &g->enemies[i]);
+        render_player(&g->renderer, &g->player, g->state, g->state_timer);
+        render_hud(&g->renderer, &g->score);
 
-    // Overlay mesaje
-    int mx = VW/2, my = MAP_ROWS*TILE_H/2;
-    Color cw = {236,236,236,255};
-    Color cy = {210,200,0,255};
-    if (g->state == GS_LEVEL_WIN)
-        DrawText(T(STR_LEVEL_CLEAR), mx-38, my-4, 8, cw);
-    if (g->state == GS_GAME_OVER) {
-        DrawText(T(STR_GAME_OVER), mx-36, my-8, 8, cw);
-        DrawText("SPACE / ENTER",  mx-38, my+4,  6, cw);
-    }
-    if (g->state == GS_ALL_WIN) {
-        DrawText("FELICITARI!", mx-30, my-8, 8, cy);
-        DrawText("SPACE / ENTER", mx-38, my+4, 6, cw);
+        // Overlay mesaje (centrat în zona de joc, sub HUD)
+        int mx = VW/2, my = PLAYFIELD_Y + MAP_ROWS*TILE_H/2;
+        Color cw = render_fg();
+        if (g->state == GS_LEVEL_WIN)
+            render_text(&g->renderer, "Уровень пройден", mx-58, my-6, 12, cw);
+        if (g->state == GS_GAME_OVER) {
+            render_text(&g->renderer, "Игра окончена", mx-52, my-10, 12, cw);
+            render_text(&g->renderer, "нажмите клавишу", mx-56, my+6, 10, cw);
+        }
+        if (g->state == GS_ALL_WIN) {
+            render_text(&g->renderer, "Поздравляем!", mx-48, my-10, 12, cw);
+            render_text(&g->renderer, "нажмите клавишу", mx-56, my+6, 10, cw);
+        }
     }
 
     EndTextureMode();

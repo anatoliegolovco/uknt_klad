@@ -17,6 +17,7 @@ enum { TILESET_SLOTS = 32 };
 typedef struct {
     Texture2D       tileset;
     RenderTexture2D target;   // 512×192 render target (upscalat la fereastră)
+    Font            font;     // glife chirilice (HUD/titlu în rusă — port fidel)
 } Renderer;
 
 // Paletă 2-culori cu comutare color (УКНЦ) / mono (monitor școlar).
@@ -36,9 +37,16 @@ void render_player(Renderer *r, const Player *p, GameState gs, float state_timer
 // Enemy sprite cu frame animație orizontal
 void render_enemy(Renderer *r, const Enemy *e);
 
-// HUD_RENDER (003652): scor + nivel + vieți în bara de jos
+// HUD_RENDER (003652): bara de sus — Счет (scor) + Попытки (vieți), text rusesc
 void render_hud(Renderer *r, const Score *s);
-void render_debug_player(const Player *p);
+
+// TITLE_SEQ (002072): ecran titlu — КЛАД mare (tile-uri) + credite (Николаев/Баранов)
+void render_title(Renderer *r);
+// DIFF_SELECT (003234): ecran alegere viteză 1-4
+void render_speed_select(Renderer *r, int speed);
+
+// text rusesc cu fontul chirilic (helper pentru HUD/titlu/meniuri)
+void render_text(Renderer *r, const char *utf8, int x, int y, int size, Color c);
 
 // Composite: upscale nearest-neighbour target → fereastră
 void render_present(Renderer *r);

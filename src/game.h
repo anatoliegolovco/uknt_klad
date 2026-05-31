@@ -18,6 +18,7 @@ typedef struct {
     Renderer renderer;
     GameState state;
     float    state_timer;
+    int      speed;        // VAR_SPEED (001312): viteză 1-4 aleasă în DIFF_SELECT
 } Game;
 
 // GAME_INIT (004000): init complet de la zero
