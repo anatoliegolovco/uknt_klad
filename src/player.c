@@ -49,16 +49,10 @@ void player_init(Player *p, int spawn_col, int spawn_row) {
 // PLAYER_MOVE_STEP (012740) + PLAYER_STATE_CHECK (012570)
 // Returnează PR_* pentru ca game_tick() să reacționeze.
 PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
-    // ── mișcare orizontală ──────────────────────────────────────────────────
-    // PLAYER_MOVE_STEP: verifică dacă tile-ul din direcția de mers e solid
-    float nx  = p->px + (float)(in.right - in.left) * PLAYER_SPEED * dt;
-    int   ckx = (int)((nx + (in.right ? TILE_W - 1 : 0)) / TILE_W);
-    int   midy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
-    if (!map_solid(m, ckx, midy)) p->px = nx;
+    p->on_ladder = on_ladder(p, m);
 
     // ── mișcare verticală: scară vs gravitație ───────────────────────────────
     // PLAYER_MOVE_STEP: dacă tile curent = LADDER → control vertical direct
-    p->on_ladder = on_ladder(p, m);
     if (p->on_ladder) {
         p->vy = 0.0f;
         int dir = in.down - in.up;            // +1 jos, -1 sus
@@ -81,6 +75,21 @@ PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
         }
         p->py = ny;
     }
+    // ── mișcare orizontală (DUPĂ verticală) ──────────────────────────────────
+    // КЛАД e pe celule: dacă vrei să mergi lateral de pe scară, aliniază la rînd
+    // ca să nu rămîi blocat între două rînduri (col-coliziunea folosea rîndul greșit).
+    if ((in.left || in.right) && p->on_ladder && !(in.up || in.down)) {
+        float snapped = (float)((int)((p->py + TILE_H * 0.5f) / TILE_H) * TILE_H);
+        // aliniază doar dacă rîndul țintă e liber (altfel rămîi pe scară)
+        int   cx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+        int   sr = (int)(snapped / TILE_H);
+        if (!map_solid(m, cx, sr)) p->py = snapped;
+    }
+    float nx  = p->px + (float)(in.right - in.left) * PLAYER_SPEED * dt;
+    int   ckx = (int)((nx + (in.right ? TILE_W - 1 : 0)) / TILE_W);
+    int   midy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
+    if (!map_solid(m, ckx, midy)) p->px = nx;
+
     // Clamp la limitele nivelului
     if (p->py < 0.0f)                           { p->py = 0.0f;  p->vy = 0.0f; }
     if (p->py > (MAP_ROWS - 1) * (float)TILE_H) p->py = (MAP_ROWS - 1) * (float)TILE_H;

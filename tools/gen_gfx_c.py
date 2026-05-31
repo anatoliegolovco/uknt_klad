@@ -31,13 +31,19 @@ def load_prog():
     return SAV.read_bytes()[512:]   # strip 512-byte RT-11 header; prog at 001000
 
 def decode_tile_16x8(d):
-    """16x8 1bpp: row r = bytes 2r (left 8px) + bytes 2r+1 (right 8px)."""
+    """16x8 1bpp, two 8x8 halves side by side:
+       left 8 cols  = bytes 0-7  (one byte per row),
+       right 8 cols = bytes 8-15 (one byte per row).
+    Verified vs emulator: ladder = 2 rails (both halves a band), gold = ONE chest
+    (left half blank, right half the chest) — NOT the 2r,2r+1 interleave which split gold.
+    """
     rows = []
     for r in range(8):
         row = []
-        for byte in (d[2*r], d[2*r + 1]):
-            for col in range(8):
-                row.append((byte >> (7 - col)) & 1)   # MSB = leftmost
+        for col in range(8):                  # left half
+            row.append((d[r] >> (7 - col)) & 1)
+        for col in range(8):                  # right half
+            row.append((d[r + 8] >> (7 - col)) & 1)
         rows.append(row)   # 16 wide
     return rows
 

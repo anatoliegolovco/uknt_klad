@@ -255,3 +255,19 @@ Evidence:
 - The 4-colour `UKNC_PAL` (black/green/yellow/white) is wrong; use bg/fg (+ mono toggle).
 - "красный/зелёный человечек" (red/green men) only differ in colour in УКНЦ RGB mode;
   in КЛАД's 2-colour mode they are white shapes distinguished by form/position.
+
+---
+
+## CORRECTION 2026-05-31 — tile = two 8×8 halves side by side (not 2r,2r+1 interleave)
+
+The first 16×8 fix used `row r = bytes 2r,2r+1`, which split the gold tile into TWO
+chests (FC|3F = `######....######` per row). The gold tile only has data in bytes 8-15
+(bytes 0-7 = 00), so the interleave put the chest's two halves on different rows.
+
+**Correct decode:** the 16 bytes are **two 8×8 columns side by side** —
+left 8 cols = bytes 0-7 (one byte/row), right 8 cols = bytes 8-15. Then:
+- Ladder (both halves a band `3C`) → two rails + central rung block = a ladder ✓
+- Gold (left half `00`, right half `FC 3F A8 2A…`) → blank left + **ONE chest** right ✓
+
+Both correct with the same decode. `gen_gfx_c.py::decode_tile_16x8` updated accordingly.
+(Confirmed by user: original shows one chest, not two.)
