@@ -271,3 +271,24 @@ left 8 cols = bytes 0-7 (one byte/row), right 8 cols = bytes 8-15. Then:
 
 Both correct with the same decode. `gen_gfx_c.py::decode_tile_16x8` updated accordingly.
 (Confirmed by user: original shows one chest, not two.)
+
+---
+
+## CONFIRMED FROM ASM 2026-05-31 — decode is 2r,2r+1 (16×8, 2 bytes/row)
+
+User: focus on ASM, the emulator image is DISTORTED (don't pixel-match it).
+
+`DISP_COL_BLIT` (041040) is only address arithmetic (`addr = row*0o120 + col`).
+The real pixel writer is `DISP_SCANLINE_WRITE` (040060): per scanline it writes
+**2 tile bytes** — byte at screen position P, then `INC` position, byte at P+1 —
+8 scanlines = 16 bytes. Each position = 8px. So **row r = byte[2r] (left 8px) ++
+byte[2r+1] (right 8px)**, 1bpp, 2-colour. This is exactly the `2r,2r+1` decode.
+
+**Therefore the current decode is byte-faithful and correct.** What it renders IS
+what the binary encodes:
+- Ladder: rungs at rows 1 & 5 (FF at bytes 2,3 and 10,11) = 2 rungs/tile.
+- Gold: blank top half (bytes 0-7 = 00), bottom half = `FC|3F` etc. = two blocks.
+
+The emulator's "thin rails + frequent rungs" and "single chest" are display DISTORTION
+(non-square stretch + scaling), not the true pixels. Do NOT extract from the emulator;
+trust the binary. Decode question is CLOSED.

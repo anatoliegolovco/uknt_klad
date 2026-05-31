@@ -9,12 +9,28 @@ static void center_tile(const Player *p, int *col, int *row) {
     *row = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 }
 
-// "Pe scară" = celula centrală a playerului e o scară. (Versiunea veche cu ry±1
-// era prea permisivă → permitea urcarea prin podea/tavan lângă scări.)
+// "Pe scară" = celula centrală e scară, SAU ești într-un zid (platformă) prin care
+// scara trece — adică ai scară și deasupra ȘI dedesubt în coloană (passthrough).
+// Așa nu cazi din modul scară când urci prin platforme, dar nu urci prin tavan în aer.
 static bool on_ladder(const Player *p, const Map *m) {
     int cx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
     int cy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
-    return map_ladder(m, cx, cy);
+    if (map_ladder(m, cx, cy)) return true;
+    if (map_at(m, cx, cy) == T_WALL) {
+        bool up = false, dn = false;
+        for (int r = cy - 1; r >= 0; r--) {
+            TileType t = map_at(m, cx, r);
+            if (t == T_LADDER) { up = true; break; }
+            if (t != T_WALL) break;
+        }
+        for (int r = cy + 1; r < MAP_ROWS; r++) {
+            TileType t = map_at(m, cx, r);
+            if (t == T_LADDER) { dn = true; break; }
+            if (t != T_WALL) break;
+        }
+        return up && dn;   // prins între scară sus și jos → încă pe scară
+    }
+    return false;
 }
 
 // CMAP_FLAGS (013570): scările trec PRIN platforme — dar doar dacă scara continuă
