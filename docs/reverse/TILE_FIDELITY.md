@@ -1,5 +1,27 @@
 # TILE_FIDELITY — Ladders & Collectibles shape audit
 
+## ✅ RESOLVED (2026-05-31) — the tile decode, proven from emulator pixels
+
+Each tile = 16 bytes = 8 rows × 2 bytes/row. The decode is **NOT uniform**; which of two
+read-rules applies depends on how the tile was authored. Both rules verified pixel-exact
+against УКНЦ emulator screenshots (`Screenshot 2026-05-31 22-38-00`, `10-24-00`, `10-24-06`,
+`22-20-41`) and consistent with the blit ASM `DISP_SCANLINE_WRITE @ 040060` (writes the two
+row bytes to consecutive video addresses P, P+1).
+
+| Tile class | Rule | Why (data + emulator proof) |
+|------------|------|------------------------------|
+| **Structural** (ladder, wall, water, exit) | **side-by-side**: `row r = byte[2r] (left 8px) ++ byte[2r+1] (right 8px)` → 16 px wide | Ladder bytes `3C,3C` → `..####....####..` = **two rails + centre gap**, full-width rungs. Emulator ladder (`10-24-00`) shows exactly two rails (cols 19-29, 40-50) with a gap (cols 30-39). |
+| **Gold/treasure** (tiles 4/5/6 = 3 chest anim frames; pixel plane bytes 0-7 all zero) | **OR then double**: `row r = (byte[2r] \| byte[2r+1])`, each px doubled to 16 wide | Chest = offset halves `FC`=`######..` + `3F`=`..######`, OR'd → `FF` = **solid lid** (no gap); studs `A8\|2A=AA`. Emulator chest (`10-24-06`, `22-20-41`) has a SOLID lid + evenly-spaced studs — side-by-side would split it into two blocks (the old bug). |
+
+A single uniform decode CANNOT satisfy both (the ladder needs its bytes at adjacent columns;
+the chest needs them overlapped). The split is principled: structural tiles encode their
+shape in side-by-side bytes; the gold tiles encode one shape across both planes meant to be
+combined. Implemented in `tools/gen_gfx_c.py:decode_tile_16x8`.
+
+---
+
+# (historical audit below — superseded by the RESOLVED section above)
+
 **Date:** 2026-05-31
 **Scope:** Compare the SHAPE of ladders (scări) and gold collectibles (aur) between the
 original game (BK-0010 emulator capture + УКНЦ-extracted tiles) and the C reimplementation.

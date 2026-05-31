@@ -31,38 +31,45 @@ def load_prog():
     return SAV.read_bytes()[512:]   # strip 512-byte RT-11 header; prog at 001000
 
 def decode_tile_16x8(d):
-    """Decode a 16-byte tile to 16x8 1bpp.
+    """Decode a 16-byte tile to 16x8 1bpp. Two rules, BOTH proven from the УКНЦ
+    emulator's pixels (see docs/reverse/TILE_FIDELITY.md) and consistent with the
+    blit ASM (DISP_SCANLINE_WRITE @ 040060 writes 2 bytes/row at addresses P, P+1).
 
-    Default (ladder/wall/water — data in the pixel plane / both planes): the УКНЦ
-    blit lays out row r = byte[2r] (left 8px) ++ byte[2r+1] (right 8px). This keeps
-    ladders as 2 rails and the water surface — DO NOT change.
+    The two source bytes of a row can be read two ways; which one the УКНЦ shows
+    depends on how the artist authored the tile:
 
-    Special case — GOLD/treasure tiles: their PIXEL plane (bytes 0-7) is all zero;
-    the graphic lives only in the COLOUR plane (bytes 8-15) as a single 8x8 chest.
-    Read 16x8 it gets split into two blocks (wrong). So for these tiles we decode
-    the colour plane as an 8x8 chest and double it horizontally to fill 16px → ONE
-    chest (matches the emulator / video clips). Only affects pixel-plane-empty tiles.
+      DEFAULT — structural tiles (ladder, wall, water, exit): the two bytes sit at
+      adjacent column groups → row r = byte[2r] (left 8px) ++ byte[2r+1] (right 8px),
+      a 16-px-wide scanline. The LADDER proves this: 3C ++ 3C = ..####....####.. —
+      two rails with a centre gap and full-width rungs, EXACTLY the emulator ladder.
+
+      GOLD/treasure (tiles 4/5/6 = the 3 animation frames of the chest; pixel plane
+      bytes 0-7 are all zero): the chest is authored as two OFFSET halves meant to be
+      COMBINED, not placed side by side — plane0 row = FC (######..), plane1 = 3F
+      (..######). OR'd → FF (########, a SOLID lid); studs A8|2A = AA. The emulator
+      shows a solid-lidded chest (no centre gap), so we OR the two bytes into an 8-px
+      row and double it to 16 px. Reading these side-by-side (the old bug) split the
+      chest into two blocks.
     """
     pixel_plane_empty = all(b == 0 for b in d[0:8])
     colour_plane_data = any(b != 0 for b in d[8:16])
-    if pixel_plane_empty and colour_plane_data:
+    if pixel_plane_empty and colour_plane_data:          # GOLD: OR the offset halves
         rows = []
         for r in range(8):
-            cb = d[8 + r]                      # one colour byte per row = 8px
+            b = d[2*r] | d[2*r + 1]                       # combine planes → solid 8px
             row = []
             for col in range(8):
-                bit = (cb >> (7 - col)) & 1
-                row.append(bit); row.append(bit)   # double each px → 16 wide, one chest
+                bit = (b >> (7 - col)) & 1
+                row.append(bit); row.append(bit)          # 2:1 УКНЦ pixels → 16 wide
             rows.append(row)
         return rows
-    # default: 16x8, two 8px bytes side by side
-    rows = []
+    rows = []                                             # DEFAULT: side-by-side 16px
     for r in range(8):
         row = []
         for byte in (d[2*r], d[2*r + 1]):
             for col in range(8):
                 row.append((byte >> (7 - col)) & 1)
-        rows.append(row)   # 16 wide
+        rows.append(row)
     return rows
 
 def tile_c_array(rows, name, index):

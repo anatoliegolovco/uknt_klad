@@ -11,7 +11,8 @@ static const char *NAME[32] = {
 };
 
 static void show(int t) {
-    printf("tile %2d (%s):  [16 wide x 8 tall, byte[2r]|byte[2r+1]]\n", t, NAME[t]);
+    // structural tiles: byte[2r]++byte[2r+1] (side-by-side); gold: byte[2r]|byte[2r+1] (OR)
+    printf("tile %2d (%s):  [16 wide x 8 tall]\n", t, NAME[t]);
     for (int r = 0; r < 8; r++) {
         printf("    ");
         for (int c = 0; c < 16; c++) {

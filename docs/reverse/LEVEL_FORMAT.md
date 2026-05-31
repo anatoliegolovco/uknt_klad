@@ -69,11 +69,16 @@ Confirmat din codul de level render (LRND_BYTE la 005016):
 |-------|-----|------------|-----|-------|
 | 0     | 0x0 | DAT_TILE_0  (017450) | Aer / fond negru | Nu |
 | 1     | 0x1 | DAT_TILE_1  (017470) | Scară (ladder) | Nu |
-| 2     | 0x2 | DAT_TILE_2  (017510) | Ieșire nivel (exit) | Nu |
+| 2     | 0x2 | DAT_TILE_2  (017510) | Ieșire nivel (exit) — **16 octeți = 0** (invizibil ca tile static; apare doar prin sprite/logica de final) | Nu |
 | 3     | 0x3 | DAT_TILE_3  (017530) | Rezervat / gol | Nu |
-| 4     | 0x4 | DAT_TILE_4  (017550) | Aur A (gold, animat) | Nu |
-| 5     | 0x5 | DAT_TILE_5  (017570) | Aur B | Nu |
-| 6     | 0x6 | DAT_TILE_6  (017610) | Aur C | Nu |
+| 4     | 0x4 | DAT_TILE_4  (017550) | Aur A → +scor (`SCORE_ADD`) | Nu |
+| 5     | 0x5 | DAT_TILE_5  (017570) | Aur B → viață bonus (`BONUS_LIFE_ADD`) | Nu |
+| 6     | 0x6 | DAT_TILE_6  (017610) | Aur C → trigger final nivel (`LEVEL_COMPLETE`) | Nu |
+
+> **⚠ Corectură (2026-05-31):** tiles 4/5/6 au **octeți IDENTICI** (`00×8 FC 3F A8 2A FC 3F FC 3F`)
+> — deci NU sunt 3 frame-uri de animație grafică (eticheta veche "animat" era o presupunere).
+> Sunt 3 colectabile cu același desen (cufăr) dar **efecte diferite** la atingere, distinse prin
+> INDEXUL tile-ului în hartă, nu prin grafică: 4=scor, 5=viață, 6=final nivel.
 | 7     | 0x7 | DAT_TILE_7  (017630) | Apă (water, fatal) | Nu* |
 | 8     | 0x8 | DAT_TILE_8  (017650) | Scară 2 (ladder variant) | Nu |
 | 9     | 0x9 | DAT_TILE_9  (017670) | Zid A (brick) | **Da** |

@@ -6,9 +6,11 @@
 
 ---
 
-## Tile Format (confirmed from disassembly)
+## Tile Format (confirmed from disassembly + emulator pixels)
 
-Each tile is **16 bytes = 8 bytes pixel-plane + 8 bytes colour-plane**, representing an **8×8 pixel, 2bpp** graphic.
+Each tile is **16 bytes = 8 rows × 2 bytes/row**, an **8×8 px 2bpp** graphic. КЛАД renders in
+**2 colours** (УКНЦ palette index 0 = blue background, white foreground — the emulator shows
+exactly two colours, never the 4 an old analysis assumed).
 
 **Address formula** (from code at 005024–005034):
 ```
@@ -16,7 +18,24 @@ tile_addr = tile_index × 16 + 017450
 ```
 Confirmed via four consecutive `ASL R2` instructions (×16) followed by `ADD #17450, R2`.
 
-**Colour encoding (confirmed from tile pixel/color plane analysis):**
+### ⭐ Pixel decode — TWO rules (proven 2026-05-31, see TILE_FIDELITY.md "RESOLVED")
+
+The two bytes of each row are read differently depending on how the tile was authored. Both
+verified pixel-exact vs УКНЦ emulator screenshots; consistent with `DISP_SCANLINE_WRITE`
+(040060) writing the two bytes to consecutive video addresses P, P+1.
+
+| Tile class | Rule | Proof |
+|------------|------|-------|
+| **Structural** (ladder, wall, water, exit) | **side-by-side**: `row = byte[2r] (left 8px) ++ byte[2r+1] (right 8px)` → 16 px | ladder `3C,3C → ..####....####..` = two rails + gap + rungs, matches emulator ladder |
+| **Gold** (4/5/6, pixel plane 0-7 = 0) | **OR + double**: `row = (byte[2r] \| byte[2r+1])`, px doubled to 16 | chest `FC\|3F=FF` solid lid, `A8\|2A=AA` studs — emulator chest has a solid lid, no centre gap |
+
+A uniform decode can't do both (ladder needs adjacent columns, chest needs overlap). Code:
+`tools/gen_gfx_c.py:decode_tile_16x8`.
+
+> ⚠ The 4-colour "Black/Green/Yellow" table below is **superseded** — this build is 2-colour.
+> Kept only as a record of the investigation.
+
+**Colour encoding (OLD/superseded — 4-colour hypothesis, NOT how this build renders):**
 
 | pixel_bit | colour_bit | Visual | Evidence |
 |-----------|------------|--------|---------|
