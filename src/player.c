@@ -23,13 +23,14 @@ static bool on_ladder(const Player *p, const Map *m) {
 //   - e scară, sau goală/pasabilă (nu zid), sau
 //   - e zid DAR celula imediat următoare în aceeași direcție e scară (climb-through).
 // dir < 0 = sus, dir > 0 = jos.
-// Regula din ASM (#20000 urcare, #10000 coborîre): mișcarea verticală pe scară e
-// permisă în orice celulă care NU e zid (platformă). Zidurile (9-13) blochează —
-// deci NU treci prin poduri/platforme. Aer/scară/aur/apă/ieșire = pasabile.
-// (dir nefolosit: regula e simetrică — blochezi zidul în ambele direcții.)
+// Mișcarea verticală pe scară, din ASM dar fără oscilație (modelul nostru e continuu):
+//   SUS  (dir<0): doar într-o celulă SCARĂ → te oprești curat la vârful scării
+//                 (nu urci în aer ca să cazi înapoi; nu treci prin platforme).
+//   JOS  (dir>0): în orice celulă care NU e zid (scară/aer/aur/ieșire) → cobori
+//                 segmentul și pășești jos; zidul (podea/platformă) te oprește.
 static bool can_climb_into(const Map *m, int cx, int cell_row, int dir) {
-    (void)dir;
-    return map_at(m, cx, cell_row) != T_WALL;
+    if (dir < 0) return map_at(m, cx, cell_row) == T_LADDER;   // sus: doar pe scară
+    return map_at(m, cx, cell_row) != T_WALL;                  // jos: orice non-zid
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────

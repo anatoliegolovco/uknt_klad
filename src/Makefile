@@ -49,3 +49,8 @@ web: $(SRCS) klad.h map.h player.h enemy.h score.h render.h gfx_data.h level_dat
 
 clean:
 	rm -rf $(OUT_DIR)
+
+# ---------- E2E headless movement/collision tests (no raylib) ----------
+test:
+	$(CC) $(CSTD) $(WARN) -I. ../tools/test_e2e.c map.c player.c enemy.c score.c -lm -o /tmp/klad_e2e
+	@/tmp/klad_e2e
