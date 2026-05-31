@@ -5,7 +5,7 @@ in **C23**, compiled to **WebAssembly** so it runs in any browser, including on
 phones. Retro look, modern engine, original code and assets.
 
 > **Working title only.** The final game name is still TBD — see
-> [`docs/design.md`](docs/design.md).
+> [`docs/design/design.md`](docs/design/design.md).
 
 ## What is this?
 
@@ -49,15 +49,16 @@ src/               the C23 / WASM reimplementation
 ## Quick start (study side)
 
 ```bash
-# 1. fetch the original blob locally (not committed)
-tools/fetch_original.sh
+# the target binary is already extracted at assets/uknc/KLAD_1987_Baranov.SAV;
+# inspect its disassembly:
+python3 tools/pdp11dis.py --raw --org 01000 assets/uknc/KLAD_1987_prog.bin | less
 
-# 2. disassemble every variant into disassembly/raw/
-tools/disasm.sh
-
-# 3. inspect, e.g. the cleanest BK-0010 variant
-python3 tools/pdp11dis.py assets/uknc/ex_klad3/KLAD3.BIN | less
+# or read the full annotated version:
+less disassembly/annotated/uknc_klad_1987.asm
 ```
+
+To run the original in the УКНЦ emulator (ground truth), see
+[`docs/reverse/EMULATOR.md`](docs/reverse/EMULATOR.md).
 
 ## Quick start (game side)
 

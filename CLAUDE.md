@@ -40,21 +40,24 @@ python3 -m http.server -d build/web
 
 The pre-built wasm artifact in `play/` is the deployed version for GitHub Pages (`https://anatoliegolovco.github.io/uknt_klad/`).
 
-## Study-side commands (`tools/`)
+## Study-side commands (`tools/` — all УКНЦ-only)
 
 ```bash
-# Download and verify the original blobs (SHA-256 checked)
-tools/fetch_original.sh
-
-# Regenerate all raw disassemblies into disassembly/raw/
-tools/disasm.sh
-
 # Disassemble the УКНЦ target (raw mode, load address 001000)
 python3 tools/pdp11dis.py --raw --org 01000 assets/uknc/KLAD_1987_prog.bin | less
+
+# Regenerate C data headers FROM the binary (run after touching the .SAV or generators):
+python3 tools/gen_gfx_c.py    > src/gfx_data.h    # tile + sprite pixel data
+python3 tools/gen_levels_c.py > src/level_data.h  # level maps + spawns
+
+# Re-extract tiles/sprites/levels as PNG+JSON into assets/uknc/{tiles,sprites,levels}/
+python3 tools/extract_uknc_gfx.py
 ```
 
-The annotated disassembly already exists: `disassembly/annotated/uknc_klad_1987.asm`.
-(BK-0010 `.BIN` binaries + their disassembly are archived under `archive/bk0010/`.)
+`src/gfx_data.h` and `src/level_data.h` are **generated, not hand-edited** — they decode
+the binary directly, so any fix to graphics/level data belongs in the generator, then
+regenerate. The annotated disassembly already exists: `disassembly/annotated/uknc_klad_1987.asm`
+(produced by `tools/gen_uknc_annotated.py`). BK-0010 binaries/tools are archived under `archive/`.
 
 ## Platform: УКНЦ МС-0511 / PDP-11
 
@@ -79,11 +82,11 @@ cd /tmp && curl -sL -o QtUkncBtl.AppImage \
   https://github.com/nzeemin/ukncbtl-qt/releases/download/preview-468/UKNCBTL_Qt-a808c28-x86_64.AppImage
 chmod +x QtUkncBtl.AppImage && ./QtUkncBtl.AppImage --appimage-extract   # -> /tmp/squashfs-root
 
-# run КЛАД directly (OPTIONCHAR on Linux is '-', NOT '/')
+# run КЛАД directly (OPTIONCHAR on Linux is '-', NOT '/'; use an ABSOLUTE disk path)
 cd /tmp/squashfs-root
-DISPLAY=:0 ./AppRun "-disk0:$PWD/../../home/anatolie/ai/klad/assets/uknc/fodos_games.dsk" \
-  -autostart -boot1
-# then at the ФОДОС prompt type:  R KLAD
+DISK=/home/anatolie/ai/klad/assets/uknc/fodos_games.dsk
+DISPLAY=:0 setsid ./AppRun "-disk0:$DISK" -autostart -boot1 >/tmp/qt.log 2>&1 </dev/null & disown
+# then at the ФОДОС prompt type:  R KLAD   (KLAD.SAV is the game file on the disk)
 ```
 
 **Driving it (this is the part that's fiddly — follow exactly):**
@@ -104,14 +107,15 @@ The emulator HUD shows "Попытки **219**". Do NOT take that at face value.
 219 is a real data value in this school-disk build, not a display bug — but it's
 anomalous vs BK's 5. Pick fidelity (219) vs intended (5) deliberately; never invent (was 9).
 
-### Other (BK-0010 only — secondary reference, 83% identical code)
+### Other (BK-0010 only — secondary reference, 83% identical code; B&W)
 ```bash
-mame bk001001 -rompath ~/mame/roms -window -autoboot_script /tmp/bk_enter.lua  # B&W
-pdp11 < tools/simh_script.ini      # simh scriptable PDP-11
-ghidraRun                          # static decompiler (PDP-11 built-in)
+mame bk001001 -rompath ~/mame/roms -window -autoboot_script /tmp/bk_enter.lua
+ghidraRun   # static decompiler (PDP-11 built-in; import as Raw Binary, load 0x200)
 ```
-
-Traces go into `disassembly/traces/` (text). Findings get promoted into `disassembly/annotated/` and documented in `docs/reverse/`. **Fidelity tracked in `docs/reverse/FIDELITY_KPI.md`** — the scorecard; an item is ✅ only after a side-by-side with an emulator capture.
+Use BK only to cross-check code; for anything visual/behavioral, the УКНЦ emulator above
+is authoritative. **Fidelity is tracked in `docs/reverse/FIDELITY_KPI.md`** — the scorecard;
+an item is ✅ only after a side-by-side with an emulator capture. Findings get promoted into
+`disassembly/annotated/` and `docs/reverse/`.
 
 ## Architecture: reimplementation (`src/`)
 
@@ -168,7 +172,17 @@ Cele 6 obiective (detalii + criterii în `docs/reverse/USER_GOALS.md`):
 
 Log de lucru (cu timestamp, pentru continuitate după crash): `docs/reverse/WORK_LOG.md`
 
-## Reverse-engineering progress
+## Status (see `docs/reverse/WORK_LOG.md` + `FIDELITY_KPI.md` for detail)
 
-- **Done**: download + verify blobs, BK-0010 platform ID, linear-sweep disassembly (`disassembly/raw/`), memory map, I/O register map, level data format (`docs/reverse/08_level_data.md`), graphics extraction via BK CPU core (`title_screen.png`, `sprites.png`, `gfx_region.bin`).
-- **Next (obiectiv 2)**: recursive-descent disassembly din entry `04000`, adnotare rutine în `archive/bk0010/disassembly/crocodile_klad.asm`.
+- **Done**: full annotated УКНЦ disassembly (`uknc_klad_1987.asm`), mechanics/byte-map/
+  routines/gfx docs, level + tile + sprite extraction, modular C23 reimplementation that
+  builds and runs (native), and **the real УКНЦ emulator running КЛАД** (ground-truth
+  references in `assets/uknc/reference_emu/`).
+- **Open fidelity gaps** (KPI ❌, validate fixes against emulator captures):
+  - **Planar tile decode** — ladders render as a solid pole (should be rails+rungs), gold
+    as a wall-textured block (should be a coin), player/enemy sprites wrong. Root cause in
+    `docs/reverse/TILE_FIDELITY.md`; the fix is in `tools/extract_uknc_gfx.py`/`gen_gfx_c.py`,
+    then regenerate.
+  - **Lives** — code uses an invented `9`; ASM truth is 219 (this build) vs 5 (BK-intended).
+    A deliberate choice, documented in `docs/reverse/KLAD_1987_BARANOV.md`.
+  - **WebAssembly build** not yet exercised this cycle.
