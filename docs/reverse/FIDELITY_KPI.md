@@ -33,8 +33,8 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 | # | Element | Emulator ground truth | Current | Status | Evidence |
 |---|---------|----------------------|---------|--------|----------|
 | A1 | Wall | white dotted texture on blue | 16×8 1bpp, matches | ✅ | compare/level1_mine_1bpp.png |
-| A2 | Ladder | vertical rails + horizontal rungs | 16×8 1bpp → rails+rungs | ✅ | compare/level1_mine_1bpp.png |
-| A3 | Gold | treasure-chest shape (white box + coin slots) | 16×8 1bpp, treasure shape | ✅ | compare/maptiles_16x8_1bpp.png |
+| A2 | Ladder | thin rails + FREQUENT rungs | 2r,2r+1: rails+2 rungs/tile (rungs sparser than original) | 🔶 | user: rungs less frequent |
+| A3 | Gold | one treasure chest | 2r,2r+1 shows 2 blocks; byte-decode can't match → extract from emulator | ❌ | user 2026-05-31 |
 | A4 | Water | wavy white surface on blue | 16×8 1bpp, wavy surface | ✅ | compare/maptiles_16x8_1bpp.png |
 | A5 | Exit | invisible (empty tile) | empty + faint marker | ✅ | compare/maptiles_16x8_1bpp.png |
 

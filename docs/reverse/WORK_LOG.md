@@ -164,3 +164,12 @@ De reparat din PLAYER_MOVE_STEP (012740) + flagurile COLLISION_MAP_BUILD (013570
 centrală = scară (nu ry±1). Mișcarea verticală trece prin can_climb_into():
 permite scară/gol, trece prin zid DOAR dacă scara continuă dincolo (climb-through
 platforme ca în КЛАД), altfel blochează. Rebuild + pornit versiunea nouă.
+
+`[2026-05-31 UTC] REVERT+OBSERVE` — User feedback: decodarea two-halves a stricat
+scările (trepte rare), podurile (jumătate) și aurul. Revenit la 2r,2r+1 (mai bună).
+Observat texturi originale (reference_emu): SCARA = 2 șine SUBȚIRI apropiate + trepte
+FRECVENTE (~la 3-4px); AURUL = UN cufăr. NICIO decodare simplă din octeți nu
+reproduce exact aceste texturi → următorul pas: EXTRAGERE tile-uri direct din
+ecranul randat al emulatorului (singura cale fidelă). Format video УКНЦ prea complex
+pt decodare statică din octeți. Coliziune: can_climb_into() acum scanează prin
+platforme consecutive (trecere prin "două tavane").

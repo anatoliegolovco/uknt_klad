@@ -25,8 +25,16 @@ static bool on_ladder(const Player *p, const Map *m) {
 static bool can_climb_into(const Map *m, int cx, int cell_row, int dir) {
     TileType t = map_at(m, cx, cell_row);
     if (t == T_LADDER) return true;
-    if (t == T_WALL)   return map_at(m, cx, cell_row + dir) == T_LADDER;  // platformă traversabilă
-    return t != T_WATER || true;   // gol/aur/exit pasabil (apa = moarte, gestionată separat)
+    if (t == T_WALL) {
+        // traversează MAI MULTE platforme consecutive dacă scara continuă dincolo
+        for (int r = cell_row + dir; r >= 0 && r < MAP_ROWS; r += dir) {
+            TileType tr = map_at(m, cx, r);
+            if (tr == T_LADDER) return true;   // scara continuă → treci prin platforme
+            if (tr != T_WALL)   break;          // gol/apă → nu mai e scară
+        }
+        return false;
+    }
+    return dir > 0;   // gol/aur/exit: permite jos (cobori de pe scară), blochează sus (nu pluti)
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
