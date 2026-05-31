@@ -222,5 +222,5 @@ Win screen strings (Crocodile 1991):
 | gradmsk.ru / YouTube | Full 2h25m playthrough, 2024 | Video ID: `jUv3u2txfBc` |
 | VK / Rutube | 1h12m additional missions walkthrough | `rutube.ru/video/529a22a8f6cee7bbb1fa216af3efbe7e/` |
 | generation-msx.nl | Rise Out original MSX page | `generation-msx.nl/software/ascii-corporation/rise-out/353` |
-| MKLAD_1991_Crocodile.GAM | Binary analysis (this repo) | `assets/original/extracted/uknc/` |
-| KLAD_1987_Baranov.SAV | Binary analysis (this repo) | `assets/original/extracted/uknc/` |
+| MKLAD_1991_Crocodile.GAM | Binary analysis (this repo) | `assets/uknc/` |
+| KLAD_1987_Baranov.SAV | Binary analysis (this repo) | `assets/uknc/` |

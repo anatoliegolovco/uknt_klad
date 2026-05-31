@@ -16,7 +16,7 @@ Usage:
 import sys
 from pathlib import Path
 
-SAV = Path(__file__).parent.parent / "assets/original/extracted/uknc/KLAD_1987_Baranov.SAV"
+SAV = Path(__file__).parent.parent / "assets/uknc/KLAD_1987_Baranov.SAV"
 
 def load_prog():
     raw = SAV.read_bytes()

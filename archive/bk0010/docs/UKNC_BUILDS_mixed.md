@@ -8,7 +8,7 @@ Two distinct versions found and extracted.
 
 | Field | Value |
 |-------|-------|
-| File | `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` |
+| File | `assets/uknc/KLAD_1987_Baranov.SAV` |
 | Size | 17 408 bytes (34 RT-11 blocks) |
 | Source disk | `fodos_games.dsk` (FODOS filesystem, from Titus collection) |
 | Source URL | `hobot.pdp-11.ru/ukdwk_archive/ukncbtlwebcomplekt/FODOS_GAMES/disk_10_fix.dsk` |
@@ -47,7 +47,7 @@ Two distinct versions found and extracted.
 
 | Field | Value |
 |-------|-------|
-| File | `assets/original/extracted/uknc/MKLAD_1991_Crocodile.GAM` |
+| File | `assets/uknc/MKLAD_1991_Crocodile.GAM` |
 | Size | 19 968 bytes (39 RT-11 blocks) |
 | Source disk | `newgames.dsk` (RT-11 SJ, DWK_QUEST 2019 collection) |
 | Source URL | `hobot.pdp-11.ru/ukdwk_archive/ukncbtlwebcomplekt/UKNCgames_NEW/newgames.dsk` |

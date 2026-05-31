@@ -29,7 +29,7 @@ This repository has two halves:
 A **personal, non-commercial** project to understand and preserve a piece of
 legacy Soviet PDP-11 software. The original material (binaries, extracted data,
 disassembly) is tracked here as a personal study/preservation archive. See
-[`design/legal.md`](design/legal.md).
+[`docs/design/legal.md`](docs/design/legal.md).
 
 - The reimplementation in `src/` is original work (own code; planned own art and
   levels), credited to its inspiration. See [`LICENSE`](LICENSE).
@@ -37,7 +37,7 @@ disassembly) is tracked here as a personal study/preservation archive. See
 ## Layout
 
 ```
-assets/original/   the original blob + extracted data (tracked; see design/legal.md)
+assets/uknc/   the original blob + extracted data (tracked; see docs/design/legal.md)
 assets/new/        our own art/levels
 docs/              architecture, reverse-engineering notes, design
 disassembly/raw/   linear-sweep disassembly (tooling output)
@@ -56,7 +56,7 @@ tools/fetch_original.sh
 tools/disasm.sh
 
 # 3. inspect, e.g. the cleanest BK-0010 variant
-python3 tools/pdp11dis.py assets/original/ex_klad3/KLAD3.BIN | less
+python3 tools/pdp11dis.py assets/uknc/ex_klad3/KLAD3.BIN | less
 ```
 
 ## Quick start (game side)

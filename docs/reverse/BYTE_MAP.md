@@ -1,6 +1,6 @@
 # BYTE_MAP — КЛАД 1987 Баранов (УКНЦ МС-0511)
 
-**File:** `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`  
+**File:** `assets/uknc/KLAD_1987_Baranov.SAV`  
 **Size:** 17408 bytes  
 **Format:** RT-11 .SAV executable  
 **Note:** Previous version of this file covered BK-0010 Crocodile KLAD.BIN (still in git history).

@@ -6,7 +6,7 @@ Documentat din assembler. Adrese octale.
 
 ## Locație în fișier
 
-**Fișier:** `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`  
+**Fișier:** `assets/uknc/KLAD_1987_Baranov.SAV`  
 **RT-11 header:** 512 bytes (offset 0x000–0x1FF)  
 **Program image:** loaded la 001000 (octal) = 512 dec → file offset = address decimal
 
@@ -140,8 +140,8 @@ Pointer la recordul curent: **VAR_CUR_LEVEL_PTR** (001302).
 
 | Fișier | Conținut |
 |--------|---------|
-| `assets/original/extracted/uknc/levels/level_NN.json` | Tile map JSON (22×32), adresă, metadate |
-| `assets/original/extracted/uknc/levels/level_NN.png` | Vizualizare PNG (color-coded, SCALE=8) |
+| `assets/uknc/levels/level_NN.json` | Tile map JSON (22×32), adresă, metadate |
+| `assets/uknc/levels/level_NN.png` | Vizualizare PNG (color-coded, SCALE=8) |
 | `tools/extract_uknc_gfx.py` | Script de extracție (secțiunea LEVELS) |
 
 JSON format:

@@ -41,7 +41,7 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 4. УКНЦ randează color (fundal albastru, mod GRB); pe monitoare mono de școală =
    tonuri de gri. Userul a jucat B&W — forma contează, nu culoarea.
 
-**Referințe salvate:** `assets/original/extracted/uknc/reference_emu/`
+**Referințe salvate:** `assets/uknc/reference_emu/`
 (title.png, level1_full.png, hud_and_field.png, player_zoom.png)
 
 `[2026-05-30 UTC] RESUMED` — User a raportat crash. Context recuperat din git log + starea repo.
@@ -91,18 +91,18 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 - Sursa disk: `hobot.pdp-11.ru/ukdwk_archive/ukncbtlwebcomplekt/FODOS_GAMES/disk_10_fix.dsk`
 - Confirmat prin string-uri în KOI8-R în binar: `"Николаев 1987"`, `"Баранов"`, `"Д.Г."`
 - Text intro complet: `"КЛАД"`, instrucțiuni în rusă, speed selector `1,2,3,4`
-- Salvat la: `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`
+- Salvat la: `assets/uknc/KLAD_1987_Baranov.SAV`
 
 **Sursă 2 — versiunea Crocodile Software 1991:**
 - Fișier: `MKLAD.GAM` (19968 bytes = 39 blocuri RT-11)
 - Sursa disk: `hobot.pdp-11.ru/ukdwk_archive/ukncbtlwebcomplekt/UKNCgames_NEW/newgames.dsk`
 - Confirmat prin string ASCII: `"@ 1991 CROCODILE SOFTWARE"`
 - Conține 18 level names (transliterate rusă): podzemelxe, zmea, nachalo, uhvati, lestnica, etc.
-- Salvat la: `assets/original/extracted/uknc/MKLAD_1991_Crocodile.GAM`
+- Salvat la: `assets/uknc/MKLAD_1991_Crocodile.GAM`
 
 **Disk images complete:**
-- `assets/original/extracted/uknc/fodos_games.dsk` (800K — sursa KLAD_1987)
-- `assets/original/extracted/uknc/newgames.dsk` (800K — sursa MKLAD_1991)
+- `assets/uknc/fodos_games.dsk` (800K — sursa KLAD_1987)
+- `assets/uknc/newgames.dsk` (800K — sursa MKLAD_1991)
 
 **Metodă de căutare:**
 - Yandex.ru → hobot.pdp-11.ru → galerie jocuri УКНЦ

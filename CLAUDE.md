@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Two parallel tracks in one repo, targeting **one** game: **КЛАД 1987 (Баранов), УКНЦ МС-0511**.
 
 1. **Study** (`docs/reverse/`, `disassembly/`, `tools/`) — reverse-engineering the УКНЦ
-   binary `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`. Start at
+   binary `assets/uknc/KLAD_1987_Baranov.SAV`. Start at
    `docs/reverse/00_overview.md`. Ground truth = the УКНЦ emulator (`docs/reverse/EMULATOR.md`).
 2. **Reimplementation** (`src/`) — clean-room C23 + raylib, native + WebAssembly.
    **No original code, art, or level data is copied.**
@@ -50,7 +50,7 @@ tools/fetch_original.sh
 tools/disasm.sh
 
 # Disassemble the УКНЦ target (raw mode, load address 001000)
-python3 tools/pdp11dis.py --raw --org 01000 assets/original/extracted/uknc/KLAD_1987_prog.bin | less
+python3 tools/pdp11dis.py --raw --org 01000 assets/uknc/KLAD_1987_prog.bin | less
 ```
 
 The annotated disassembly already exists: `disassembly/annotated/uknc_klad_1987.asm`.
@@ -81,7 +81,7 @@ chmod +x QtUkncBtl.AppImage && ./QtUkncBtl.AppImage --appimage-extract   # -> /t
 
 # run КЛАД directly (OPTIONCHAR on Linux is '-', NOT '/')
 cd /tmp/squashfs-root
-DISPLAY=:0 ./AppRun "-disk0:$PWD/../../home/anatolie/ai/klad/assets/original/extracted/uknc/fodos_games.dsk" \
+DISPLAY=:0 ./AppRun "-disk0:$PWD/../../home/anatolie/ai/klad/assets/uknc/fodos_games.dsk" \
   -autostart -boot1
 # then at the ФОДОС prompt type:  R KLAD
 ```
@@ -93,7 +93,7 @@ DISPLAY=:0 ./AppRun "-disk0:$PWD/../../home/anatolie/ai/klad/assets/original/ext
 - Find WID: `xwininfo -root -children | grep "UKNC Back"`.
 - Color modes RGB/GRB/Gray — school monitors were mono, so **shape > color**.
 
-References captured from the running game: `assets/original/extracted/uknc/reference_emu/`.
+References captured from the running game: `assets/uknc/reference_emu/`.
 
 ### ⚠ Lives value — worked example of "ASM over display"
 The emulator HUD shows "Попытки **219**". Do NOT take that at face value. ASM:
@@ -139,7 +139,7 @@ binary's tile data (`gfx_data.h`), not hand-drawn art.
 `TILE_FIDELITY.md`): tile planar decode (ladders/gold/character render wrong), lives value.
 Validate every fix against an emulator capture before marking ✅.
 
-## Key decisions (see `design/decisions.md` for full ADRs)
+## Key decisions (see `docs/design/decisions.md` for full ADRs)
 
 - **D1**: Custom `tools/pdp11dis.py` instead of radare2 (Ubuntu radare2 has no PDP-11 plugin).
 - **D3**: Study target pivoted la УКНЦ (МС-0511) — versiunea originală Баранов 1987. BK-0010 Crocodile era repacked din același cod (83% identic). УКНЦ folosește video planar prin porturi @#176640/176642.
@@ -149,7 +149,7 @@ Validate every fix against an emulator capture before marking ✅.
 
 ## Ce vrea userul — obiective obligatorii (УКНЦ КЛАД 1987 Баранов)
 
-**⚠ TARGET ACTUAL: `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (УКНЦ МС-0511)**  
+**⚠ TARGET ACTUAL: `assets/uknc/KLAD_1987_Baranov.SAV` (УКНЦ МС-0511)**  
 **NU** `KLAD.BIN` (BK-0010) — acela era reperul anterior, acum lucrăm cu originalul УКНЦ.
 
 **IMPORTANT:** Dacă ești tentat să spui că totul e gata și totul e bine, oprește-te și citești mai întâi `docs/reverse/USER_GOALS.md`. Acel fișier conține lista exactă de livrabile cu statusuri. Dacă vreun status e ❌, NU e gata.
@@ -162,8 +162,8 @@ Cele 6 obiective (detalii + criterii în `docs/reverse/USER_GOALS.md`):
 1. **BYTE_MAP** — hartă completă a octeților din `KLAD_1987_Baranov.SAV` → `docs/reverse/BYTE_MAP.md`
 2. **Assembler adnotat** — cod + doc → `disassembly/annotated/uknc_klad_1987.asm` + `docs/reverse/ROUTINES.md`
 3. **Mecanica jocului** — exclusiv din cod assembler → `docs/reverse/MECHANICS.md`
-4. **Toate nivelurile** — extrase ca JSON + PNG → `assets/original/extracted/uknc/levels/`
-5. **Sprites/texturi** — pixel fidelity → `assets/original/extracted/uknc/tiles/` + `docs/reverse/GFX_MAP.md`
+4. **Toate nivelurile** — extrase ca JSON + PNG → `assets/uknc/levels/`
+5. **Sprites/texturi** — pixel fidelity → `assets/uknc/tiles/` + `docs/reverse/GFX_MAP.md`
 6. **Animații** — frame-uri, timing, triggere → `docs/reverse/ANIMATIONS.md`
 
 Log de lucru (cu timestamp, pentru continuitate după crash): `docs/reverse/WORK_LOG.md`

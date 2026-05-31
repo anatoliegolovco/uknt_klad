@@ -7,12 +7,12 @@ original game (BK-0010 emulator capture + УКНЦ-extracted tiles) and the C re
 and reconstruction of how tiles look when tiled. **Observation only — no source modified.**
 
 Authoritative byte values come from `docs/reverse/GFX_MAP.md` (confirmed from disassembly)
-and from re-decoding `assets/original/extracted/uknc/tiles/*.png` and
-`assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`.
+and from re-decoding `assets/uknc/tiles/*.png` and
+`assets/uknc/KLAD_1987_Baranov.SAV`.
 
 Inputs analysed: `/tmp/emu_lvl.png`, `/tmp/emu_right.png`, `/tmp/emu_left.png`,
 `/tmp/my_tiles.png`, `/tmp/my_field.png`, the extracted 64×64 tile PNGs, and
-`assets/original/extracted/uknc/levels/level_01.png`.
+`assets/uknc/levels/level_01.png`.
 
 ---
 

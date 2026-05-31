@@ -42,10 +42,10 @@
 
 **Acest fișier este sursa de adevăr.** Dacă ești tentat să spui că "totul e gata și totul e bine", revino AICI și verifică fiecare punct față de ce există în repo.
 
-**⚠ TARGET ACTUAL: `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (УКНЦ МС-0511)**  
+**⚠ TARGET ACTUAL: `assets/uknc/KLAD_1987_Baranov.SAV` (УКНЦ МС-0511)**  
 **Pivot de la:** `archive/bk0010/binaries/ex_klad/KLAD.BIN` (BK-0010 Crocodile) — acel work rămâne ca referință, cod 83% identic.
 
-Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`)
+Versiunea țintă: **КЛАД original Баранов 1987** (`assets/uknc/KLAD_1987_Baranov.SAV`)
 
 ---
 
@@ -114,7 +114,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Fiecare nivel are tile map complet (dimensiuni, fiecare tile identificat)
 - Pozițiile de start ale jucătorului și inamicilor per nivel
 
-**Status:** ✅ COMPLET — 10 niveluri extrase: `assets/original/extracted/uknc/levels/level_NN.json` + `.png`. Format confirmat din cod: 22 rânduri × 16 bytes, stride=352 (ADD #540). Poziții de start: în TBL_ENTITY_PTRS (001230) → per-level entity records (015230–017447). Lipsă LEVEL_FORMAT.md (poate fi scris dacă e cerut).
+**Status:** ✅ COMPLET — 10 niveluri extrase: `assets/uknc/levels/level_NN.json` + `.png`. Format confirmat din cod: 22 rânduri × 16 bytes, stride=352 (ADD #540). Poziții de start: în TBL_ENTITY_PTRS (001230) → per-level entity records (015230–017447). Lipsă LEVEL_FORMAT.md (poate fi scris dacă e cerut).
 
 ---
 
@@ -133,7 +133,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 - Paleta BK-0010 folosită corect (negru/alb în mod standard, sau paleta color dacă e cazul)
 - Nu lipsește niciun sprite vizibil în joc
 
-**Status:** ✅ COMPLET — 32 tile-uri + 208 sprite frames extrase: `assets/original/extracted/uknc/tiles/` + `sprites/`. GFX_MAP.md scris cu format complet (stride=16, 2bpp, formula addr=idx×16+017450). Paletă aproximată — culorile exacte necesită trace emulator pentru valorile registrului de paletă УКНЦ.
+**Status:** ✅ COMPLET — 32 tile-uri + 208 sprite frames extrase: `assets/uknc/tiles/` + `sprites/`. GFX_MAP.md scris cu format complet (stride=16, 2bpp, formula addr=idx×16+017450). Paletă aproximată — culorile exacte necesită trace emulator pentru valorile registrului de paletă УКНЦ.
 
 ---
 

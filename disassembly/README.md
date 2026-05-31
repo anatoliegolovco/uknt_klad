@@ -1,7 +1,7 @@
 # disassembly/
 
 Study artifacts derived from the original КЛАД binary. **Tracked** in this
-personal, non-commercial preservation repo (see `design/legal.md`).
+personal, non-commercial preservation repo (see `docs/design/legal.md`).
 
 - `raw/` — linear-sweep output of `tools/pdp11dis.py` over the original blob.
   Regenerate any time with:

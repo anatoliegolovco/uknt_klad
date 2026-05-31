@@ -11,7 +11,7 @@ are in `/archive` and are **not** part of this work.)
 | Platform | Электроника УКНЦ (МС-0511) |
 | Distribution | school disk "Н-Шангская СШ" |
 | Game file on disk | `KLAD.SAV` (FODOS, on `fodos_games.dsk`) |
-| Extracted | `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (17 408 B, 34 blocks) |
+| Extracted | `assets/uknc/KLAD_1987_Baranov.SAV` (17 408 B, 34 blocks) |
 | Load address | `001000` (octal); entry runs into init at `004000` |
 
 ## Identification strings (KOI8-R, in the binary)

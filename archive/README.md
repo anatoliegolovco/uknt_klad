@@ -7,12 +7,15 @@ needed to build or study the target; kept only for reference/provenance.
 ## Contents
 
 ### `bk0010/` — the БК-0010 lineage (wrong platform)
-- `binaries/` — `ex_klad*/` = `KLAD.BIN`, `KLAD2/3/4.BIN`, `klad10.bin` (BK raw images)
+- `binaries/` — `ex_klad*/` = `KLAD.BIN`, `KLAD2/3/4.BIN`, `klad10.bin` + the source `*.rar`
 - `extracted/` — `bk0010/`, `crocodile/`, `klad3/` graphic/data extractions
 - `disassembly/` — `crocodile_klad.asm` (BK annotated) + raw BK disassemblies
 - `docs/` — BK/mixed docs: `00_overview` (old), `01_memory_map`, `02_io_registers`,
   `08_level_data`, `ROUTINES.md` (BK), `GAME_HISTORY_AND_REVIEWS.md`, `TODO.md`,
   `UKNC_BUILDS_mixed.md` (had a 1991 section; superseded by `KLAD_1987_BARANOV.md`)
+- `tools/` — BK-only scripts: `bk_emu.py`, `bk_unpack_harness.c`, `extract_crocodile.sh`,
+  `render_crocodile.py`, `extract_data.py`, `extract_tiles.py`, `disasm.sh`
+  (disassembled the archived BK `.BIN`s), `fetch_original.sh` (downloaded the BK `.rar`s)
 
 BK-0010 code is ~83% identical to the УКНЦ target and was useful to bootstrap the
 annotation, but it is a different machine (linear framebuffer vs УКНЦ planar video).
@@ -26,7 +29,9 @@ annotation, but it is a different machine (linear framebuffer vs УКНЦ planar
 
 ### `misc/`
 - `repo_tmp/` — stray pasted image, etc.
+- `uknc_block_dumps/` — intermediate УКНЦ block extractions (`block_NN_*.bin/.png`,
+  `credits_*.png`); superseded by the clean `assets/uknc/{levels,tiles,sprites}/`.
 
 ## Why kept (not deleted)
-Personal preservation archive (see `design/decisions.md` D6/D7). If a question about
+Personal preservation archive (see `docs/design/decisions.md` D6/D7). If a question about
 provenance or the BK lineage comes up, it's here. Day-to-day work ignores it.

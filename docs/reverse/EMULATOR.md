@@ -17,7 +17,7 @@ The УКНЦ ROM is bundled in the build (`emulator/uknc_rom.bin`), no separate 
 ## Launch straight into КЛАД
 ```bash
 cd /tmp/squashfs-root
-DISK=/home/anatolie/ai/klad/assets/original/extracted/uknc/fodos_games.dsk
+DISK=/home/anatolie/ai/klad/assets/uknc/fodos_games.dsk
 DISPLAY=:0 setsid ./AppRun "-disk0:$DISK" -autostart -boot1 >/tmp/qt.log 2>&1 < /dev/null & disown
 ```
 - **OPTIONCHAR on Linux is `-`, NOT `/`** (`-disk0:` `-autostart` `-boot1`).
@@ -49,5 +49,5 @@ DISPLAY=:0 setsid ./AppRun "-disk0:$DISK" -autostart -boot1 >/tmp/qt.log 2>&1 < 
 - The CLI tried first with `/` prefix silently no-ops (Windows OPTIONCHAR) — always `-`.
 
 ## References captured
-`assets/original/extracted/uknc/reference_emu/` — title.png, level1_full.png,
+`assets/uknc/reference_emu/` — title.png, level1_full.png,
 hud_and_field.png, player_zoom.png. Regenerate/extend when validating KPI items.

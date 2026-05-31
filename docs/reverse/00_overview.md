@@ -15,10 +15,10 @@ version **only**.
 
 | | |
 |---|---|
-| Game file | `assets/original/extracted/uknc/KLAD.SAV` (on disk) |
-| Extracted image | `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (17 408 B = 34 RT-11 blocks) |
-| Program image | `assets/original/extracted/uknc/KLAD_1987_prog.bin` (load `001000`) |
-| Source disk | `assets/original/extracted/uknc/fodos_games.dsk` (FODOS filesystem) |
+| Game file | `assets/uknc/KLAD.SAV` (on disk) |
+| Extracted image | `assets/uknc/KLAD_1987_Baranov.SAV` (17 408 B = 34 RT-11 blocks) |
+| Program image | `assets/uknc/KLAD_1987_prog.bin` (load `001000`) |
+| Source disk | `assets/uknc/fodos_games.dsk` (FODOS filesystem) |
 | Disassembly | `disassembly/annotated/uknc_klad_1987.asm` (full, annotated) |
 | Author strings | `"Николаев 1987"` @2532, `"Баранов"` @2546, `"Д.Г."` @2554 |
 
@@ -30,7 +30,7 @@ version **only**.
 ## Run it (ground truth)
 
 See [`EMULATOR.md`](EMULATOR.md). Short version — QtUkncBtl, then `R KLAD` at the
-ФОДОС prompt. Reference captures: `assets/original/extracted/uknc/reference_emu/`.
+ФОДОС prompt. Reference captures: `assets/uknc/reference_emu/`.
 
 ---
 

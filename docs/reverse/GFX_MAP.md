@@ -1,7 +1,7 @@
 # GFX_MAP — КЛАД 1987 Баранов (УКНЦ МС-0511)
 
-**Target binary:** `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`  
-**Extracted to:** `assets/original/extracted/uknc/tiles/`, `assets/original/extracted/uknc/sprites/`  
+**Target binary:** `assets/uknc/KLAD_1987_Baranov.SAV`  
+**Extracted to:** `assets/uknc/tiles/`, `assets/uknc/sprites/`  
 **Extraction script:** `tools/extract_uknc_gfx.py`
 
 ---
@@ -97,14 +97,14 @@ Each frame is 16 bytes (same format as tiles: 8 pixel + 8 colour, 8×8px 2bpp).
 | 012–015 | Player death / fall |
 | 016–207 | Enemy variants + additional player poses |
 
-**Spritesheet:** `assets/original/extracted/uknc/sprites/spritesheet.png` (16 frames/row)
+**Spritesheet:** `assets/uknc/sprites/spritesheet.png` (16 frames/row)
 
 ---
 
 ## Output Files
 
 ```
-assets/original/extracted/uknc/
+assets/uknc/
 ├── tiles/
 │   ├── tile_00_bg_empty.png  … tile_31_*.png   (32 files, 64×64px each)
 │   └── tileset.png                              (256×64px, 8 tiles/row)

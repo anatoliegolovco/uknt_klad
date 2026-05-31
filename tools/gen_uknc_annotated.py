@@ -18,7 +18,7 @@ ROOT = os.path.dirname(HERE)
 
 RAW_UKNC   = os.path.join(ROOT, "disassembly/raw/uknc_klad_1987.asm")
 RAW_BK     = os.path.join(ROOT, "disassembly/raw/bk0010_unpacked.asm")
-UKNC_BIN   = os.path.join(ROOT, "assets/original/extracted/uknc/KLAD_1987_prog.bin")
+UKNC_BIN   = os.path.join(ROOT, "assets/uknc/KLAD_1987_prog.bin")
 BK_DUMP    = os.path.join(ROOT, "assets/original/extracted/bk0010/emu2_dump.bin")
 OUT        = os.path.join(ROOT, "disassembly/annotated/uknc_klad_1987.asm")
 
@@ -561,7 +561,7 @@ def main():
     out.append("""\
 ; =============================================================================
 ; КЛАД (Баранов 1987) — Complete Annotated Disassembly, УКНЦ (МС-0511)
-; Source: assets/original/extracted/uknc/KLAD_1987_Baranov.SAV
+; Source: assets/uknc/KLAD_1987_Baranov.SAV
 ;   RT-11 .SAV: 512-byte header + 16896-byte program image at 0o001000
 ;   Entry point: 0o001000  Top: 0o042000
 ;

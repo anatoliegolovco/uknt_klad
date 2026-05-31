@@ -2,7 +2,7 @@
 
 **Scorecard.** Each element is compared against the **real УКНЦ emulator** (QtUkncBtl
 running `KLAD.SAV` from `fodos_games.dsk`). Reference captures live in
-`assets/original/extracted/uknc/reference_emu/`.
+`assets/uknc/reference_emu/`.
 
 ## Status legend
 - ❌ **WRONG** — confirmed different from emulator
@@ -71,6 +71,6 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 ## Emulator quick-start
 ```
 cd /tmp/squashfs-root
-./AppRun "-disk0:<abs>/assets/original/extracted/uknc/fodos_games.dsk" -autostart -boot1
+./AppRun "-disk0:<abs>/assets/uknc/fodos_games.dsk" -autostart -boot1
 # at ФОДОС prompt:  R KLAD   (xdotool WITHOUT --window; click screen first to focus)
 ```

@@ -20,8 +20,8 @@ except ImportError:
     print("Need Pillow: pip install Pillow")
     sys.exit(1)
 
-SAV  = Path(__file__).parent.parent / "assets/original/extracted/uknc/KLAD_1987_Baranov.SAV"
-OUT  = Path(__file__).parent.parent / "assets/original/extracted/uknc"
+SAV  = Path(__file__).parent.parent / "assets/uknc/KLAD_1987_Baranov.SAV"
+OUT  = Path(__file__).parent.parent / "assets/uknc"
 
 SCALE = 8  # pixels per game-pixel in output PNG
 
