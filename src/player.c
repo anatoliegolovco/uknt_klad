@@ -9,27 +9,13 @@ static void center_tile(const Player *p, int *col, int *row) {
     *row = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 }
 
-// Caută o scară în coloana cx, plecând din `row` în direcția `dir` (-1 sus / +1 jos).
-// Trece prin AER și PLATFORME (zid) — scările conectează platforme, cu goluri în coloană.
-// Se oprește (fără scară) la apă/aur/ieșire/margine.
-static bool ladder_ahead(const Map *m, int cx, int row, int dir) {
-    for (int r = row + dir; r >= 0 && r < MAP_ROWS; r += dir) {
-        TileType t = map_at(m, cx, r);
-        if (t == T_LADDER) return true;
-        if (t == T_WATER || t == T_GOLD || t == T_EXIT) break;
-        // continuă prin T_EMPTY (gol) și T_WALL (platformă)
-    }
-    return false;
-}
-
-// "Pe scară" = celula centrală e scară, SAU ești într-un gol/platformă din interiorul
-// unui segment de scară (scară și deasupra ȘI dedesubt în coloană). Așa coloana cu
-// goluri/platforme e o singură scară traversabilă, dar nu urci prin tavan în aer deschis.
+// "Pe scară" = celula centrală e scară (regula strictă din ASM: PLAYER_STATE_CHECK
+// lucrează pe tile-ul curent). Fără passthrough — segmentele separate de platforme
+// rămîn separate (nu urci prin poduri/platforme).
 static bool on_ladder(const Player *p, const Map *m) {
     int cx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
     int cy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
-    if (map_ladder(m, cx, cy)) return true;
-    return ladder_ahead(m, cx, cy, -1) && ladder_ahead(m, cx, cy, +1);
+    return map_ladder(m, cx, cy);
 }
 
 // CMAP_FLAGS (013570): scările trec PRIN platforme — dar doar dacă scara continuă
@@ -37,12 +23,13 @@ static bool on_ladder(const Player *p, const Map *m) {
 //   - e scară, sau goală/pasabilă (nu zid), sau
 //   - e zid DAR celula imediat următoare în aceeași direcție e scară (climb-through).
 // dir < 0 = sus, dir > 0 = jos.
+// Regula din ASM (#20000 urcare, #10000 coborîre): mișcarea verticală pe scară e
+// permisă în orice celulă care NU e zid (platformă). Zidurile (9-13) blochează —
+// deci NU treci prin poduri/platforme. Aer/scară/aur/apă/ieșire = pasabile.
+// (dir nefolosit: regula e simetrică — blochezi zidul în ambele direcții.)
 static bool can_climb_into(const Map *m, int cx, int cell_row, int dir) {
-    TileType t = map_at(m, cx, cell_row);
-    if (t == T_LADDER) return true;
-    if (t == T_WATER) return true;   // apa = moarte (gestionată în state-check)
-    // gol sau platformă: permite dacă scara continuă în direcția dir (traversare)
-    return ladder_ahead(m, cx, cell_row, dir) || (t == T_EMPTY && map_ladder(m, cx, cell_row - dir));
+    (void)dir;
+    return map_at(m, cx, cell_row) != T_WALL;
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
