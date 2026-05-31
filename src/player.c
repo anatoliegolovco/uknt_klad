@@ -9,20 +9,24 @@ static void center_tile(const Player *p, int *col, int *row) {
     *row = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 }
 
-// CMAP_FLAGS (013570): flag #20000 = tile scară cu tavan solid deasupra.
-// Asta înseamnă că playerul poate urca PRIN platforme (wall tiles) pe coloana
-// de scară. Fix: verificăm scara în 3 rânduri consecutive în jurul playerului,
-// inclusiv rândul de deasupra (pentru "climb-through-platform").
+// "Pe scară" = celula centrală a playerului e o scară. (Versiunea veche cu ry±1
+// era prea permisivă → permitea urcarea prin podea/tavan lângă scări.)
 static bool on_ladder(const Player *p, const Map *m) {
-    int cx  = (int)((p->px + TILE_W * 0.5f) / TILE_W);
-    int ry1 = (int)(p->py / TILE_H);
-    int ry2 = (int)((p->py + TILE_H - 1) / TILE_H);
-    // Rândul de deasupra: dacă playerul apasă Up și există scară deasupra,
-    // continuă să urce chiar dacă tile-ul curent e platformă (wall)
-    return map_ladder(m, cx, ry1)   ||
-           map_ladder(m, cx, ry2)   ||
-           map_ladder(m, cx, ry1-1) ||  // scară imediat deasupra → climb-through
-           map_ladder(m, cx, ry2+1);    // scară imediat dedesubt → intrare scară
+    int cx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+    int cy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
+    return map_ladder(m, cx, cy);
+}
+
+// CMAP_FLAGS (013570): scările trec PRIN platforme — dar doar dacă scara continuă
+// dincolo de platformă. Permite mișcarea verticală în celula țintă dacă:
+//   - e scară, sau goală/pasabilă (nu zid), sau
+//   - e zid DAR celula imediat următoare în aceeași direcție e scară (climb-through).
+// dir < 0 = sus, dir > 0 = jos.
+static bool can_climb_into(const Map *m, int cx, int cell_row, int dir) {
+    TileType t = map_at(m, cx, cell_row);
+    if (t == T_LADDER) return true;
+    if (t == T_WALL)   return map_at(m, cx, cell_row + dir) == T_LADDER;  // platformă traversabilă
+    return t != T_WATER || true;   // gol/aur/exit pasabil (apa = moarte, gestionată separat)
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -56,8 +60,15 @@ PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
     // PLAYER_MOVE_STEP: dacă tile curent = LADDER → control vertical direct
     p->on_ladder = on_ladder(p, m);
     if (p->on_ladder) {
-        p->vy  = 0.0f;
-        p->py += (float)(in.down - in.up) * PLAYER_SPEED * dt;
+        p->vy = 0.0f;
+        int dir = in.down - in.up;            // +1 jos, -1 sus
+        if (dir != 0) {
+            float ny  = p->py + (float)dir * PLAYER_SPEED * dt;
+            int   cx  = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+            // rândul muchiei de avans în direcția mișcării
+            int   row = (int)(((dir > 0) ? ny + TILE_H - 1 : ny) / TILE_H);
+            if (can_climb_into(m, cx, row, dir)) p->py = ny;
+        }
     } else {
         // Gravitație: ADD la viteza verticală, oprire la WALL de jos
         p->vy += PLAYER_GRAVITY * dt;

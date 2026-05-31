@@ -154,3 +154,13 @@ La fiecare crash, citește în ordine:
 - Commit: `6db6aaf`  
 - **Next:** Obiectiv 3 (MECHANICS.md) sau Obiectiv 6 (ANIMATIONS.md)
 
+
+`[2026-05-31 UTC] BUG` — User: coliziune verticală pe scară defectă — playerul urcă
+PRIN podea/tavan în sus. Cauză: în on_ladder()/player_update mișcarea verticală pe
+scară nu verifică coliziunea (vy=0; py += dir*speed, fără check tile destinație).
+De reparat din PLAYER_MOVE_STEP (012740) + flagurile COLLISION_MAP_BUILD (013570).
+
+`[2026-05-31 UTC] FIX` — Coliziune verticală scară: on_ladder() acum cere celula
+centrală = scară (nu ry±1). Mișcarea verticală trece prin can_climb_into():
+permite scară/gol, trece prin zid DOAR dacă scara continuă dincolo (climb-through
+platforme ca în КЛАД), altfel blochează. Rebuild + pornit versiunea nouă.

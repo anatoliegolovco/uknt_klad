@@ -54,7 +54,7 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 |---|---------|----------------------|---------|--------|----------|
 | C1 | Player movement keys | arrows; shoot Q/S | WASD/arrows | 🔶 | UKNC_BUILDS.md intro text |
 | C2 | Gravity / fall | falls to floor | implemented | 🔶 | — |
-| C3 | Ladder climb | up/down on ladder | implemented | 🔶 | — |
+| C3 | Ladder climb | up/down, passes through platforms only if ladder continues | gated by can_climb_into() | 🔶 | fixed, re-test |
 | C4 | Gold collect → score | +N points | +10 | 🔶 | MECHANICS.md |
 | C5 | Water death | lose life | implemented | 🔶 | — |
 | C6 | Enemy collision | lose life | implemented | 🔶 | — |
