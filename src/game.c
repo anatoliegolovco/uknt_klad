@@ -72,21 +72,21 @@ static void game_tick(Game *g, Input in, float dt) {
     switch (pr) {
         case PR_GOLD:
             map_clear(&g->map,
-                (int)((g->player.px + TILE_PX*0.5f) / TILE_PX),
-                (int)((g->player.py + TILE_PX*0.5f) / TILE_PX));
+                (int)((g->player.px + TILE_W*0.5f) / TILE_W),
+                (int)((g->player.py + TILE_H*0.5f) / TILE_H));
             score_add_gold(&g->score);
             break;
         case PR_BONUS:
             map_clear(&g->map,
-                (int)((g->player.px + TILE_PX*0.5f) / TILE_PX),
-                (int)((g->player.py + TILE_PX*0.5f) / TILE_PX));
+                (int)((g->player.px + TILE_W*0.5f) / TILE_W),
+                (int)((g->player.py + TILE_H*0.5f) / TILE_H));
             score_add_life(&g->score);
             break;
         case PR_LEVEL_WIN:
         case PR_EXIT:
             map_clear(&g->map,
-                (int)((g->player.px + TILE_PX*0.5f) / TILE_PX),
-                (int)((g->player.py + TILE_PX*0.5f) / TILE_PX));
+                (int)((g->player.px + TILE_W*0.5f) / TILE_W),
+                (int)((g->player.py + TILE_H*0.5f) / TILE_H));
             if (score_level_advance(&g->score))
                 g->state = GS_ALL_WIN;
             else {
@@ -122,6 +122,9 @@ void game_frame(Game *g, float dt) {
 
     Input in = read_input();
 
+    // Comutare paletă color/mono (tasta M) — emulator УКНЦ vs monitor monocrom
+    if (IsKeyPressed(KEY_M)) render_toggle_mono();
+
     // State machine joc
     switch (g->state) {
         case GS_PLAYING:
@@ -153,7 +156,7 @@ void game_frame(Game *g, float dt) {
 
     // ── render ───────────────────────────────────────────────────────────────
     BeginTextureMode(g->renderer.target);
-    ClearBackground((Color){0,0,0,255});
+    ClearBackground(render_bg());
 
     render_map(&g->renderer, &g->map);
     for (int i = 0; i < MAX_ENEMIES; i++)
@@ -163,7 +166,7 @@ void game_frame(Game *g, float dt) {
     render_debug_player(&g->player);
 
     // Overlay mesaje
-    int mx = VW/2, my = MAP_ROWS*TILE_PX/2;
+    int mx = VW/2, my = MAP_ROWS*TILE_H/2;
     Color cw = {236,236,236,255};
     Color cy = {210,200,0,255};
     if (g->state == GS_LEVEL_WIN)

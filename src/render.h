@@ -9,18 +9,20 @@
 #include "score.h"
 #include "i18n.h"
 
-// LEVEL_RENDER (004776): ASL×4 + ADD #17450 → tile_addr = idx*16 + 0o17450
-// Tileset texture = strip orizontal de 32 sloturi 8×8 px, slot index = tile index.
+// Tileset = 32 sloturi × 16×8 px, 1bpp (slot index = tile index).
 //   slots 0-15  : tile-uri hartă (TILE_GFX[0..15])
-//   slots 16-31 : tile-uri caracter (TILE_GFX[16..31]) — half-plane sprite tiles
-// Caracterul (crocodil) e desenat din 2 tile-uri half-plane suprapuse 1px (planar),
-// exact ca SPRITE_DRAW (014030). Perechile sînt în render.c.
+//   slots 16-31 : tile-uri caracter (TILE_GFX[16..31])
 enum { TILESET_SLOTS = 32 };
 
 typedef struct {
     Texture2D       tileset;
-    RenderTexture2D target;   // 256×192 render target (upscalat la fereastră)
+    RenderTexture2D target;   // 512×192 render target (upscalat la fereastră)
 } Renderer;
+
+// Paletă 2-culori cu comutare color (УКНЦ) / mono (monitor școlar).
+Color render_bg(void);
+Color render_fg(void);
+void  render_toggle_mono(void);
 
 void render_init(Renderer *r);
 void render_shutdown(Renderer *r);

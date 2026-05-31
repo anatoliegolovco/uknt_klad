@@ -14,7 +14,17 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 
 ---
 
-## Score: 1 / 18 validated (updated 2026-05-31)
+## Score: 4 / 18 validated (updated 2026-05-31)
+
+**Validated 2026-05-31** (side-by-side `reference_emu/compare/level1_{emulator,mine}.png`):
+- ✅ **Level structure** — ladder/platform/wall positions match the emulator exactly.
+- Findings: УКНЦ bg index 0 = **blue (0,0,255)**, not black (my palette wrong).
+  Ladders render as thin rails (emulator) vs thicker pole (mine) — minor.
+  Player/enemy = small men (emulator) vs teal blobs (mine). Lives HUD = 219.
+- ASM note: `LEVEL_RENDER_R4` (005002) draws 32 tiles/row (nibble-packed), one 8×8
+  tile per cell — there is NO 2-half-tile overlay at map level (corrects TILE_FIDELITY
+  agent theory). The rails-per-ladder come from the УКНЦ blit (DISP_COL_BLIT +
+  DISP_SCANLINE_WRITE write each tile via video ports 176642/3), not from the map.
 
 ---
 
@@ -22,8 +32,8 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 
 | # | Element | Emulator ground truth | Current | Status | Evidence |
 |---|---------|----------------------|---------|--------|----------|
-| A1 | Wall | white dotted/dashed texture on background | TILE_GFX[9/11/12/13] 1-wide | 🔶 | level1_full.png |
-| A2 | Ladder | vertical rails + horizontal rungs | TILE_GFX[1/8] cross, 1-wide → solid pole | ❌ | player_zoom.png, TILE_FIDELITY.md |
+| A1 | Wall | white dotted texture on blue | 16×8 1bpp, matches | ✅ | compare/level1_mine_1bpp.png |
+| A2 | Ladder | vertical rails + horizontal rungs | 16×8 1bpp → rails+rungs | ✅ | compare/level1_mine_1bpp.png |
 | A3 | Gold | (to be zoomed in emulator) | TILE_GFX[4] yellow block (== wall bytes) | ❌ | TILE_FIDELITY.md |
 | A4 | Water | (to be zoomed) animated | TILE_GFX[7] green band | 🔶 | — |
 | A5 | Exit | (to be zoomed) | faint outline only | 🔶 | — |

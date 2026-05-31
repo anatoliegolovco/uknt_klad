@@ -5,8 +5,8 @@
 
 // Coloana și rândul tile central al playerului
 static void center_tile(const Player *p, int *col, int *row) {
-    *col = (int)((p->px + TILE_PX * 0.5f) / TILE_PX);
-    *row = (int)((p->py + TILE_PX * 0.5f) / TILE_PX);
+    *col = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+    *row = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 }
 
 // CMAP_FLAGS (013570): flag #20000 = tile scară cu tavan solid deasupra.
@@ -14,9 +14,9 @@ static void center_tile(const Player *p, int *col, int *row) {
 // de scară. Fix: verificăm scara în 3 rânduri consecutive în jurul playerului,
 // inclusiv rândul de deasupra (pentru "climb-through-platform").
 static bool on_ladder(const Player *p, const Map *m) {
-    int cx  = (int)((p->px + TILE_PX * 0.5f) / TILE_PX);
-    int ry1 = (int)(p->py / TILE_PX);
-    int ry2 = (int)((p->py + TILE_PX - 1) / TILE_PX);
+    int cx  = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+    int ry1 = (int)(p->py / TILE_H);
+    int ry2 = (int)((p->py + TILE_H - 1) / TILE_H);
     // Rândul de deasupra: dacă playerul apasă Up și există scară deasupra,
     // continuă să urce chiar dacă tile-ul curent e platformă (wall)
     return map_ladder(m, cx, ry1)   ||
@@ -30,8 +30,8 @@ static bool on_ladder(const Player *p, const Map *m) {
 // GAME_INIT (004000) → spawnul playerului la coord din entity record
 void player_init(Player *p, int spawn_col, int spawn_row) {
     *p = (Player){
-        .px         = (float)(spawn_col * TILE_PX),
-        .py         = (float)(spawn_row * TILE_PX),
+        .px         = (float)(spawn_col * TILE_W),
+        .py         = (float)(spawn_row * TILE_H),
         .vy         = 0.0f,
         .on_ladder  = false,
         .dead       = false,
@@ -48,8 +48,8 @@ PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
     // ── mișcare orizontală ──────────────────────────────────────────────────
     // PLAYER_MOVE_STEP: verifică dacă tile-ul din direcția de mers e solid
     float nx  = p->px + (float)(in.right - in.left) * PLAYER_SPEED * dt;
-    int   ckx = (int)((nx + (in.right ? TILE_PX - 1 : 0)) / TILE_PX);
-    int   midy = (int)((p->py + TILE_PX * 0.5f) / TILE_PX);
+    int   ckx = (int)((nx + (in.right ? TILE_W - 1 : 0)) / TILE_W);
+    int   midy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
     if (!map_solid(m, ckx, midy)) p->px = nx;
 
     // ── mișcare verticală: scară vs gravitație ───────────────────────────────
@@ -62,17 +62,17 @@ PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
         // Gravitație: ADD la viteza verticală, oprire la WALL de jos
         p->vy += PLAYER_GRAVITY * dt;
         float ny  = p->py + p->vy * dt;
-        int   ftx = (int)((p->px + TILE_PX * 0.5f) / TILE_PX);
-        int   fty = (int)((ny + TILE_PX) / TILE_PX);
+        int   ftx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+        int   fty = (int)((ny + TILE_H) / TILE_H);
         if (map_solid(m, ftx, fty)) {
             p->vy = 0.0f;
-            ny    = (float)(fty * TILE_PX) - (float)TILE_PX;
+            ny    = (float)(fty * TILE_H) - (float)TILE_H;
         }
         p->py = ny;
     }
     // Clamp la limitele nivelului
     if (p->py < 0.0f)                           { p->py = 0.0f;  p->vy = 0.0f; }
-    if (p->py > (MAP_ROWS - 1) * (float)TILE_PX) p->py = (MAP_ROWS - 1) * (float)TILE_PX;
+    if (p->py > (MAP_ROWS - 1) * (float)TILE_H) p->py = (MAP_ROWS - 1) * (float)TILE_H;
 
     // ── direcție + stare animație (SPRITE_HELPERS 013216) ────────────────────
     // ASM: dacă entity[+0o16]==0o12 (pe scară) → state 0o21 (climb), altfel 0o23 (walk).

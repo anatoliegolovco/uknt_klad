@@ -35,8 +35,8 @@ static void apply_gravity(Enemy *e, const Map *m) {
 static void do_move(Enemy *e, const Map *m, const Player *p) {
     int pcol, prow;
     // Col/row player din poziția pixel
-    pcol = (int)((p->px + TILE_PX * 0.5f) / TILE_PX);
-    prow = (int)((p->py + TILE_PX * 0.5f) / TILE_PX);
+    pcol = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+    prow = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 
     int dx = (pcol > e->col) ? 1 : (pcol < e->col) ? -1 : 0;
     int dy = (prow > e->row) ? 1 : (prow < e->row) ? -1 : 0;
@@ -82,7 +82,7 @@ bool enemy_tick(Enemy *e, const Map *m, const Player *p, float dt) {
     }
 
     // LEVEL_END_CHECK (001636): player și inamic pe același tile → moarte player
-    int pcol = (int)((p->px + TILE_PX * 0.5f) / TILE_PX);
-    int prow = (int)((p->py + TILE_PX * 0.5f) / TILE_PX);
+    int pcol = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+    int prow = (int)((p->py + TILE_H * 0.5f) / TILE_H);
     return (e->col == pcol && e->row == prow);
 }

@@ -230,3 +230,28 @@ data drawn 2 tiles wide**, and both the extractor (`tools/extract_uknc_gfx.py`) 
 blit in `src/render.c::render_map()` treat each tile as an independent straight bitmap. Fix the
 planar decode (and/or draw structural tiles 2-wide) and the ladder will gain its side rails and
 gold will stop looking like a recoloured wall.
+
+---
+
+## RESOLVED 2026-05-31 — tiles are 16×8 1bpp (not 8×8 2bpp)
+
+Validated against the real УКНЦ emulator (not the mono BK capture used above).
+
+**Root cause:** the УКНЦ tile is **16 pixels wide × 8 tall, 1 bit-per-pixel** (2-colour).
+Evidence:
+1. `DISP_SCANLINE_WRITE` (040060) consumes **2 bytes per row** (bytes 2r and 2r+1 →
+   the 16-bit pixel word for row r), 8 rows = 16 bytes. NOT 8 pixel-plane + 8 colour-plane.
+2. The emulator playfield contains **exactly two colours**: blue (0,0,255) bg + white fg.
+   No yellow/green — the game is 2-colour. The prior 4-colour 2bpp decode invented colours
+   that never appear on screen.
+3. Decoding tile 1 (ladder, bytes `3C 3C FF FF …`) as 16×8 1bpp →
+   `..####....####..` rows + `################` rung rows = **two rails + rungs**, exactly
+   the emulator ladder. The 8×8 2bpp decode gave a single centred band (wrong).
+
+**Consequence for the reimplementation:**
+- Tiles are 16w×8h, 1bpp. Palette is 2 colours: index 0 = background, 1 = foreground.
+- Playfield = 32 tiles × 16px = 512px wide, 22 rows × 8px = 176px tall.
+- `tools/gen_gfx_c.py` and `extract_uknc_gfx.py` decode must change to 1bpp 16×8.
+- The 4-colour `UKNC_PAL` (black/green/yellow/white) is wrong; use bg/fg (+ mono toggle).
+- "красный/зелёный человечек" (red/green men) only differ in colour in УКНЦ RGB mode;
+  in КЛАД's 2-colour mode they are white shapes distinguished by form/position.

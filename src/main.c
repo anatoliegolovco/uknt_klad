@@ -16,7 +16,7 @@ int main(void) {
     // FN_HW_INIT (005754): init hardware, apoi TITLE_SEQ
     // Echivalent: inițializăm fereastra și contextul grafic
     SetConfigFlags(FLAG_VSYNC_HINT);
-    InitWindow(VW * 3, VH * 3, "КЛАД (1987 Баранов)");
+    InitWindow(768, 576, "КЛАД (1987 Баранов)");
     SetTargetFPS(60);
 
     Game game;

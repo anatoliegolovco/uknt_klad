@@ -3,14 +3,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// ── dimensiuni fixe, din COLLISION_MAP_BUILD (013524) și stride 0o540 ────────
-// ADD #0o540 (=352) per nivel confirmă 22×16 bytes = 22×32 tiles
+// ── dimensiuni fixe ───────────────────────────────────────────────────────────
+// Map: 22 rânduri × 32 coloane (COLLISION_MAP_BUILD 013524, stride 0o540).
+// Tile УКНЦ = 16 px lățime × 8 px înălțime, 1bpp (DISP_SCANLINE_WRITE 040060:
+// 2 bytes/rând = cuvânt de 16px). Vezi docs/reverse/TILE_FIDELITY.md.
 enum {
     MAP_COLS  = 32,
     MAP_ROWS  = 22,
-    TILE_PX   = 8,    // pixeli per tile
-    VW        = 256,  // lățime render target = MAP_COLS × TILE_PX
-    VH        = 192,  // înălțime render target = (MAP_ROWS × TILE_PX) + 16 HUD
+    TILE_W    = 16,   // lățime tile (px) — УКНЦ pixeli ne-pătrați (2:1)
+    TILE_H    = 8,    // înălțime tile (px)
+    VW        = MAP_COLS * TILE_W,        // 512
+    VH        = MAP_ROWS * TILE_H + 16,   // 176 + 16 HUD = 192
 };
 
 // ── tile indices 0-15, din DAT_TILE_* symbols (017450–020030) ────────────────
