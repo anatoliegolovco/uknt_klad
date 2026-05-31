@@ -8,7 +8,7 @@
 
 ### 1. Ce SE PĂSTREAZĂ (nu se modifică, nu se șterge)
 - `disassembly/annotated/uknc_klad_1987.asm` — codul ASM adnotat și comentat
-- `disassembly/annotated/crocodile_klad.asm` — referință BK-0010
+- `archive/bk0010/disassembly/crocodile_klad.asm` — referință BK-0010
 - `disassembly/raw/` — dezasamblări brute
 - `docs/reverse/` — toată documentația de reverse engineering
 - `assets/original/` — binarele originale și extracțiile din ele
@@ -43,7 +43,7 @@
 **Acest fișier este sursa de adevăr.** Dacă ești tentat să spui că "totul e gata și totul e bine", revino AICI și verifică fiecare punct față de ce există în repo.
 
 **⚠ TARGET ACTUAL: `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (УКНЦ МС-0511)**  
-**Pivot de la:** `assets/original/ex_klad/KLAD.BIN` (BK-0010 Crocodile) — acel work rămâne ca referință, cod 83% identic.
+**Pivot de la:** `archive/bk0010/binaries/ex_klad/KLAD.BIN` (BK-0010 Crocodile) — acel work rămâne ca referință, cod 83% identic.
 
 Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/extracted/uknc/KLAD_1987_Baranov.SAV`)
 
@@ -68,7 +68,7 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 **Ce se vrea:** Codul în assembler al jocului, curat, adnotat cu ce face fiecare rutină/bloc.
 
 **Fișiere de output:**
-- `disassembly/annotated/crocodile_klad.asm` — assembler complet cu etichete și comentarii
+- `archive/bk0010/disassembly/crocodile_klad.asm` — assembler complet cu etichete și comentarii
 - `docs/reverse/ROUTINES.md` — index al tuturor rutinelor identificate (adresă, nume, ce face)
 
 **Criterii de completitudine:**
@@ -158,13 +158,13 @@ Versiunea țintă: **КЛАД original Баранов 1987** (`assets/original/e
 
 | Artefact | Există | Note |
 |----------|--------|------|
-| `KLAD.BIN` | ✅ | `assets/original/ex_klad/KLAD.BIN` |
+| `KLAD.BIN` | ✅ | `archive/bk0010/binaries/ex_klad/KLAD.BIN` |
 | Linear disassembly brut | ✅ | `disassembly/raw/KLAD.asm` |
 | Title screen PNG | ✅ | `assets/original/extracted/crocodile/title_screen.png` |
 | Sprites PNG (brut) | ✅ | `assets/original/extracted/crocodile/sprites.png` |
 | gfx_region.bin | ✅ | `assets/original/extracted/crocodile/gfx_region.bin` |
 | BYTE_MAP.md | ❌ | Neînceput |
-| Assembler adnotat | ✅ | `disassembly/annotated/crocodile_klad.asm` — 35/35 rutine |
+| Assembler adnotat | ✅ | `archive/bk0010/disassembly/crocodile_klad.asm` — 35/35 rutine |
 | ROUTINES.md | ✅ | `docs/reverse/ROUTINES.md` — index complet + variabile globale |
 | MECHANICS.md | ❌ | Neînceput |
 | Niveluri extrase | ❌ | Parțial în 08_level_data.md |

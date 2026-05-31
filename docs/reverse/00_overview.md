@@ -1,85 +1,72 @@
-# 00 — Overview & binary identification
+# КЛАД (1987, Баранов) — УКНЦ МС-0511 — project overview
 
-## What we have
+This repository reverse-engineers **one specific game** and reimplements it in C23:
 
-The pdp-11.org.ru game archive (`archive.pdp-11.org.ru/tmp/`) yields **five**
-КЛАД variants, each a RAR holding a single BK-style raw `.BIN` memory image.
-(`r-games.net`, the task's primary source, does not resolve from our network;
-this archive is the working fallback.)
+> **КЛАД** — Николаев / Баранов Д.Г., **1987**, for the **Электроника УКНЦ (МС-0511)**.
+> School distribution: "Н-Шангская СШ". Validated running in the УКНЦ emulator.
 
-| file | size | header load | header len | leading bytes | classification |
-|------|-----:|------------:|-----------:|---------------|----------------|
-| `KLAD.BIN`    | 10433 | `0732`  | `024275` (10429) | data preamble | BK-0010, entry TBD |
-| `KLAD2.BIN`   | 11086 | `0732`  | `025512` (11082) | data preamble | BK-0010, entry TBD |
-| `KLAD3.BIN`   | 15876 | `01000` | `037000` (15872) | `JMP @#4000` | **BK-0010, clean entry** |
-| `KLAD4.BIN`   | 10267 | `0732`  | `024027` (10263) | data preamble | BK-0010, entry TBD |
-| `klad10.bin`  | 11527 | `0720`  | `026403` (11523) | data preamble | BK-0010, entry TBD |
+Everything BK-0010, the 1991 Crocodile port, and other versions has been moved to
+[`/archive`](../../archive/) — see `archive/README.md`. The working tree is this
+version **only**.
 
-All five validate as BK raw images: `header_len + 4 == file_size` exactly.
-SHA-256 sums are recorded in `tools/fetch_original.sh`.
+---
 
-## Platform: BK-0010, not УКНЦ
+## The target binary
 
-The task assumed the УКНЦ "Crocodile Software" build (planar video, GRB palette,
-distributed in an RT-11 `.dsk`). **These binaries are the БК-0010 build
-instead.** Operand-level fingerprinting (only deliberate `#imm`/`@#abs`
-constants, which filters data noise) shows:
+| | |
+|---|---|
+| Game file | `assets/original/extracted/uknc/KLAD.SAV` (on disk) |
+| Extracted image | `assets/original/extracted/uknc/KLAD_1987_Baranov.SAV` (17 408 B = 34 RT-11 blocks) |
+| Program image | `assets/original/extracted/uknc/KLAD_1987_prog.bin` (load `001000`) |
+| Source disk | `assets/original/extracted/uknc/fodos_games.dsk` (FODOS filesystem) |
+| Disassembly | `disassembly/annotated/uknc_klad_1987.asm` (full, annotated) |
+| Author strings | `"Николаев 1987"` @2532, `"Баранов"` @2546, `"Д.Г."` @2554 |
 
-- `KLAD3.BIN`: `MOV #040000` (BK screen base) ×5, plus `#0177700`, `#0177716`
-  (BK system register), `#0177662` (BK keyboard data), `#0177664` (BK scroll),
-  `#0177714`. 15 distinct BK-register hits.
-- All variants pour constants into the `040000`–`077777` range — the БК linear
-  framebuffer. УКНЦ does not have a CPU-visible framebuffer there (its video is
-  planar, behind the peripheral processor).
+**Platform:** УКНЦ = two KM1801VM2 (PDP-11) CPUs; planar video via a peripheral CPU
+(no direct CPU framebuffer like BK-0010). All constants octal. Game at `001000`–`037777`.
 
-**Implication:** for understanding *mechanics* — the only thing the clean-room
-reimplementation needs — the BK-0010 build is equivalent to and simpler than
-the УКНЦ build. We proceed with it. If the specific УКНЦ/GRB build is wanted
-later, it most plausibly lives in the 800 KiB "40-in-1" RT-11 floppy image,
-which we have not yet found on a reachable mirror.
+---
 
-The five variants are likely different versions / level sets / authorship lines
-(there are both a 1987 Баранов КЛАД and the Crocodile port). Distinguishing them
-precisely needs dynamic analysis in an emulator (next section).
+## Run it (ground truth)
 
-## Reference target
+See [`EMULATOR.md`](EMULATOR.md). Short version — QtUkncBtl, then `R KLAD` at the
+ФОДОС prompt. Reference captures: `assets/original/extracted/uknc/reference_emu/`.
 
-Until told otherwise we treat **`KLAD3.BIN`** as the primary subject: it is the
-largest (most complete), loads at the canonical БК `01000`, and has a clean
-`JMP @#4000` entry trampoline that disassembles into coherent init code. The
-others begin with a data/loader preamble whose true entry point we will confirm
-dynamically.
+---
 
-## Methodology & tooling
+## Game rules (from the binary's own intro text, KOI8-R)
 
-We could not use radare2 here (the Ubuntu package ships no PDP-11 plugin), so we
-wrote **`tools/pdp11dis.py`** — a from-scratch, validated PDP-11 disassembler
-(octal output, full addressing-mode + PC-relative target resolution). It is the
-canonical tool for this repo; `disassembly/raw/*.asm` is its linear-sweep
-output. Linear sweep necessarily mis-decodes data regions as code; the
-`disassembly/annotated/` tree will hold hand-corrected, symbolised routines as
-we work through them.
+- Goal: traverse all mazes, collect all treasure (клады), avoid the **green men**
+  (зелёные человечки), don't fall in water, maximise score.
+- You control the **red man** (красный человечек).
+- Shoot left = **Q**, shoot right = **S**.
+- Speed select at start: keys **1–4** (1 = max, 4 = min).
+- HUD: `"Счет"` (score) + `"Попытки"` (attempts/lives).
 
-### The intended pipeline
+---
 
-1. **Recon (done):** identify container, load address, platform — this file.
-2. **Static sweep (done):** `tools/disasm.sh` → `disassembly/raw/`.
-3. **Dynamic analysis (needs a GUI host):** run in **UKNCBTL** / a BK emulator
-   with a debugger; breakpoint boot, keyboard read, sprite blit, water-death;
-   capture traces. **This step cannot run in the headless cloud container** —
-   it is to be done on the local Ubuntu desktop. See `docs/reverse/TODO.md`.
-4. **Annotate:** promote understood routines into `disassembly/annotated/` and
-   write up `03_boot_init.md` … `09_sound.md`.
-5. **Reimplement clean-room:** `src/` (C23 → WebAssembly).
+## Document map
 
-## Status of the task's checklist
+| Doc | Content |
+|-----|---------|
+| `EMULATOR.md` | How to run + drive the УКНЦ emulator, capture references |
+| `KLAD_1987_BARANOV.md` | Canonical version facts (this build's specifics) |
+| `MECHANICS.md` | Game mechanics extracted from ASM |
+| `ROUTINES_UKNC.md` | Index of all routines (address → name → role) |
+| `GFX_MAP.md` | Tile/sprite memory map + format |
+| `TILE_FIDELITY.md` | Ladder/gold/character shape discrepancies + root cause |
+| `ANIMATIONS.md` | Animation timing + sprite frames |
+| `BYTE_MAP.md` | Byte-range catalogue of the SAV |
+| `LEVEL_FORMAT.md` | Level data format + extraction |
+| `FIDELITY_KPI.md` | **Scorecard** — reimplementation vs emulator, ✅ only when validated |
+| `REIMPL_PLAN.md` | C23 reimplementation plan (ASM-first) |
+| `WORK_LOG.md` | Timestamped progress log |
+| `USER_GOALS.md` | The objectives + absolute rules |
 
-- [x] Find a working source for the blob (archive.pdp-11.org.ru)
-- [x] Download + integrity (SHA-256 recorded) into `assets/original/` (tracked)
-- [x] Identify format (BK raw `.BIN`, not `.dsk`) and platform (BK-0010)
-- [x] Toolchain: disassembler (custom), extractor scripts, unrar/7z
-- [ ] Confirm the game runs in an emulator — **GUI, do locally** (see TODO.md)
-- [x] Extract individual files from the archives
-- [x] Begin disassembly of the main binary
-- [x] First documentation iteration (this set)
-- [x] Git repo structure
+---
+
+## Reimplementation (`src/`)
+
+Clean-room C23 + raylib → native (Linux) **and** WebAssembly. Logic derived strictly
+from `uknc_klad_1987.asm`; graphics decoded from the binary. No original code copied.
+Fidelity is tracked objectively in `FIDELITY_KPI.md` against emulator captures.
