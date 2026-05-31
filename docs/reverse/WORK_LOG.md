@@ -15,7 +15,34 @@ Statusuri: `DONE` / `IN_PROGRESS` / `BLOCKED` / `CRASHED` / `RESUMED`
 
 ---
 
-## 2026-05-30
+## 2026-05-31
+
+`[2026-05-31 UTC] DONE` — КЛАД 1987 Баранов rulează în emulatorul УКНЦ REAL (color) + referințe capturate
+
+**Emulator УКНЦ funcțional (QtUkncBtl):**
+- AppImage: `github.com/nzeemin/ukncbtl-qt` release preview-468, extras în `/tmp/squashfs-root/`
+  (FUSE indisponibil → `./QtUkncBtl.AppImage --appimage-extract`, rulează `./AppRun`)
+- ROM УКНЦ inclus în build (`emulator/uknc_rom.bin`) — nu necesită ROM separat
+- Lansare directă în КЛАД:
+  `./AppRun "-disk0:<abs>/fodos_games.dsk" -autostart -boot1`
+  (OPTIONCHAR pe Linux = `-`, NU `/`). Apoi la promptul ФОДОС: tastează `R KLAD`.
+- **Input:** `xdotool key/type` FĂRĂ `--window` (XTEST, evenimente trusted). Cu `--window`
+  Qt ignoră (XSendEvent sintetic). Click pe ecranul emulatorului întâi pt focus.
+- **Screenshot:** `tools/shot.py <WID> out.png` (citește măștile XWD → culori corecte).
+- Disk КЛАД: `fodos_games.dsk`, fișier `KLAD.SAV` (confirmat din `DIR`).
+
+**Constatări GROUND TRUTH din emulator (corectează presupuneri anterioare):**
+1. **Vieți = 219** afișat literal ("Попытки 219"), NU "9". VAR_LIVES=0o333=219 se
+   afișează ca număr zecimal complet. Reimplementarea C arată "9" → GREȘIT.
+2. **Player = omuleț alb (красный человечек)** — figură umanoidă ~8px, NU crocodil,
+   NU pătrat. Vezi `reference_emu/player_zoom.png`.
+3. **Scări = șine verticale + trepte** (rails+rungs), NU stâlp solid. Confirmă
+   `TILE_FIDELITY.md` (decode planar greșit upstream).
+4. УКНЦ randează color (fundal albastru, mod GRB); pe monitoare mono de școală =
+   tonuri de gri. Userul a jucat B&W — forma contează, nu culoarea.
+
+**Referințe salvate:** `assets/original/extracted/uknc/reference_emu/`
+(title.png, level1_full.png, hud_and_field.png, player_zoom.png)
 
 `[2026-05-30 UTC] RESUMED` — User a raportat crash. Context recuperat din git log + starea repo.
 
