@@ -1,0 +1,4 @@
+// Headless QColor shim — emubase core does not actually paint; minimal stub.
+#pragma once
+typedef unsigned int QRgb;
+class QColor { public: QColor(){} QColor(int,int,int){} };

@@ -31,3 +31,9 @@ _site/
 !/play/
 !/play/**
 klad-web.zip
+
+# --- Headless УКНЦ emulator build artifact ---
+vendor/ukncbtl-qt/headless/uknc_headless
+
+# --- scratch ---
+tmp/

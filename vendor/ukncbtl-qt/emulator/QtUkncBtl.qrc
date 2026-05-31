@@ -1,0 +1,33 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/keyboard.png</file>
+        <file>images/iconRun.svg</file>
+        <file>images/iconReset.svg</file>
+        <file>images/iconFloppy.svg</file>
+        <file>images/iconFloppySlot.svg</file>
+        <file>images/iconCartridge.svg</file>
+        <file>images/iconCartridgeSlot.svg</file>
+        <file>images/iconHdd.svg</file>
+        <file>images/iconHddSlot.svg</file>
+        <file>images/iconHex.svg</file>
+        <file>images/iconSound.svg</file>
+        <file>images/iconSoundOff.svg</file>
+        <file>images/iconStepInto.svg</file>
+        <file>images/iconStepOver.svg</file>
+        <file>images/iconCpuPpu.svg</file>
+        <file>images/iconWordByte.svg</file>
+        <file>images/iconEditAddress.svg</file>
+        <file>images/iconMemoryCpu.png</file>
+        <file>images/iconMemoryPpu.png</file>
+        <file>images/iconMemoryRam.png</file>
+        <file>images/iconMemoryRom.png</file>
+        <file>images/iconScreenshot.svg</file>
+        <file>images/iconDebugger.svg</file>
+        <file>images/ukncbtl.png</file>
+        <file>uknc_rom.bin</file>
+    </qresource>
+    <qresource prefix="/lang">
+        <file alias="ukncbtl_en.qm">lang/ukncbtl_en.qm</file>
+        <file alias="ukncbtl_ru.qm">lang/ukncbtl_ru.qm</file>
+    </qresource>
+</RCC>
