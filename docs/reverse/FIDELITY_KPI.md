@@ -14,7 +14,7 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 
 ---
 
-## Score: 4 / 18 validated (updated 2026-05-31)
+## Score: 7 / 18 validated (updated 2026-05-31)
 
 **Validated 2026-05-31** (side-by-side `reference_emu/compare/level1_{emulator,mine}.png`):
 - ✅ **Level structure** — ladder/platform/wall positions match the emulator exactly.
@@ -34,9 +34,9 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 |---|---------|----------------------|---------|--------|----------|
 | A1 | Wall | white dotted texture on blue | 16×8 1bpp, matches | ✅ | compare/level1_mine_1bpp.png |
 | A2 | Ladder | vertical rails + horizontal rungs | 16×8 1bpp → rails+rungs | ✅ | compare/level1_mine_1bpp.png |
-| A3 | Gold | (to be zoomed in emulator) | TILE_GFX[4] yellow block (== wall bytes) | ❌ | TILE_FIDELITY.md |
-| A4 | Water | (to be zoomed) animated | TILE_GFX[7] green band | 🔶 | — |
-| A5 | Exit | (to be zoomed) | faint outline only | 🔶 | — |
+| A3 | Gold | treasure-chest shape (white box + coin slots) | 16×8 1bpp, treasure shape | ✅ | compare/maptiles_16x8_1bpp.png |
+| A4 | Water | wavy white surface on blue | 16×8 1bpp, wavy surface | ✅ | compare/maptiles_16x8_1bpp.png |
+| A5 | Exit | invisible (empty tile) | empty + faint marker | ✅ | compare/maptiles_16x8_1bpp.png |
 
 ## B. Sprites / animation
 
