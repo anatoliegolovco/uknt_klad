@@ -42,8 +42,8 @@ capture. The emulator is the single source of truth (not docs, not the BK-0010 b
 
 | # | Element | Emulator ground truth | Current | Status | Evidence |
 |---|---------|----------------------|---------|--------|----------|
-| B1 | Player shape | white humanoid (красный человечек), ~8px | tile-bank overlay (was crocodile/square) | ❌ | player_zoom.png |
-| B2 | Enemy shape | green humanoid (зелёный человечек) | enemy walk tiles | ❌ | (to be zoomed) |
+| B1 | Player shape | white человечек, 16×8 (crude) | char tiles 18/20/21 (table 012410) | 🔶 | ASM-grounded; pixel-confirm pending |
+| B2 | Enemy shape | white человечек (green only in RGB mode) | char tiles 20/21 | 🔶 | ASM-grounded; pixel-confirm pending |
 | B3 | Player walk anim | (frames to be captured) | 2-frame cycle | 🔶 | — |
 | B4 | Player climb anim | (to be captured) | climb tile | 🔶 | — |
 | B5 | Enemy anim | 8-frame horiz / 5-frame vert | frame cycle | 🔶 | ANIMATIONS.md |

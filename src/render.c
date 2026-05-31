@@ -16,11 +16,13 @@ Color render_bg(void) { return g_mono ? PAL_MONO.bg : PAL_COLOR.bg; }
 Color render_fg(void) { return g_mono ? PAL_MONO.fg : PAL_COLOR.fg; }
 void  render_toggle_mono(void) { g_mono = !g_mono; }
 
-// Tile-uri caracter (16-31). Indici referențiați de tabela de animație 012410.
-// Player/enemy randate ca o singură figură 16×8 (se rafinează vs emulator).
-#define CHAR_STAND  16
+// Tile-uri caracter (16-31), 16×8 1bpp. Indicii vin din tabela de animație 012410
+// (indexată (state-0o21)*2 + dir): climb=18 (verificat: table[10]=18), walk=20/21/22.
+// SPRITE_HELPERS (013216) scrie indexul în celula player; SPRITE_DRAW (014030) îl blit-uie.
+// Figura УКНЦ e crudă (16×8) — om alb pe albastru (красный/зелёный doar în mod RGB).
+#define CHAR_STAND  20   // walk frame A (nu există tile "stand" separat în tabelă)
 #define CHAR_WALK0  20
-#define CHAR_WALK1  22
+#define CHAR_WALK1  21
 #define CHAR_CLIMB  18
 
 // tileset: pixeli fg = alb opac, fond = transparent. La desenare aplicăm tenta fg.
