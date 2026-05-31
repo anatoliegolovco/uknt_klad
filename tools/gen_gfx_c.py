@@ -31,9 +31,31 @@ def load_prog():
     return SAV.read_bytes()[512:]   # strip 512-byte RT-11 header; prog at 001000
 
 def decode_tile_16x8(d):
-    """16x8 1bpp: row r = bytes 2r (left 8px) ++ bytes 2r+1 (right 8px).
-    (two-halves variant broke walls/ladders/bridges; this keeps them correct.
-    Gold still imperfect — to be replaced by emulator-extracted tiles.)"""
+    """Decode a 16-byte tile to 16x8 1bpp.
+
+    Default (ladder/wall/water — data in the pixel plane / both planes): the УКНЦ
+    blit lays out row r = byte[2r] (left 8px) ++ byte[2r+1] (right 8px). This keeps
+    ladders as 2 rails and the water surface — DO NOT change.
+
+    Special case — GOLD/treasure tiles: their PIXEL plane (bytes 0-7) is all zero;
+    the graphic lives only in the COLOUR plane (bytes 8-15) as a single 8x8 chest.
+    Read 16x8 it gets split into two blocks (wrong). So for these tiles we decode
+    the colour plane as an 8x8 chest and double it horizontally to fill 16px → ONE
+    chest (matches the emulator / video clips). Only affects pixel-plane-empty tiles.
+    """
+    pixel_plane_empty = all(b == 0 for b in d[0:8])
+    colour_plane_data = any(b != 0 for b in d[8:16])
+    if pixel_plane_empty and colour_plane_data:
+        rows = []
+        for r in range(8):
+            cb = d[8 + r]                      # one colour byte per row = 8px
+            row = []
+            for col in range(8):
+                bit = (cb >> (7 - col)) & 1
+                row.append(bit); row.append(bit)   # double each px → 16 wide, one chest
+            rows.append(row)
+        return rows
+    # default: 16x8, two 8px bytes side by side
     rows = []
     for r in range(8):
         row = []
