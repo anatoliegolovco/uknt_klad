@@ -37,13 +37,15 @@ cd vendor/ukncbtl-qt/headless
 Boots ФОДОС from the disk and runs headless. (To launch КЛАД itself, inject the keystrokes
 `R KLAD\n` via `CMotherboard::KeyboardEvent(scancode, pressed)` — next iteration.)
 
-## Status
+## Status — ✅ fully working headless
 - ✅ emubase core compiles Qt-free (7/7 files)
-- ✅ headless harness links (137 KB, no Qt) and **runs** — boots ФОДОС, executes frames,
-  reads planar RAM
-- ⬜ keystroke injection to auto-run КЛАД headless
-- ⬜ planar→RGB screen dump (replicate `Emulator_PrepareScreenRGB32`) for headless PNG
-  screenshots (pixel-exact visual ground truth, scriptable)
+- ✅ headless harness links (no Qt) and runs
+- ✅ keystroke injection — `boot_klad()` auto-boots КЛАД (menu→disk→ФОДОС→`R KLAD`→start)
+- ✅ planar→RGB screen dump (`screen.cpp`) → 640×288 PPM. КЛАД boot/title/gameplay captured
+  pixel-exact in `assets/uknc/reference_emu/headless/`. Gameplay HUD shows "Попытки 219",
+  confirming the ASM lives value `0o333`.
+
+Build & use guide for agents: `docs/headless/README.md`.
 
 ## Upstream sync
 This is a vendored snapshot (no nested `.git`). To re-sync: clone upstream at a newer
