@@ -282,3 +282,16 @@ gameplay reads the УКНЦ keyboard *hardware ports* 41020/40660, which uknc_em
 the static path is unambiguous.)
 **Decision needed (see chat):** keep our designed exit→advance (then make door connect to the
 exit for the 5 stuck levels), adopt the faithful key-advance, or make WIN = collect the gold_c.
+
+### KI-13 RESOLUTION (decizia userului: design B — cheie→ușă→ieșire)
+Userul a ales **B**: cheia (gold_c) deschide ușa, iar IEȘIREA (tile 2, urcată pe scară) termină
+nivelul — consideră avansul-cu-tastă (0o55) un artefact al portării pe discul școlar. Implementat:
+- `map.c map_can_up`: poți urca ÎN ieșire (tile 2) din celula de dedesubt (ușa de sus). Ieșirea
+  e unică/nivel → fără victorii false.
+- `map.c map_can_down`: adăugat cazul CMAP #10000 lipsă (cur==8 && jos≤6 → cobori de pe scară în
+  aur/aer) — verificat vs bufferul real.
+- `game.c` (deja): gold_c → `map_open_door` + continuă; PR_EXIT (tile 2) → `score_level_advance`.
+**REZULTAT: toate 10 nivele completabile** (reachability `/tmp/reach`: exit 1/1 pe fiecare,
+conștient de apă). E2E 10/10, 0 wall-overlaps. Diferența completabil/blocat venea din: ieșirile
+celor 5 nivele „blocate" plutesc cu aer dedesubt (vs zid/scară la cele 5 OK) — se ajunge urcând
+în ele de pe rândul-platformă de sub ele.

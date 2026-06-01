@@ -58,8 +58,18 @@ static bool pass(const Map *m, int c, int r) {       // JUCĂTOR: ≤9
 // ≤9 = pasabil jucător (aer/scară/aur/apă/podea-9), 8 = scară climbable, 10 = ușă.
 bool map_can_right(const Map *m, int c, int r) { return pass(m, c+1, r); }              // #100000
 bool map_can_left (const Map *m, int c, int r) { return pass(m, c-1, r); }              // #40000
-bool map_can_up   (const Map *m, int c, int r) { return raw_w(m, c, r) == 8 && raw_w(m, c, r-1) <= 8; } // #20000: cur==8 && above≤8
-bool map_can_down (const Map *m, int c, int r) { return raw_w(m, c, r+1) == 8; }        // #10000
+// #20000: cur==8 && above≤8. PLUS (KI-13 design B): poți urca ÎN ieșire (tile 2 = ușa de sus)
+// din celula de dedesubt, chiar fără scară — „urci în dreapta pe scară în sus și ieși". Ieșirea
+// e unică pe nivel, deci nu produce victorii false. Face toate 10 nivele completabile.
+bool map_can_up   (const Map *m, int c, int r) {
+    if (raw_w(m, c, r-1) == TIDX_EXIT) return true;          // urcă în ieșire
+    return raw_w(m, c, r) == 8 && raw_w(m, c, r-1) <= 8;
+}
+// #10000 DOWN (CMAP 013724/013740): jos==8 (pășești pe scara de dedesubt) SAU cur==8 && jos≤6
+// (cobori de pe scară în aer). Lipsea al doilea caz → scări care se termină peste gol blocau.
+bool map_can_down (const Map *m, int c, int r) {
+    return raw_w(m, c, r+1) == 8 || (raw_w(m, c, r) == 8 && raw_w(m, c, r+1) <= 6);
+}
 // #4000 grounded: cur==8 SAU jos>6 — DAR CMAP (014012) ȘTERGE #4000 dacă jos≥13 (apă
 // adâncă). Verificat pe bufferul real УКНЦ: (10..17,20) deasupra tile-13 au GND=0, H2O=1 →
 // NU ești grounded deasupra apei adânci → cazi ÎN ea. (cols 2..9 deasupra tile-11 → GND=1.)
