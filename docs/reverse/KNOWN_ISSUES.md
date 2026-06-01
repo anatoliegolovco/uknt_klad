@@ -157,3 +157,16 @@ left/right there — ladders dead-end instead of connecting to platforms.
 **Ground truth needed (KI/T8):** extract the real per-level reachability from uknc_emu
 (COLLISION_MAP_BUILD flags) — if the real game reaches everything but we don't, it's our
 movement/data. This is the concrete next step before changing the climb rule.
+
+### KI-8 ground-truth result (uknc_emu) — CONCLUSIVE: our movement is the bug
+Extracted the REAL collision flags from uknc_emu (BUF_TILE_WORK 014550 after
+COLLISION_MAP_BUILD) and BFS'd them from the real player cell (014422 → cell 642 = col2,
+row20). With the documented direction bits (right=0o1000, left=0o400, up=0o20000,
+down=0o10000) the REAL game reaches **363/704 cells, exit 1/1, gold 6/8** — i.e. it
+navigates to the exit and gold. Our impl reaches ~53 cells, exit 0/1.
+**Root cause:** the original moves by **per-cell direction flags** (R/L/U/D computed by
+COLLISION_MAP_BUILD); our `map.c`/`player.c` use heuristics (map_solid + climb-only-into-
+ladder) that are far too strict. **Faithful fix:** reimplement COLLISION_MAP_BUILD's flag
+computation (or bake the per-level flag maps extracted from uknc_emu) and make player
+movement obey the flags — then the player can traverse like the original. This is the fix
+for KI-8 (the player getting stuck) and supersedes the delicate ad-hoc climb rule.

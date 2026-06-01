@@ -376,7 +376,31 @@ int main(int argc, char **argv){
         for(int a=0;a<MEMSZ;a++) if(C.plane1[a]){ nz++; if(lo<0)lo=a; hi=a; }
         printf("drove %ld instr, PC=%06o, plane1 nz=%ld range %06o..%06o%s\n",
                lim, C.r[7], nz, lo<0?0:lo, hi<0?0:hi, C.trapped?C.trapmsg:"");
+        // player entity @014420: [0]=type [2]=tile-cell ptr/X [6]=screen(plane) pos
+        printf("player entity @014420: ");
+        for(int w=0; w<=016; w+=2) printf("[%o]=%06o ", w, rdw(&C,(uint16_t)(014420+w)));
+        printf("\n");
+        uint16_t spos = rdw(&C, 014426);     // entity[6] = R1 = blit plane position
+        uint16_t pbase = (uint16_t)(spos + 0106210);
+        printf("player rendered at plane base %06o (entity[6]=%06o + 0106210):\n", pbase, spos);
+        for(int y=0;y<8;y++){ printf("  ");
+            for(int x=0;x<24;x++){
+                uint16_t addr=(uint16_t)(pbase + y*0120 + (x>>3));
+                printf("%c", ((C.plane1[addr]>>(7-(x&7)))&1)?'#':'.');
+            }
+            printf("\n");
+        }
         dump_plane(&C, "/tmp/plane1_game.pgm", lo<0?0106210:(uint16_t)lo);
+        // dump the collision work buffer (BUF_TILE_WORK 014550, 22*32 words) — the REAL
+        // movement graph (per-cell direction flags built by COLLISION_MAP_BUILD).
+        FILE *cf=fopen("/tmp/cmap.bin","wb");
+        if(cf){ for(int i=0;i<22*32;i++){ uint16_t w=rdw(&C,(uint16_t)(014550+i*2));
+                    fputc(w&0xff,cf); fputc(w>>8,cf); } fclose(cf);
+                printf("collision buffer @014550 -> /tmp/cmap.bin (704 words)\n"); }
+        uint16_t pp=rdw(&C,014422);   // VAR_PLAYER_TILE_PTR → player cell in the buffer
+        int pidx=((int)pp-014550)/2;
+        printf("player tile ptr @014422=%06o -> cell index %d (row %d, col %d if /32)\n",
+               pp, pidx, pidx/32, pidx%32);
         return 0;
     }
 
