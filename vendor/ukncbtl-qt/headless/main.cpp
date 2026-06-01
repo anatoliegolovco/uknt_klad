@@ -89,12 +89,21 @@ static void shoot(const char* path);   // fwd
 enum { K_RIGHT=0133, K_LEFT=0116, K_UP=0154, K_DOWN=0134 };
 static void boot_sprite(CMotherboard* b){
     boot_klad(b);                       // into the maze at spawn
-    shoot("/tmp/spr_a.ppm");
-    b->KeyboardEvent(K_RIGHT, true);    // walk right
-    run_frames(b, 40);
+    shoot("/tmp/spr_rest.ppm");         // standing/at rest
+    // walk right, capturing several animation phases (player moves between shots)
+    b->KeyboardEvent(K_RIGHT, true);
+    run_frames(b, 14); shoot("/tmp/spr_w1.ppm");
+    run_frames(b, 12); shoot("/tmp/spr_w2.ppm");
+    run_frames(b, 12); shoot("/tmp/spr_w3.ppm");
     b->KeyboardEvent(K_RIGHT, false);
+    run_frames(b, 10);
+    // try to climb: move up (if on/at a ladder)
+    b->KeyboardEvent(K_UP, true);
+    run_frames(b, 20); shoot("/tmp/spr_c1.ppm");
+    run_frames(b, 16); shoot("/tmp/spr_c2.ppm");
+    b->KeyboardEvent(K_UP, false);
     run_frames(b, 8);
-    shoot("/tmp/spr_b.ppm");
+    shoot("/tmp/spr_after.ppm");        // reference for diffing the climb shots
 }
 
 // Boot to the ФОДОС prompt (РУС mode) and type the missing Cyrillic letters with spaces,

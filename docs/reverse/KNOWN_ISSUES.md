@@ -104,6 +104,15 @@ faithful player sprite is the **DISPLAYED output** (captured from the Qt/headles
 dither by design. Conclusion: bake the captured displayed sprite into `render.c` (like the
 font, extracted from rendered output). Walk/climb frames: capture the same way at those poses.
 
+**Walk/climb animation (captured via the `sprite` mode, frame-diff at multiple phases):**
+- **Walk** — the player figure is the SAME across walk frames (captured at several phases) →
+  КЛАД uses a single figure for stand/walk (no visible walk animation). The single
+  `PLAYER_ART` already baked is faithful. ✓
+- **Climb** — there IS a distinct climbing pose, but the player is ON a ladder, so the
+  capture = sprite ⊕ ladder rungs (garbled). A clean climb frame needs subtracting the ladder
+  pattern or the display-transform path. Minor refinement; current code uses the walk figure
+  while climbing (acceptable). Frames saved: `/tmp/spr_{rest,w1..w3,c1,c2}.ppm`.
+
 ## Verified OK
 - **Level 1 layout** — our maze tile-grid matches the original (`02_gameplay.png`) modulo a
   ~2-row alignment offset in the diff; the structure (borders, ladder columns, platforms)
