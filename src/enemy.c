@@ -9,6 +9,7 @@ void enemy_init(Enemy *e, int col, int row) {
         .active   = (col >= 0),  // col < 0 = absent în acest nivel
         .dir      = 1,
         .falling  = false,
+        .warmup   = ENEMY_WARMUP,
         .move_cd  = ENEMY_MOVE_INTERVAL,
         .anim_t   = 0.0f,
         .anim_horiz = 0,
@@ -83,11 +84,16 @@ bool enemy_tick(Enemy *e, const Map *m, const Player *p, float dt) {
     // Animație continuă (SPRITE_ANIM_A/C: 8-frame horiz)
     e->anim_t += dt;
 
-    // Throttle mișcare (echivalent CMP #400, @#TICK_CTR)
-    e->move_cd -= dt;
-    if (e->move_cd <= 0.0f) {
-        e->move_cd = ENEMY_MOVE_INTERVAL;
-        do_move(e, m, p);
+    // Warmup (ENEMY2_TICK 006562): inamicul stă pe loc la începutul nivelului, apoi pornește.
+    if (e->warmup > 0.0f) {
+        e->warmup -= dt;
+    } else {
+        // Throttle mișcare (echivalent CMP #400, @#TICK_CTR)
+        e->move_cd -= dt;
+        if (e->move_cd <= 0.0f) {
+            e->move_cd = ENEMY_MOVE_INTERVAL;
+            do_move(e, m, p);
+        }
     }
 
     // LEVEL_END_CHECK (001636): player și inamic pe același tile → moarte player

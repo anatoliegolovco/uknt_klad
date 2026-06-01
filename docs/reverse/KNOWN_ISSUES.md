@@ -320,3 +320,17 @@ in one tick → snapped to the player's row and cornered them); (b) it climbed t
 when not in their column-ish. Fixed `enemy.c do_move` to the faithful logic: column-gated ladder
 climb + **one-cell-per-tick gravity** → it now gets stuck easily and descends slowly (evadable),
 like the original. (KI-7 distinct hatched enemy sprite still open.)
+
+## KI-15 — enemy spawn camping the exit (L6/L8/L9) + missing warmup — FIXED
+Binar: unii inamici apar FIX pe celula de ieșire (originalul nu folosea ieșirea, deci nu conta;
+designul nostru B o folosește): L8 e1(15,0)+e2(16,0) PE exit(15,0); L9 e1(9,8) PE exit(9,8);
+L6 e1(8,0) lângă exit(7,0). → camp-uiau goal-ul de la start.
+**Fix (src/game.c `enemy_spawn_override`):** îi mutăm pe poziții NEUTRALE (max-min distanță BFS de
+ieșire/cheie/spawn): L6 e1→(28,20); L8 e1→(29,20), e2→(22,10); L9 e1→(27,1). Restul rămân ca în binar.
+**Plus (src/enemy.c) — WARMUP fidel** (ENEMY2_TICK 006562: ~256 tickuri ≈ 2s): inamicul stă pe loc
+la începutul nivelului, apoi pornește → jucătorul are un avans. Lipsea complet în reimplementare.
+**Notă onestă:** modelul discret de proof (`prove_level.c`) tot NU certifică L6/L8/L9 nici cu
+relocare nici la 8× — un chaser perfect la nivel-de-celulă e imbatabil pe grile dense 1-lat în
+modelul turn-based. Asta e o limită a MODELULUI (jocul real e continuu, inamicul throttled la 0.5s,
+jucătorul poate face juke sub-celulă), nu o dovadă că nivelul e imposibil. Fix-ul elimină camp-uirea
+ieșirii de la start; corectitudinea fină se judecă la joc.

@@ -81,6 +81,7 @@ int main(int argc,char**argv){
 
     int sc=LEVEL_SPAWNS[lvl][0][0], sr=settle(&mClosed,LEVEL_SPAWNS[lvl][0][0],LEVEL_SPAWNS[lvl][0][1]);
     int ec0=LEVEL_SPAWNS[lvl][1][0], er0=LEVEL_SPAWNS[lvl][1][1];
+    if(argc>4){ ec0=atoi(argv[3]); er0=atoi(argv[4]); }   // test enemy1 spawn override
     if(ec0<0){ printf("level %d has no enemy1 — trivially see reachability tool\n",lvl+1); }
     int kc=-1,kr=-1,xc=-1,xr=-1;
     for(int r=0;r<NR;r++)for(int c=0;c<NC;c++){ if(mClosed.raw[r][c]==6){kc=c;kr=r;} if(mClosed.raw[r][c]==2){xc=c;xr=r;} }

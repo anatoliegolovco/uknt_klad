@@ -29,6 +29,20 @@ static Input read_input(void) {
     return in;
 }
 
+// KI-15 (design B balance): în binar unii inamici apar FIX pe celula de ieșire și o
+// camp-uiesc de la start (originalul nu folosea ieșirea, deci nu conta). Pentru mecanica
+// noastră cheie→ușă→ieșire îi mutăm pe poziții NEUTRALE (departe de ieșire/cheie/spawn,
+// calculate cu BFS). Restul inamicilor rămân ca în binar. Vezi docs/reverse/AI_PASSABILITY.md.
+static bool enemy_spawn_override(int lvl, int idx, int *col, int *row) {
+    switch (lvl) {                                   // lvl 0-indexat; idx 0=enemy1, 1=enemy2
+        case 5: if (idx==0){ *col=28; *row=20; return true; } break;   // L6: e1 era (8,0) lângă exit(7,0)
+        case 7: if (idx==0){ *col=29; *row=20; return true; }          // L8: e1 era (15,0) PE exit
+                if (idx==1){ *col=22; *row=10; return true; } break;   // L8: e2 era (16,0) lângă exit
+        case 8: if (idx==0){ *col=27; *row=1;  return true; } break;   // L9: e1 era (9,8) PE exit
+    }
+    return false;
+}
+
 // ── load nivel ───────────────────────────────────────────────────────────────
 // LEVEL_COMPLETE (001034) + COLLISION_MAP_BUILD (013524)
 static void load_level(Game *g) {
@@ -40,11 +54,12 @@ static void load_level(Game *g) {
                 LEVEL_SPAWNS[lvl][0][0],
                 LEVEL_SPAWNS[lvl][0][1]);
 
-    // Spawn inamici (entity records la 014430, 014440)
-    for (int i = 0; i < MAX_ENEMIES; i++)
-        enemy_init(&g->enemies[i],
-                   LEVEL_SPAWNS[lvl][i+1][0],
-                   LEVEL_SPAWNS[lvl][i+1][1]);
+    // Spawn inamici (entity records la 014430, 014440), cu override anti-camp pe ieșire
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        int ec = LEVEL_SPAWNS[lvl][i+1][0], er = LEVEL_SPAWNS[lvl][i+1][1];
+        enemy_spawn_override(lvl, i, &ec, &er);
+        enemy_init(&g->enemies[i], ec, er);
+    }
 }
 
 // ── GAME_INIT (004000) ────────────────────────────────────────────────────────

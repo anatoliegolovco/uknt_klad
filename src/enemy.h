@@ -11,6 +11,9 @@
 // 0o400 = 256 ticks de joc între mișcări.
 // La УКНЦ ~8MHz cu DELAY_SPIN=1000 → ~133 ticks/s → 256/133 ≈ 1.9s/mișcare
 #define ENEMY_MOVE_INTERVAL  0.5f   // secunde (apropriat pentru display modern)
+// ENEMY2_TICK (006562): CMP #0o400(256), @#TICK_CTR — inamicul stă pe loc primele ~256 tickuri
+// la start de nivel (warmup), apoi pornește. ~256/133 ≈ 2s. Dă jucătorului un avans.
+#define ENEMY_WARMUP  2.0f
 
 // SPRITE_ANIM_A/B (010102/010142): "8-frame horiz, 5-frame vert"
 #define ENEMY_ANIM_HORIZ  8
@@ -22,6 +25,7 @@ typedef struct {
     bool  active;        // EREC_STATE: 0=inactiv, 010=activ
     int   dir;           // direcție orizontală: -1 stânga, +1 dreapta
     bool  falling;       // în cădere liberă (nu se agață de scări cât cade — ca jucătorul)
+    float warmup;        // ENEMY2_TICK 006562: nu se mișcă primele ~256 tickuri (≈2s) la start
     float move_cd;       // cooldown până la mișcare (TICK_CTR throttle)
     float anim_t;        // timer animație continuă
     int   anim_horiz;    // frame orizontal curent (0-7)
