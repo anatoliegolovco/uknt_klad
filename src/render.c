@@ -104,12 +104,19 @@ void render_map(Renderer *r, const Map *m) {
         for (int col = 0; col < MAP_COLS; col++) {
             TileIdx idx = map_raw(m, col, row);
             if (idx == TIDX_AIR) continue;
+            int dx = col*TILE_W, dy = row*TILE_H + PLAYFIELD_Y;
             if (idx == TIDX_EXIT) {
                 Color fg = render_fg(); fg.a = 60;
-                DrawRectangleLines(col*TILE_W, row*TILE_H + PLAYFIELD_Y, TILE_W, TILE_H, fg);
+                DrawRectangleLines(dx, dy, TILE_W, TILE_H, fg);
                 continue;
             }
-            draw_slot(r, idx, col * TILE_W, row * TILE_H + PLAYFIELD_Y, false);
+            if (idx == 10) {   // KI-10: UȘA. Închisă = bloc plin; deschisă (cheia luată) = cadru gol.
+                Color fg = render_fg();
+                if (m->door_open) DrawRectangleLines(dx+1, dy, TILE_W-2, TILE_H, fg); // ușă deschisă
+                else              DrawRectangle(dx, dy, TILE_W, TILE_H, fg);           // ușă închisă
+                continue;
+            }
+            draw_slot(r, idx, dx, dy, false);
         }
 }
 

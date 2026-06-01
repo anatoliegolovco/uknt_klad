@@ -213,3 +213,20 @@ only THEN does the level complete.
      passable), play a sound — do NOT advance the level.
   2. keep the real `T_EXIT` (tile 2) as the level-complete trigger (reach it after the door).
   3. update the reachability E2E to open the door before checking exit-reachability.
+
+## KI-11 — 7 levels not completable: spawn/navigation, NOT map mis-extraction
+**Verified:** the level maps are extracted FAITHFULLY (level 6 dumped direct from the binary
+@025440 == our level_data.h). So the maps are correct.
+**Real issue:** the player can't navigate to the goal in levels 2,3,5,6,7,8,9. Example —
+level 6: the player spawns at (2,20) inside a vertical shaft (cols 2-3) with **no ladder** and
+walled on the right (col4) except at row 0 → it can't climb out → stuck.
+**Suspect:** LEVEL_SPAWNS look wrong/defaulted — player spawns are mostly (2,20)/(3,20)
+(bottom-left) while the per-level enemy spawns sit at the TOP (row 0). Level 1 player spawn is
+(2,0) (top). The bottom-left shaft is unnavigable in some levels → the player likely spawns
+elsewhere in the real game (e.g. on a top platform, descending).
+**Visual (done):** the door (tile 10) now renders closed=solid block / open=empty frame; the
+key chest (gold_c) disappears on collection (map_clear) and opens the door.
+**To reach "10 levels OK":** extract the REAL per-level player spawn from uknc_emu (drive
+through levels / set CUR_MAP_ADDR 001300 + LEVEL_TBL_PTR 001304 per level and read the player
+entity 014420), fix LEVEL_SPAWNS, then re-run reachability (door-open) — exits should become
+reachable. Levels = base TBL_LEVEL_MAP_1 022100, stride 0o540=352 bytes.
