@@ -257,12 +257,28 @@ water. With the corrected, water-aware model: **5/10 completable (1,4,6,9,10)**;
 NOTE: the prior "5/10 OK" was OPTIMISTIC — those paths walked along the bottom row OVER the
 tile-13 water border (= death in the real game). Water-awareness makes the router honest.
 
-## KI-13 — 5 levels' EXIT still unreachable (door→exit link, NOT water/collision)
-Levels 2,3,5,7,8 reach the KEY (gold_c, tile 6) but not the EXIT (tile 2). The collision model
-is now ground-truth-verified, so this is a game-logic gap: the door (`hdr[2]` per spawn record,
-e.g. L3=(26,1)) is opened by the key, but the exit (e.g. L3=(15,0)) is reached by climbing a
-ladder to the top row — and our discrete router/movement can't yet trace that vertical path.
-OPEN QUESTION (win condition): `PLAYER_STATE_CHECK` (012570) checks tiles 4/5/6/11 but NEVER
-tile 2; collecting gold_c (key) opens the door + plays a sound (2060) but the JSR to
-LEVEL_COMPLETE (1034) was not found from there — need to trace whether reaching the EXIT tile,
-or collecting the key, is what actually advances the level. Resolve before claiming 10/10.
+## KI-13 — RESOLVED: there is NO exit-tile level-completion in this build
+**Investigated exhaustively (static + emulator probe). Findings (ground truth):**
+- `LEVEL_COMPLETE` (001034) — the only code that writes the level pointers `@1300`/`@1304` —
+  is **DEAD CODE**: the value `0o1034` appears NOWHERE in the binary (no JSR/JMP/jump-table
+  entry reaches it). Confirmed by full-binary word scan.
+- `PLAYER_STATE_CHECK` (012570) **never** advances the level. Emulator probe (`uknc_emu psc`)
+  over every tile 0..14: no tile changes `@1300`/`@1304`. Per-tile effects, empirically:
+    - tile 4/5 (gold/bonus) → cell cleared to 0 (collected, score/life).
+    - tile 6 (gold_c) → cell set to **16 (0o20)** + `ENEMY_RESPAWN` (012716) rewrites the two
+      "door" cells `@17424`/`@17426` to tile 9 + sets their neighbours' ≤9 flags (the "door").
+    - tile 9 (0o11) → cell set to **15 (0o17)** + `JMP @#4640` = **DEATH** (tile 9 is lethal).
+    - tile 2 (exit) → **nothing** (not checked anywhere).
+- The ONLY level-advance path: `GAME_LOOP_MENU` (001354) reads the keyboard; if the code ==
+  **`0o55`** → `JMP @#1004` (mislabelled GAME_OVER_SOFT) → `CLR R0` → `@#4160` checks
+  `@17430 >= 011200` (all 10 spawn records consumed → real game-over/tally), else `JMP 1016`
+  → `LEVEL_RESET` (010206) with **R0==0** → `ADD #24,10(R4)` advances the spawn-table pointer
+  → next level. (Death reaches `LEVEL_RESET` with R0=1000 → reload SAME level.)
+**Meaning:** this школьный build advances levels via a **key press (УКНЦ code 0o55)**, NOT by
+reaching an exit. The "exit tile" (2) is inert; the in-code per-level GOAL is the gold_c "key"
+(opens the door + spawns two enemies). So "all 10 exits reachable by climbing" is NOT a fidelity
+requirement — it was our added design. (Emulator key-injection couldn't reproduce it because
+gameplay reads the УКНЦ keyboard *hardware ports* 41020/40660, which uknc_emu doesn't yet feed;
+the static path is unambiguous.)
+**Decision needed (see chat):** keep our designed exit→advance (then make door connect to the
+exit for the 5 stuck levels), adopt the faithful key-advance, or make WIN = collect the gold_c.

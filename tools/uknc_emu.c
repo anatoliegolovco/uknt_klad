@@ -443,6 +443,55 @@ int main(int argc, char **argv){
         return 0;
     }
 
-    fprintf(stderr,"usage: %s selftest | call <octal_addr> [maxins]\n", argv[0]);
+    if(!strcmp(cmd,"psc")){   // probe PLAYER_STATE_CHECK (012570): what does each tile DO?
+        if(load_sav(sav)<0) return 1;
+        C.r[7]=01000; C.trapped=false;
+        #define STEPN(n) do{ for(long i=0;i<(n)&&!C.trapped;i++){ step(&C); } }while(0)
+        C.keycode=015; STEPN(2000000);   // → title
+        C.keycode=061; STEPN(800000);    // speed '1' → start level 1
+        C.keycode=0;   STEPN(500000);    // settle
+        printf("== baseline: CUR_MAP@1300=%06o LEVEL_TBL@1304=%06o GAMESTATE@17430=%06o "
+               "lives@17436=%03o playerstate@14420=%06o\n",
+               rdw(&C,01300), rdw(&C,01304), rdw(&C,017430), rdw(&C,017436), rdw(&C,014420));
+        uint16_t scratch = 014550 + (10*32+10)*2;   // interior cell row10 col10
+        for(int tile=0; tile<=14; tile++){
+            // snapshot
+            uint16_t m0=rdw(&C,01300), t0=rdw(&C,01304), st0=rdw(&C,014420);
+            uint16_t d1=rdw(&C,017424), d2=rdw(&C,017426);
+            // place tile in scratch cell, point player tile ptr at it
+            C.mem[scratch]=(uint8_t)tile; C.mem[scratch+1]=0;
+            wrw(&C,014422,scratch);
+            C.r[7]=0; long n=call(012570, 300000);   // PLAYER_STATE_CHECK
+            uint16_t m1=rdw(&C,01300), t1=rdw(&C,01304), st1=rdw(&C,014420);
+            uint16_t cellnow=C.mem[scratch];
+            uint16_t nd1=rdw(&C,017424), nd2=rdw(&C,017426);
+            printf("tile %2d (0o%02o): %s | cell %2d->%2d | pstate %06o->%06o | "
+                   "MAP %s LVLTBL %s | door1@%06o %s door2@%06o %s\n",
+                   tile, tile, C.trapped?"TRAP":"ok", tile, cellnow, st0, st1,
+                   m0==m1?"=":"CHANGED!", t0==t1?"=":"CHANGED!",
+                   d1, d1!=nd1?"chg":"-", d2, d2!=nd2?"chg":"-");
+            (void)n; (void)st0;
+            C.trapped=false;
+        }
+        return 0;
+    }
+
+    if(!strcmp(cmd,"advance")){   // does key 0o55 advance the level? (CUR_MAP 1300 / spawn ptr 17430)
+        if(load_sav(sav)<0) return 1;
+        C.r[7]=01000; C.trapped=false;
+        #define STP(n) do{ for(long i=0;i<(n)&&!C.trapped;i++){ step(&C); } }while(0)
+        C.keycode=015; STP(2000000);   // → title
+        C.keycode=061; STP(800000);    // speed '1' → level 1
+        C.keycode=0;   STP(500000);    // settle
+        printf("before: CUR_MAP@1300=%06o spawnptr@17430=%06o player_ptr@14422=%06o\n",
+               rdw(&C,01300), rdw(&C,017430), rdw(&C,014422));
+        C.keycode=055; STP(1500000);   // inject key 0o55 (the suspected advance key)
+        C.keycode=0;   STP(500000);
+        printf("after 0o55: CUR_MAP@1300=%06o spawnptr@17430=%06o player_ptr@14422=%06o%s\n",
+               rdw(&C,01300), rdw(&C,017430), rdw(&C,014422), C.trapped?C.trapmsg:"");
+        return 0;
+    }
+
+    fprintf(stderr,"usage: %s selftest|game|video|blit <t>|call <addr>|psc|advance\n", argv[0]);
     return 2;
 }
