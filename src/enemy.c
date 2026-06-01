@@ -15,52 +15,43 @@ void enemy_init(Enemy *e, int col, int row) {
     };
 }
 
-// Gravitație: inamicul cade până la WALL / LADDER / WATER
-// Din ENEMY2_MOVE implicit: inamicul nu zboară, se lipește de platforme
-static void apply_gravity(Enemy *e, const Map *m) {
-    while (e->row + 1 < MAP_ROWS) {
-        TileType below = map_at(m, e->col, e->row + 1);
-        if (below == T_WALL || below == T_LADDER || below == T_WATER) break;
-        e->row++;
-    }
+// Inamicul poate păși într-o celulă: tile RAW ≤ 8 (aer/scară/aur/apă-mică/scară2).
+// Originalul (ENEMY2_MOVE 006654/006662) testează #100000 (≤9) DAR exclude tile 9
+// (CMPB #11,2(R1) → BEQ skip), deci net = ≤8. Inamicul NU calcă pe tile 9 (podea/ușă),
+// spre deosebire de jucător (≤9) — de-asta inamicul e mai limitat.
+static bool epass(const Map *m, int c, int r) { return map_raw(m, c, r) <= 8; }
+// Grounded inamic = #4000: pe scară (raw==8) SAU jos solid (jos>6).
+static bool egrounded(const Map *m, int c, int r) {
+    return map_raw(m, c, r) == 8 || map_raw(m, c, r + 1) > 6;
 }
 
-// ENEMY2_MOVE (006602..007034): greedy chase, horiz-first, vertical pe scară
-// Logica din ASM:
-//   R0 = col inamic (din tile ptr offset față de BUF_TILE_WORK start)
-//   R1 = col player
-//   CMP R0,R1: BGT → inamic la dreapta → încearcă stânga
-//              BLT → inamic la stânga → încearcă dreapta
-//              BEQ → aceeași coloană → încearcă vertical (sus/jos pe scară)
+// ENEMY2_MOVE (006602..007134) — chase GREEDY PRIMITIV (NU pathfinding):
+//   - dacă inamicul NU e pe coloana jucătorului → un pas ORIZONTAL spre coloana lui;
+//   - DOAR când e pe ACEEAȘI coloană urcă/coboară pe scară spre rândul jucătorului;
+//   - apoi, dacă nu e grounded, cade UN SINGUR rând (006712: ADD #100 → 7242).
+// => se blochează ușor (nu urcă scări ca să te urmărească decât dacă ești pe coloana lui),
+//    cade lent (un rând/tick). Asta îl face „prostuț", ca originalul (nu „prea deștept").
 static void do_move(Enemy *e, const Map *m, const Player *p) {
-    int pcol, prow;
-    // Col/row player din poziția pixel
-    pcol = (int)((p->px + TILE_W * 0.5f) / TILE_W);
-    prow = (int)((p->py + TILE_H * 0.5f) / TILE_H);
+    int pcol = (int)((p->px + TILE_W * 0.5f) / TILE_W);
+    int prow = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 
-    int dx = (pcol > e->col) ? 1 : (pcol < e->col) ? -1 : 0;
-    int dy = (prow > e->row) ? 1 : (prow < e->row) ? -1 : 0;
-
-    // Mișcare orizontală (prioritate): BIT #100000,(R1) = tile pasabil?
-    if (dx != 0) {
-        TileType t = map_at(m, e->col + dx, e->row);
-        // Inamicul nu intră în WALL sau WATER (similar cu verificarea flag din ASM)
-        if (t != T_WALL && t != T_WATER) {
-            e->col += dx;
-            e->dir  = dx;
+    if (e->col != pcol) {                                  // coloane diferite → orizontal
+        int dx = (pcol > e->col) ? 1 : -1;
+        if (epass(m, e->col + dx, e->row)) {
+            e->col += dx; e->dir = dx;
             e->anim_horiz = (e->anim_horiz + 1) % ENEMY_ANIM_HORIZ;
         }
-    }
-    // Mișcare verticală: doar dacă pe scară (BIT #10000 = ladder flag în original)
-    else if (dy != 0 && map_ladder(m, e->col, e->row)) {
-        TileType t = map_at(m, e->col, e->row + dy);
-        if (t != T_WALL) {
+    } else if (e->row != prow && map_raw(m, e->col, e->row) == 8) {  // aceeași coloană + pe scară
+        int dy = (prow > e->row) ? 1 : -1;
+        if (epass(m, e->col, e->row + dy)) {
             e->row += dy;
             e->anim_vert = (e->anim_vert + 1) % ENEMY_ANIM_VERT;
         }
     }
 
-    apply_gravity(e, m);
+    // Gravitație UN rând/tick (006712), nu instant — coboară lent, ca originalul.
+    if (e->row + 1 < MAP_ROWS && !egrounded(m, e->col, e->row))
+        e->row++;
 }
 
 // ENEMY2_TICK (006552):

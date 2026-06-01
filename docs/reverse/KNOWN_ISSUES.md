@@ -308,3 +308,15 @@ to our reimplementation (hold ←/→ while falling to drift one column) — a d
 deviation (like KI-13 design B) that would make those chests reachable and match the remembered
 mechanic. Options: (a) stay fidel/column-locked; (b) add drift-while-falling. If (b): then
 re-check level 1 reaches 8/8 chests via the reachability tool. NOT decided yet — noted for later.
+
+## KI-6 — UPDATE: enemy AI was "too smart"; made it faithfully primitive
+Verified the original `ENEMY2_MOVE` (006602): it is a **primitive greedy chase, NOT pathfinding**.
+- Different column → one horizontal step toward the player's column; same column → climb a ladder
+  toward the player's row; then fall ONE cell if ungrounded (006712). Enemies can't step on tile 9
+  (door/floor) — net passable = ≤8 (player is ≤9). Per-enemy cadence: ENEMY1 every ~5 ticks,
+  ENEMY2/3 every tick after a 256-tick warmup.
+Our version was too aggressive because: (a) **instant gravity** (apply_gravity fell to the floor
+in one tick → snapped to the player's row and cornered them); (b) it climbed toward the player even
+when not in their column-ish. Fixed `enemy.c do_move` to the faithful logic: column-gated ladder
+climb + **one-cell-per-tick gravity** → it now gets stuck easily and descends slowly (evadable),
+like the original. (KI-7 distinct hatched enemy sprite still open.)
