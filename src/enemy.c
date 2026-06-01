@@ -24,33 +24,41 @@ static bool epass(const Map *m, int c, int r) { return map_raw(m, c, r) <= 8; }
 static bool egrounded(const Map *m, int c, int r) {
     return map_raw(m, c, r) == 8 || map_raw(m, c, r + 1) > 6;
 }
+// Flag-uri verticale, exact ca CMAP (013724/013740/013702): #20000 SUS (cur==8 && sus≤8),
+// #10000 JOS (jos==8 → pășești pe scara de dedesubt, SAU cur==8 && jos≤6 → cobori în aer).
+static bool ecan_up  (const Map *m, int c, int r) { return map_raw(m, c, r) == 8 && map_raw(m, c, r-1) <= 8; }
+static bool ecan_down(const Map *m, int c, int r) { return map_raw(m, c, r+1) == 8 || (map_raw(m, c, r) == 8 && map_raw(m, c, r+1) <= 6); }
 
-// ENEMY2_MOVE (006602..007134) — chase GREEDY PRIMITIV (NU pathfinding):
-//   - dacă inamicul NU e pe coloana jucătorului → un pas ORIZONTAL spre coloana lui;
-//   - DOAR când e pe ACEEAȘI coloană urcă/coboară pe scară spre rândul jucătorului;
-//   - apoi, dacă nu e grounded, cade UN SINGUR rând (006712: ADD #100 → 7242).
-// => se blochează ușor (nu urcă scări ca să te urmărească decât dacă ești pe coloana lui),
-//    cade lent (un rând/tick). Asta îl face „prostuț", ca originalul (nu „prea deștept").
+// ENEMY2_MOVE (006602..007134) — chase greedy MODERAT (nu pathfinding, dar funcțional):
+//   - un pas ORIZONTAL spre coloana jucătorului (prioritar);
+//   - dacă e BLOCAT orizontal SAU deja pe coloana lui → un pas VERTICAL spre rândul lui,
+//     folosind scările (urcă #20000 / COBOARĂ #10000 — poate coborî de pe platformă pe scara
+//     de dedesubt, nu doar când e deja pe scară);
+//   - apoi cade UN rând dacă nu e grounded (006712). Se mai blochează (greedy), dar acum
+//     chiar coboară scările ca să ajungă la tine — nici prea deștept, nici inert.
 static void do_move(Enemy *e, const Map *m, const Player *p) {
     int pcol = (int)((p->px + TILE_W * 0.5f) / TILE_W);
     int prow = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 
-    if (e->col != pcol) {                                  // coloane diferite → orizontal
+    bool moved = false;
+    if (e->col != pcol) {                                  // orizontal spre coloana jucătorului
         int dx = (pcol > e->col) ? 1 : -1;
         if (epass(m, e->col + dx, e->row)) {
             e->col += dx; e->dir = dx;
             e->anim_horiz = (e->anim_horiz + 1) % ENEMY_ANIM_HORIZ;
+            moved = true;
         }
-    } else if (e->row != prow && map_raw(m, e->col, e->row) == 8) {  // aceeași coloană + pe scară
-        int dy = (prow > e->row) ? 1 : -1;
-        if (epass(m, e->col, e->row + dy)) {
-            e->row += dy;
-            e->anim_vert = (e->anim_vert + 1) % ENEMY_ANIM_VERT;
+    }
+    if (!moved && e->row != prow) {                        // aliniat SAU blocat → vertical pe scară
+        if (prow > e->row && ecan_down(m, e->col, e->row)) {
+            e->row++; e->anim_vert = (e->anim_vert + 1) % ENEMY_ANIM_VERT; moved = true;
+        } else if (prow < e->row && ecan_up(m, e->col, e->row)) {
+            e->row--; e->anim_vert = (e->anim_vert + 1) % ENEMY_ANIM_VERT; moved = true;
         }
     }
 
     // Gravitație UN rând/tick (006712), nu instant — coboară lent, ca originalul.
-    if (e->row + 1 < MAP_ROWS && !egrounded(m, e->col, e->row))
+    if (!moved && e->row + 1 < MAP_ROWS && !egrounded(m, e->col, e->row))
         e->row++;
 }
 
