@@ -182,3 +182,16 @@ grid snapping. Result: the player navigates (reachability: level 1 212 cells inc
 is collecting gold (gold_c=tile6 → LEVEL_COMPLETE), not touching the exit tile; and those
 levels' DATA may be mis-extracted. Next: validate per-level reachability vs uknc_emu ground
 truth for all 10 (T8 done only for level 1) + use gold_c as the completability metric.
+
+## KI-9 — aspect ratio / font distortion (TO INVESTIGATE)
+**Dims:** emulator УКНЦ screen = **640×288 px** (32×22 tiles → ~16×9.5 px/tile, non-square).
+Our render target = **512×192** (tiles 16×8) + render_present stretches vertically **×1.19**
+(8→9.5) to match the УКНЦ tile shape.
+**Distortion:** that global ×1.19 vertical stretch is applied to EVERYTHING, including the
+8×8 font → glyphs become 8×9.5 (non-square, distorted). The maze tiles look right but text
+is squashed/stretched. Also we only render 512 wide (the maze), not the full 640 (УКНЦ has
+side margins).
+**To investigate:** render at a target that matches the УКНЦ pixel grid (e.g. 640×288, or
+draw glyphs/UI at their true 8×8 aspect un-stretched while only the tile art carries the 2:1
+pixel ratio), so tiles AND font keep correct proportions. Decide the canonical internal
+resolution (likely 640×288 to match the УКНЦ exactly) and map tiles/sprites/font onto it.
