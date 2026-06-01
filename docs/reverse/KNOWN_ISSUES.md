@@ -295,3 +295,16 @@ nivelul — consideră avansul-cu-tastă (0o55) un artefact al portării pe disc
 conștient de apă). E2E 10/10, 0 wall-overlaps. Diferența completabil/blocat venea din: ieșirile
 celor 5 nivele „blocate" plutesc cu aer dedesubt (vs zid/scară la cele 5 OK) — se ajunge urcând
 în ele de pe rândul-platformă de sub ele.
+
+## KI-14 — DEFERRED DECISION: mid-fall horizontal control (2 uncollectable chests, lvl 1)
+**Finding (verified):** this build's fall is **column-locked** — straight down, keyboard ignored
+while ungrounded (`ACT_DISPATCH` 001562 forces `MOV #10,R0`=down and loops without re-polling;
+`uknc_emu fall` probe: col2→falls to row20, col unchanged). So there is NO mid-fall steering.
+**Consequence:** level 1's 2 chests at `(4,15)` (bonus) + `(4,17)` (gold) sit in walled pockets
+reachable only by drifting left mid-fall (col5→col4) → **uncollectable bonus** in this build.
+Score-only (tile 4/5); does NOT affect completion (key+exit reachable).
+**Decision DEFERRED (user, 2026-06):** revisit later whether to ADD mid-fall horizontal control
+to our reimplementation (hold ←/→ while falling to drift one column) — a deliberate design
+deviation (like KI-13 design B) that would make those chests reachable and match the remembered
+mechanic. Options: (a) stay fidel/column-locked; (b) add drift-while-falling. If (b): then
+re-check level 1 reaches 8/8 chests via the reachability tool. NOT decided yet — noted for later.
