@@ -108,6 +108,12 @@ def extract_src(src):
                 glyphs.append(glyph_at(white, cx, y0))
     return glyphs
 
+# Glyphs extracted at an EXACT (src, x, y) — for chars the word-detector mis-slices
+# (next to maze art). (src, x_top_left, y_top_left, char).
+MANUAL = [
+    ('00_boot_menu.png', 17, 90, '4'),     # from "4 - стык С2"
+]
+
 def build():
     chars = {}                       # char -> 8x8 bitmap (first clean occurrence)
     for src, gmap in SOURCES.items():
@@ -115,6 +121,10 @@ def build():
         for idx, ch in gmap.items():
             if idx < len(glyphs) and ch not in chars:
                 chars[ch] = glyphs[idx]
+    for src, x, y, ch in MANUAL:
+        _, _, white = load(REF + src)
+        if ch not in chars:
+            chars[ch] = glyph_at(white, x, y)
     order = sorted(chars, key=lambda c: ord(c))
     # labelled verification atlas
     S = 5; cell = 8*S + 16; cols = 12; rows = (len(order)+cols-1)//cols

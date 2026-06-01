@@ -185,16 +185,18 @@ void render_speed_select(Renderer *r, int speed) {
     render_text(r, "1 - быстро   4 - медленно", VW/2 - 110, 140, 11, fg); // fast/slow
 }
 
-// Upscale la fereastră. Pixelii УКНЦ sînt ne-pătrați (2:1): un tile 16×8 din date
-// se afișează PĂTRAT. Deci lățimea efectivă = VW/2, raportul de afișare = 256:192 (4:3).
+// Upscale la fereastră. MĂSURAT din emulatorul original (02_gameplay.png): tile-urile
+// se afișează 16px lat × 9.5px înalt — LATE, nu pătrate. Labirintul e centrat pe ecranul
+// albastru cu margini (~65px laterale în 640). Deci: lățime plină (16px/tile), înălțime
+// ×1.19 (8→9.5px/tile), fundal albastru ca УКНЦ, centrat cu margini (~0.9 din fereastră).
 void render_present(Renderer *r) {
     BeginDrawing();
-    ClearBackground(BLACK);
-    const float aspect_w = VW * 0.5f;          // 256 — pixeli orizontali pe jumătate
-    const float aspect_h = (float)VH;          // 192
+    ClearBackground(render_bg());                  // ecran УКНЦ albastru (nu negru)
+    const float aspect_w = (float)VW;              // 512 — tile-uri 16px late (ca originalul)
+    const float aspect_h = (float)VH * 1.19f;      // ~228 — tile-uri ~9.5px înalte
     float sx = (float)GetScreenWidth()  / aspect_w;
     float sy = (float)GetScreenHeight() / aspect_h;
-    float s  = (sx < sy) ? sx : sy;
+    float s  = ((sx < sy) ? sx : sy) * 0.92f;      // 0.92 → margine albastră de jur împrejur
     float dw = aspect_w * s, dh = aspect_h * s;
     Rectangle src = {0, 0, (float)VW, -(float)VH};   // flip Y
     Rectangle dst = {
