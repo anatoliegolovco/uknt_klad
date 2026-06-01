@@ -53,48 +53,38 @@ void player_init(Player *p, int spawn_col, int spawn_row) {
 // PLAYER_MOVE_STEP (012740) + PLAYER_STATE_CHECK (012570)
 // Returnează PR_* pentru ca game_tick() să reacționeze.
 PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
-    p->on_ladder = on_ladder(p, m);
+    // Celula curentă + "pe scară" = celulă RAW ladder2 (tile 8) — ca originalul.
+    int col, row;
+    center_tile(p, &col, &row);
+    p->on_ladder = (map_raw(m, col, row) == 8);
 
-    // ── mișcare verticală: scară vs gravitație ───────────────────────────────
-    // PLAYER_MOVE_STEP: dacă tile curent = LADDER → control vertical direct
-    if (p->on_ladder) {
-        p->vy = 0.0f;
-        int dir = in.down - in.up;            // +1 jos, -1 sus
-        if (dir != 0) {
-            float ny  = p->py + (float)dir * PLAYER_SPEED * dt;
-            int   cx  = (int)((p->px + TILE_W * 0.5f) / TILE_W);
-            // rândul muchiei de avans în direcția mișcării
-            int   row = (int)(((dir > 0) ? ny + TILE_H - 1 : ny) / TILE_H);
-            if (can_climb_into(m, cx, row, dir)) p->py = ny;
-        }
-    } else {
-        // Gravitație: ADD la viteza verticală, oprire la WALL de jos
-        p->vy += PLAYER_GRAVITY * dt;
-        float ny  = p->py + p->vy * dt;
-        int   ftx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
-        int   fty = (int)((ny + TILE_H) / TILE_H);
-        if (map_solid(m, ftx, fty)) {
+    // ── mișcare STRICT după flag-urile COLLISION_MAP_BUILD (013570) ───────────
+    // Prioritate: cățărat (scară) → mers pe suport → gravitație. Aliniere la grilă
+    // (px la coloană când urci/cazi, py la rînd când mergi) ca să nu se blocheze
+    // între celule (modelul nostru e continuu, originalul e pe celule).
+    bool climbed = false;
+    if (in.up && map_can_up(m, col, row)) {          // #20000: urcă scara
+        p->px = (float)(col * TILE_W); p->py -= PLAYER_SPEED * dt; p->vy = 0.0f; climbed = true;
+    } else if (in.down && map_can_down(m, col, row)) { // #10000: coboară scara
+        p->px = (float)(col * TILE_W); p->py += PLAYER_SPEED * dt; p->vy = 0.0f; climbed = true;
+    }
+    if (!climbed) {
+        bool supported = p->on_ladder || map_grounded(m, col, row);   // #4000
+        if (supported) {
             p->vy = 0.0f;
-            ny    = (float)(fty * TILE_H) - (float)TILE_H;
+            if (!p->on_ladder) p->py = (float)(row * TILE_H);          // stă pe platformă
+            if      (in.right && map_can_right(m, col, row)) p->px += PLAYER_SPEED * dt; // #1000
+            else if (in.left  && map_can_left (m, col, row)) p->px -= PLAYER_SPEED * dt; // #400
+        } else {
+            // gravitație: cade pe coloană până ajunge pe suport/scară
+            p->vy += PLAYER_GRAVITY * dt; if (p->vy > 300.0f) p->vy = 300.0f;
+            p->px = (float)(col * TILE_W); p->py += p->vy * dt;
         }
-        p->py = ny;
     }
-    // ── mișcare orizontală (DUPĂ verticală) ──────────────────────────────────
-    // КЛАД e pe celule: dacă vrei să mergi lateral de pe scară, aliniază la rînd
-    // ca să nu rămîi blocat între două rînduri (col-coliziunea folosea rîndul greșit).
-    if ((in.left || in.right) && p->on_ladder && !(in.up || in.down)) {
-        float snapped = (float)((int)((p->py + TILE_H * 0.5f) / TILE_H) * TILE_H);
-        // aliniază doar dacă rîndul țintă e liber (altfel rămîi pe scară)
-        int   cx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
-        int   sr = (int)(snapped / TILE_H);
-        if (!map_solid(m, cx, sr)) p->py = snapped;
-    }
-    float nx  = p->px + (float)(in.right - in.left) * PLAYER_SPEED * dt;
-    int   ckx = (int)((nx + (in.right ? TILE_W - 1 : 0)) / TILE_W);
-    int   midy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
-    if (!map_solid(m, ckx, midy)) p->px = nx;
 
     // Clamp la limitele nivelului
+    if (p->px < 0.0f) p->px = 0.0f;
+    if (p->px > (MAP_COLS - 1) * (float)TILE_W) p->px = (MAP_COLS - 1) * (float)TILE_W;
     if (p->py < 0.0f)                           { p->py = 0.0f;  p->vy = 0.0f; }
     if (p->py > (MAP_ROWS - 1) * (float)TILE_H) p->py = (MAP_ROWS - 1) * (float)TILE_H;
 
@@ -121,8 +111,7 @@ PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
     }
 
     // ── PLAYER_STATE_CHECK (012570) ──────────────────────────────────────────
-    // MOV @#14422, R3 → tile la poziția playerului
-    int col, row;
+    // MOV @#14422, R3 → tile la poziția playerului (recalculat după mișcare)
     center_tile(p, &col, &row);
     TileIdx idx = map_raw(m, col, row);
 

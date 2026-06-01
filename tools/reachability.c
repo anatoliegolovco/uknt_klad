@@ -11,23 +11,22 @@
 #include <stdio.h>
 #include <string.h>
 
-// Gravity: from (c,r) fall until on a ladder or a floor (solid below) or the bottom.
+// Gravity: fall while not on a climbable ladder (raw 8) and nothing supporting below
+// (below tile ≤ 6 = air/gold). Matches map_grounded (#4000).
 static int settle(const Map *m, int c, int r) {
-    while (r < MAP_ROWS - 1 && !map_ladder(m, c, r) && !map_solid(m, c, r + 1))
+    while (r < MAP_ROWS - 1 && map_raw(m, c, r) != 8 && map_raw(m, c, r + 1) <= 6)
         r++;
     return r;
 }
 
-// The 4 player moves (then gravity settles). Returns new row in *nr (col unchanged for U/D).
-// dir: 0=left 1=right 2=up 3=down. Returns true if the move is possible.
+// The 4 moves, STRICTLY per the COLLISION_MAP_BUILD flags (map_can_*), then gravity settles.
+// dir: 0=left 1=right 2=up 3=down.
 static bool try_move(const Map *m, int c, int r, int dir, int *nc, int *nr) {
     switch (dir) {
-        case 0: if (c > 0 && !map_solid(m, c - 1, r)) { *nc = c - 1; *nr = settle(m, c - 1, r); return true; } break;
-        case 1: if (c < MAP_COLS-1 && !map_solid(m, c + 1, r)) { *nc = c + 1; *nr = settle(m, c + 1, r); return true; } break;
-        case 2: // up: only while on a ladder and the cell above is a ladder (player.c can_climb_into)
-            if (map_ladder(m, c, r) && map_at(m, c, r - 1) == T_LADDER) { *nc = c; *nr = r - 1; return true; } break;
-        case 3: // down: on a ladder, into any non-wall below
-            if (map_ladder(m, c, r) && r < MAP_ROWS-1 && !map_solid(m, c, r + 1)) { *nc = c; *nr = settle(m, c, r + 1); return true; } break;
+        case 0: if (map_can_left(m, c, r))  { *nc = c - 1; *nr = settle(m, c - 1, r); return true; } break;
+        case 1: if (map_can_right(m, c, r)) { *nc = c + 1; *nr = settle(m, c + 1, r); return true; } break;
+        case 2: if (map_can_up(m, c, r))    { *nc = c;     *nr = r - 1;               return true; } break;
+        case 3: if (map_can_down(m, c, r))  { *nc = c;     *nr = r + 1;               return true; } break;
     }
     return false;
 }

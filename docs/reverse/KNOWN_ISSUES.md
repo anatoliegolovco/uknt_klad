@@ -170,3 +170,15 @@ ladder) that are far too strict. **Faithful fix:** reimplement COLLISION_MAP_BUI
 computation (or bake the per-level flag maps extracted from uknc_emu) and make player
 movement obey the flags — then the player can traverse like the original. This is the fix
 for KI-8 (the player getting stuck) and supersedes the delicate ad-hoc climb rule.
+
+### KI-8 FIX applied — player movement now uses the faithful collision flags
+`map.c` now exposes `map_can_right/left/up/down/grounded` computed EXACTLY like
+COLLISION_MAP_BUILD (013570): right/left = neighbour raw tile ≤ 8; up = current==8 (ladder2)
+&& above ≤ 8; down = below==8; grounded = current==8 || below>6. `player.c player_update`
+was rewritten to move STRICTLY by these flags (climb → walk-on-support → gravity), with
+grid snapping. Result: the player navigates (reachability: level 1 212 cells incl. exit
+1/1, was 53/exit-0; levels 4 & 10 also reach the exit). E2E collision invariants still 10/10.
+**Still open:** levels 2,3,5,6,7,8,9 show the EXIT unreachable — but the КЛАД win condition
+is collecting gold (gold_c=tile6 → LEVEL_COMPLETE), not touching the exit tile; and those
+levels' DATA may be mis-extracted. Next: validate per-level reachability vs uknc_emu ground
+truth for all 10 (T8 done only for level 1) + use gold_c as the completability metric.

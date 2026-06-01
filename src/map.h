@@ -28,5 +28,14 @@ bool map_solid(const Map *m, int col, int row);   // T_WALL blochează
 bool map_ladder(const Map *m, int col, int row);  // T_LADDER permite vertical
 bool map_water(const Map *m, int col, int row);   // T_WATER = letal
 
+// FLAG-URI DE MIȘCARE PER-CELULĂ — fidele cu COLLISION_MAP_BUILD (013570).
+// Originalul mișcă jucătorul/inamicii STRICT după aceste flag-uri (nu euristici).
+// Index tile RAW: ≤8 = nu-zid (aer/scară/aur/apă), 8 = scară climbable (ladder2).
+bool map_can_right(const Map *m, int col, int row);  // #1000: tile dreapta ≤ 8
+bool map_can_left (const Map *m, int col, int row);  // #400 : tile stânga ≤ 8
+bool map_can_up   (const Map *m, int col, int row);  // #20000: curent==8 ȘI sus ≤ 8
+bool map_can_down (const Map *m, int col, int row);  // #10000: jos == 8
+bool map_grounded (const Map *m, int col, int row);  // #4000: suport (curent==8 sau jos>6)
+
 // PLAYER_STATE_CHECK (012570): CLRB (R3) → tile → EMPTY după colectare aur
 void map_clear(Map *m, int col, int row);

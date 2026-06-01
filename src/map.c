@@ -36,6 +36,20 @@ bool map_solid(const Map *m, int col, int row)  { return map_at(m, col, row) == 
 bool map_ladder(const Map *m, int col, int row) { return map_at(m, col, row) == T_LADDER; }
 bool map_water(const Map *m, int col, int row)  { return map_at(m, col, row) == T_WATER;  }
 
+// Raw tile index with out-of-bounds = wall (COLLISION_MAP_BUILD compares neighbour tiles;
+// the playfield border is walls, so OOB must read as a wall, not air).
+static int raw_w(const Map *m, int c, int r) {
+    if (c < 0 || c >= MAP_COLS || r < 0 || r >= MAP_ROWS) return 11; // wall
+    return map_raw(m, c, r);
+}
+// Per-cell movement flags — EXACT from COLLISION_MAP_BUILD (013570). RAW tile index:
+// ≤8 = non-wall (air/ladder/gold/water), 8 = climbable ladder (ladder2).
+bool map_can_right(const Map *m, int c, int r) { return raw_w(m, c+1, r) <= 8; }       // #1000
+bool map_can_left (const Map *m, int c, int r) { return raw_w(m, c-1, r) <= 8; }       // #400
+bool map_can_up   (const Map *m, int c, int r) { return raw_w(m, c, r) == 8 && raw_w(m, c, r-1) <= 8; } // #20000
+bool map_can_down (const Map *m, int c, int r) { return raw_w(m, c, r+1) == 8; }       // #10000
+bool map_grounded (const Map *m, int c, int r) { return raw_w(m, c, r) == 8 || raw_w(m, c, r+1) > 6; } // #4000
+
 // PLAYER_STATE_CHECK (012570): CLRB (R3) — șterge tile după colectare
 void map_clear(Map *m, int col, int row) {
     if (col < 0 || col >= MAP_COLS || row < 0 || row >= MAP_ROWS) return;
