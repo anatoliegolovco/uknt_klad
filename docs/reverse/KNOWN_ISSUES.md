@@ -79,6 +79,21 @@ tiles through the C23 `uknc_emu` against a blank framebuffer) to reconstruct the
 then set `render.c` to draw tiles 18/20 (+ their partner) at the right offset. This is a
 multi-step modeling task — the architecture is fully traced, the pixel reconstruction isn't.
 
+**✅ Video model implemented in `uknc_emu` (the authoritative renderer).** From `emubase`:
+port 176640 = plane address, 176642→plane1, 176643→plane2, pixel = 3-bit plane combo.
+`uknc_emu blit <tile>` now executes the REAL `TILE_BLIT_REV` against this model and reads
+plane1. Results (authoritative — the actual game code rendering):
+- ladder (1) → `..####....####..` = **2 rails** ✓
+- gold (4)  → `######....######` = **2 blocks** (NOT a solid chest!) — so map tiles are
+  unambiguously **side-by-side 16px**. The solid chest the player sees is the GOLD drawn as
+  a **sprite** (2 tiles + offsets), not as a map tile. (Our OR gold happens to match the
+  sprite look, so it stays.)
+- player tiles 18/20 (from table 012410) → still render as sparse **dither** via plain
+  `TILE_BLIT_REV`, so the clean captured figure is NOT a plain blit of those tiles → the
+  player sprite must use a different composition (XOR path 040220, or different tiles).
+**Open:** use `uknc_emu` to execute the full `SPRITE_DRAW` (set up the player entity record)
+and read plane1 → the true player sprite, frame by frame.
+
 ## Verified OK
 - **Level 1 layout** — our maze tile-grid matches the original (`02_gameplay.png`) modulo a
   ~2-row alignment offset in the diff; the structure (borders, ladder columns, platforms)

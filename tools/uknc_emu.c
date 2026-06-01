@@ -33,15 +33,38 @@ typedef struct {
     int N, Z, V, C;
     bool trapped;
     char trapmsg[64];
+    // УКНЦ video model (from emubase): 176640=plane address, 176642→plane1, 176643→plane2.
+    uint8_t  plane1[MEMSZ], plane2[MEMSZ];
+    uint16_t port176640;
 } CPU;
 
 // ── memory access ─────────────────────────────────────────────────────────────
-static uint16_t rdw(CPU *c, uint16_t a){ a&=0177776; if(a>=IOPAGE) return 0;
+// УКНЦ video ports (below the I/O page, so intercept explicitly).
+static bool vid_write(CPU *c, uint16_t a, uint8_t v){
+    switch(a){
+        case 0176640: c->port176640 = (c->port176640 & 0xff00) | v; return true;
+        case 0176641: c->port176640 = (c->port176640 & 0x00ff) | (v<<8); return true;
+        case 0176642: c->plane1[c->port176640] = v; return true;   // plane 1 data
+        case 0176643: c->plane2[c->port176640] = v; return true;   // plane 2 data
+    }
+    return false;
+}
+static uint16_t rdw(CPU *c, uint16_t a){ a&=0177776;
+    if(a==0176640) return c->port176640;                                  // plane address
+    if(a==0176642) return (uint16_t)(c->plane1[c->port176640] | (c->plane2[c->port176640]<<8));
+    if(a>=IOPAGE) return 0;
     return (uint16_t)(c->mem[a] | (c->mem[a+1]<<8)); }
 static void wrw(CPU *c, uint16_t a, uint16_t v){ a&=0177776; if(a>=IOPAGE) return;
+    if(a==0176640){ c->port176640=v; return; }
+    if(a==0176642){ c->plane1[c->port176640]=v&0xff; c->plane2[c->port176640]=v>>8; return; }
     c->mem[a]=v&0xff; c->mem[a+1]=v>>8; }
-static uint8_t rdb(CPU *c, uint16_t a){ return a>=IOPAGE ? 0 : c->mem[a]; }
-static void wrb(CPU *c, uint16_t a, uint8_t v){ if(a<IOPAGE) c->mem[a]=v; }
+static uint8_t rdb(CPU *c, uint16_t a){
+    if(a==0176640) return c->port176640&0xff;
+    if(a==0176641) return c->port176640>>8;
+    if(a==0176642) return c->plane1[c->port176640];
+    if(a==0176643) return c->plane2[c->port176640];
+    return a>=IOPAGE ? 0 : c->mem[a]; }
+static void wrb(CPU *c, uint16_t a, uint8_t v){ if(vid_write(c,a,v)) return; if(a<IOPAGE) c->mem[a]=v; }
 static uint16_t fetch(CPU *c){ uint16_t w=rdw(c,c->r[7]); c->r[7]+=2; return w; }
 
 static void trap(CPU *c, const char *what, uint16_t op, uint16_t pc){
@@ -272,6 +295,28 @@ static long call(uint16_t addr, long maxins){
     return n;                          // hit limit
 }
 
+// Dump plane 1 as a 640x288 PGM (80 bytes/scanline, stride 0o120, MSB=left pixel).
+static void dump_plane(CPU *c, const char *path, uint16_t base){
+    const int W=640, H=288;
+    FILE *f=fopen(path,"wb"); if(!f) return;
+    fprintf(f,"P5\n%d %d\n255\n",W,H);
+    for(int y=0;y<H;y++) for(int x=0;x<W;x++){
+        uint16_t addr=(uint16_t)(base + y*0120 + (x>>3));
+        uint8_t b=c->plane1[addr];
+        uint8_t px=((b>>(7-(x&7)))&1)?255:0;
+        fwrite(&px,1,1,f);
+    }
+    fclose(f);
+    printf("plane1 -> %s (640x288 from base %06o)\n", path, base);
+}
+
+// Run from addr for up to maxins instructions (no sentinel; the game loops).
+static long run_n(uint16_t addr, long maxins){
+    C.r[7]=addr; C.trapped=false; long n=0;
+    while(n<maxins){ step(&C); n++; if(C.trapped) return -n; }
+    return n;
+}
+
 int main(int argc, char **argv){
     const char *sav="assets/uknc/KLAD_1987_Baranov.SAV";
     const char *cmd = argc>1 ? argv[1] : "selftest";
@@ -289,6 +334,38 @@ int main(int argc, char **argv){
         bool ok=(lives==0333);
         printf("SELF-TEST %s — expected 0o333 (219)\n", ok?"PASS ✅":"FAIL ❌");
         return ok?0:1;
+    }
+
+    if(!strcmp(cmd,"blit") && argc>=3){  // call TILE_BLIT_REV for one tile → read real pixels
+        if(load_sav(sav)<0) return 1;
+        int tile=(int)strtol(argv[2],NULL,8);
+        C.mem[0100]=(uint8_t)tile;       // tile index byte
+        C.r[2]=0100;                     // R2 -> tile index
+        C.r[1]=0;                        // R1 = plane position (base added inside)
+        long n=call(014302, 200000);     // TILE_BLIT_REV
+        printf("blit tile %o: %s after %ld instr%s\n", tile,
+               C.trapped?"TRAP":"done", n<0?-n:n, C.trapped?C.trapmsg:"");
+        // dump a small region around the blit (base 0o106210, first rows)
+        const int W=16, H=8;
+        printf("rendered pixels (plane1, 16x8 at base):\n");
+        for(int y=0;y<H;y++){ printf("  ");
+            for(int x=0;x<W;x++){
+                uint16_t addr=(uint16_t)(0106210 + y*0120 + (x>>3));
+                printf("%c", ((C.plane1[addr]>>(7-(x&7)))&1)?'#':'.');
+            }
+            printf("\n");
+        }
+        return 0;
+    }
+
+    if(!strcmp(cmd,"video")){            // run real render code, dump plane1 to verify model
+        if(load_sav(sav)<0) return 1;
+        long n=run_n(01000, argc>=3?strtol(argv[2],NULL,10):3000000);
+        printf("ran %ld instr from RESTART (%s)%s\n", n<0?-n:n,
+               C.trapped?"TRAP":"limit", C.trapped?C.trapmsg:"");
+        uint16_t base = argc>=4 ? (uint16_t)strtol(argv[3],NULL,8) : 0106210;
+        dump_plane(&C, "/tmp/plane1.pgm", base);
+        return 0;
     }
 
     if(!strcmp(cmd,"call") && argc>=3){
