@@ -36,6 +36,7 @@ typedef struct {
     // УКНЦ video model (from emubase): 176640=plane address, 176642→plane1, 176643→plane2.
     uint8_t  plane1[MEMSZ], plane2[MEMSZ];
     uint16_t port176640;
+    int      keycode;   // injected key (0=none); read via 040546 (bit7=ready, 6-0=code)
 } CPU;
 
 // ── memory access ─────────────────────────────────────────────────────────────
@@ -63,6 +64,8 @@ static uint8_t rdb(CPU *c, uint16_t a){
     if(a==0176641) return c->port176640>>8;
     if(a==0176642) return c->plane1[c->port176640];
     if(a==0176643) return c->plane2[c->port176640];
+    if(a==0040546) return c->keycode ? (uint8_t)(0200 | (c->keycode & 0177)) : 0;  // kbd status
+    if(a==0176674) return 0200;   // display status: bit7=ready (unstick the vsync poll)
     return a>=IOPAGE ? 0 : c->mem[a]; }
 static void wrb(CPU *c, uint16_t a, uint8_t v){ if(vid_write(c,a,v)) return; if(a<IOPAGE) c->mem[a]=v; }
 static uint16_t fetch(CPU *c){ uint16_t w=rdw(c,c->r[7]); c->r[7]+=2; return w; }
@@ -162,7 +165,10 @@ static void step(CPU *c){
     // no-operand / condition-code ops
     if(op==0){ trap(c,"HALT",op,pc); return; }
     if(op==1||op==2||op==3||op==4||op==5) return;          // WAIT/RTI/BPT/IOT/RESET → nop
-    if(op>=0104000 && op<=0104777) return;                 // EMT/TRAP (ФОДОС syscall) → nop
+    if(op>=0104000 && op<=0104777){                        // EMT/TRAP (ФОДОС syscall)
+        if(op==0104006) c->r[0]=c->keycode;                // EMT 6 = char input → injected key
+        return;
+    }
     if(op>=0240 && op<=0277){                               // condition-code set/clear
         int bits=op&017, setf=(op&020)!=0;
         if(bits&1) c->C=setf;
@@ -355,6 +361,22 @@ int main(int argc, char **argv){
             }
             printf("\n");
         }
+        return 0;
+    }
+
+    if(!strcmp(cmd,"game")){             // drive title→speed→gameplay, dump plane1 with player
+        if(load_sav(sav)<0) return 1;
+        C.r[7]=01000; C.trapped=false;
+        long lim=0;
+        #define STEP_N(n) do{ for(long i=0;i<(n)&&!C.trapped;i++){ step(&C); lim++; } }while(0)
+        C.keycode=015; STEP_N(2000000);     // boot → title, advance on Enter (0o15)
+        C.keycode=061; STEP_N(800000);      // speed select '1' → start game (level+player)
+        C.keycode=0;   STEP_N(500000);      // no input → player at rest, frame rendered
+        long nz=0; int lo=-1,hi=-1;
+        for(int a=0;a<MEMSZ;a++) if(C.plane1[a]){ nz++; if(lo<0)lo=a; hi=a; }
+        printf("drove %ld instr, PC=%06o, plane1 nz=%ld range %06o..%06o%s\n",
+               lim, C.r[7], nz, lo<0?0:lo, hi<0?0:hi, C.trapped?C.trapmsg:"");
+        dump_plane(&C, "/tmp/plane1_game.pgm", lo<0?0106210:(uint16_t)lo);
         return 0;
     }
 
