@@ -8,8 +8,12 @@
   html,body{margin:0;height:100%;background:#000;overflow:hidden;
     display:flex;align-items:center;justify-content:center;
     font-family:system-ui,sans-serif;color:#ccc;touch-action:none;}
-  /* Fill the viewport while keeping crisp retro pixels. raylib letterboxes. */
-  canvas{image-rendering:pixelated;width:100vw;height:100vh;display:block;outline:none;}
+  /* Centre the game (4:3, 256×192 ×3) both axes; scale to fit the viewport,
+     keep crisp retro pixels, black letterbox around it. */
+  canvas{image-rendering:pixelated;display:block;outline:none;
+    aspect-ratio:4 / 3;
+    width:min(100vw, 133.333vh);   /* 4/3 of the viewport height */
+    height:auto;max-height:100vh;}
   #note{position:fixed;bottom:6px;left:0;right:0;text-align:center;
     font-size:12px;opacity:.55;pointer-events:none;}
   #note a{color:#f0d23c;pointer-events:auto;text-decoration:none;}

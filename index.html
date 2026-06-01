@@ -42,21 +42,22 @@
 
   <h2>Ce e gata</h2>
   <ul>
-    <li class="done">Toolchain: disassembler PDP-11 propriu (<code>tools/pdp11dis.py</code>), extractor de date, scripturi</li>
     <li class="done">Target reverse-engineering: <b>КЛАД 1987 (Баранов), УКНЦ МС-0511</b> (video planar, port @#176640)</li>
-    <li class="done">Documentație: arhitectură, memory map, registre I/O, date niveluri</li>
-    <li class="done">Engine C23 + raylib: build nativ + WebAssembly din aceeași sursă</li>
-    <li class="done">Slice jucabil: labirint, gravitație, scări, comori, apă = moarte</li>
-    <li class="done">Interfață în <b>română</b> (i18n), input tastatură + touch</li>
-    <li class="done">Publicat pe GitHub Pages — build WASM automat prin GitHub Actions (CI/CD)</li>
+    <li class="done"><b>Fork headless al emulatorului УКНЦ</b> (UKNCBTL fără Qt, C++ + g++) — mașina completă (2× CPU PDP-11, video planar, FDD) rulată fără ecran pentru <b>capturi ground-truth automate</b></li>
+    <li class="done">Disassembly adnotat УКНЦ + documentație: memory/byte map, registre I/O, mecanica jocului dedusă din assembler</li>
+    <li class="done">Extracție din binar: <b>10 niveluri</b> (JSON + PNG), tile-uri și sprite-uri</li>
+    <li class="done"><b>Engine propriu scris în C23 + raylib</b> — același cod compilat nativ și WebAssembly (nu doar tooling Python)</li>
+    <li class="done">Gameplay: gravitație, scări, apă = moarte, gardian (AI fidel), scor/vieți, cheie → ușă → ieșire (toate cele 10 niveluri completabile)</li>
+    <li class="done">Animații player (mers / cățărare), sprite gardian distinct, culori scări rezolvate din firmware (alb pe albastru) + mod color/mono</li>
+    <li class="done">Interfață în <b>română</b> (i18n) + comutare versiune, input tastatură + touch</li>
+    <li class="done">CI/CD: build WASM <b>din sursă</b> prin GitHub Actions, deploy automat pe GitHub Pages la fiecare push</li>
   </ul>
 
   <h2>Următorii pași</h2>
   <ul>
-    <li class="todo">Confirmarea formatului nivelurilor (necesită emulator <code>bkbtl</code>, local)</li>
-    <li class="todo">Gardieni (AI patrulare), scor, ecrane title / nivel-terminat</li>
-    <li class="todo">Niveluri proprii, art 8×8 propriu, sunet</li>
-    <li class="todo">Font cu diacritice (ă/î/ș/ț)</li>
+    <li class="todo">Fidelitate decodare planară a câtorva tile-uri (scări / aur încă imperfecte vs. capturile emulatorului)</li>
+    <li class="todo">Sunet / efecte</li>
+    <li class="todo">Validare side-by-side a fiecărui ecran vs. fork-ul headless</li>
   </ul>
 
   <h2>Controale</h2>
