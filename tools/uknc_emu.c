@@ -361,9 +361,13 @@ int main(int argc, char **argv){
     if(!strcmp(cmd,"video")){            // run real render code, dump plane1 to verify model
         if(load_sav(sav)<0) return 1;
         long n=run_n(01000, argc>=3?strtol(argv[2],NULL,10):3000000);
-        printf("ran %ld instr from RESTART (%s)%s\n", n<0?-n:n,
-               C.trapped?"TRAP":"limit", C.trapped?C.trapmsg:"");
-        uint16_t base = argc>=4 ? (uint16_t)strtol(argv[3],NULL,8) : 0106210;
+        printf("ran %ld instr from RESTART (%s)%s  final PC=%06o\n", n<0?-n:n,
+               C.trapped?"TRAP":"limit", C.trapped?C.trapmsg:"", C.r[7]);
+        // scan whole plane1 for content
+        long nz=0; int lo=-1, hi=-1;
+        for(int a=0;a<MEMSZ;a++) if(C.plane1[a]){ nz++; if(lo<0)lo=a; hi=a; }
+        printf("plane1 non-zero bytes: %ld  range %06o..%06o\n", nz, lo<0?0:lo, hi<0?0:hi);
+        uint16_t base = argc>=4 ? (uint16_t)strtol(argv[3],NULL,8) : (lo<0?0106210:(uint16_t)lo);
         dump_plane(&C, "/tmp/plane1.pgm", base);
         return 0;
     }
