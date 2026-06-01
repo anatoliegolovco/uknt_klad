@@ -12,7 +12,12 @@ typedef struct {
     TileIdx  raw[MAP_ROWS][MAP_COLS];  // index original 0-15 (pentru render)
     TileType typ[MAP_ROWS][MAP_COLS];  // tip logic (pentru coliziune)
     int      gold_count;               // aurul rămas pe nivel
+    bool     door_open;                // KI-10: cheia (gold_c) deschide ușa (tile 10)
 } Map;
+
+// KI-10: deschide ușa nivelului (apelat la colectarea cheii gold_c). Rutina ASM 12716
+// rescrie celulele @17424/@17426 (tile 10 = ușa) făcându-le pasabile.
+void map_open_door(Map *m);
 
 // COLLISION_MAP_BUILD (013524): MOVB (R4),(R2); BIC #177760,(R2)+ → low nibble
 //                               MOVB (R4)+,(R2); BIC #177417,(R2); ASR×4 → high nibble

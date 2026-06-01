@@ -31,6 +31,26 @@ static bool try_move(const Map *m, int c, int r, int dir, int *nc, int *nr) {
     return false;
 }
 
+// BFS from (sc,sr) over the flag-based moves; fills `seen`, returns reachable-cell count.
+static int g_qc[MAP_ROWS*MAP_COLS], g_qr[MAP_ROWS*MAP_COLS];
+static int bfs(const Map *m, int sc, int sr, bool seen[MAP_ROWS][MAP_COLS], long *edges) {
+    int head = 0, tail = 0; *edges = 0;
+    seen[sr][sc] = true; g_qc[0] = sc; g_qr[0] = sr; tail = 1;
+    while (head < tail) {
+        int c = g_qc[head], r = g_qr[head]; head++;
+        for (int d = 0; d < 4; d++) {
+            int nc, nr;
+            if (try_move(m, c, r, d, &nc, &nr)) {
+                (*edges)++;
+                if (nr >= 0 && nr < MAP_ROWS && !seen[nr][nc]) {
+                    seen[nr][nc] = true; g_qc[tail] = nc; g_qr[tail] = nr; tail++;
+                }
+            }
+        }
+    }
+    return tail;
+}
+
 int main(void) {
     int total_fail = 0;
     printf("# КЛАД movement-reachability report (%d levels)\n", NUM_LEVELS);
@@ -40,33 +60,31 @@ int main(void) {
         int sc = LEVEL_SPAWNS[lvl][0][0], sr0 = LEVEL_SPAWNS[lvl][0][1];
         int sr = settle(&m, sc, sr0);
         static bool seen[MAP_ROWS][MAP_COLS];
-        memset(seen, 0, sizeof seen);
-        // BFS
-        static int qc[MAP_ROWS*MAP_COLS], qr[MAP_ROWS*MAP_COLS];
-        int head = 0, tail = 0;
-        seen[sr][sc] = true; qc[tail] = sc; qr[tail] = sr; tail++;
         long edges = 0;
-        while (head < tail) {
-            int c = qc[head], r = qr[head]; head++;
-            for (int d = 0; d < 4; d++) {
-                int nc, nr;
-                if (try_move(&m, c, r, d, &nc, &nr)) {
-                    edges++;
-                    if (nr >= 0 && nr < MAP_ROWS && !seen[nr][nc]) {
-                        seen[nr][nc] = true; qc[tail] = nc; qr[tail] = nr; tail++;
-                    }
-                }
-            }
+        // PASS 1 — door closed: explore until we reach the KEY (gold_c, tile 6).
+        memset(seen, 0, sizeof seen);
+        int reach = bfs(&m, sc, sr, seen, &edges);
+        bool key_reached = false;
+        for (int r = 0; r < MAP_ROWS; r++)
+            for (int c = 0; c < MAP_COLS; c++)
+                if (seen[r][c] && map_raw(&m, c, r) == TIDX_GOLD_C) key_reached = true;
+        // PASS 2 — KI-10: the key OPENS THE DOOR (tile 10); re-explore the WHOLE maze incl.
+        // the now-open door + the exit beyond it. We never stop at the exit — every corridor.
+        if (key_reached) {
+            map_open_door(&m);
+            memset(seen, 0, sizeof seen);
+            reach = bfs(&m, sc, sr, seen, &edges);
         }
-        // count gold / exit and how many are reachable
-        int gold_total = 0, gold_reach = 0, exit_total = 0, exit_reach = 0, reach = tail;
+        // count gold / exit reachable (after the door is open)
+        int gold_total = 0, gold_reach = 0, exit_total = 0, exit_reach = 0;
         for (int r = 0; r < MAP_ROWS; r++)
             for (int c = 0; c < MAP_COLS; c++) {
                 TileType t = map_at(&m, c, r);
                 if (t == T_GOLD) { gold_total++; if (seen[r][c]) gold_reach++; }
                 if (t == T_EXIT) { exit_total++; if (seen[r][c]) exit_reach++; }
             }
-        bool ok = (gold_total == 0 || gold_reach > 0) && (exit_total == 0 || exit_reach > 0);
+        // completable = can reach the EXIT (after collecting the key + opening the door)
+        bool ok = (exit_total == 0 || exit_reach > 0);
         if (!ok) total_fail++;
         if (lvl == 0) {   // overlay: '+' reachable, lowercase tile = unreachable
             printf("  level 1 reachability overlay ('+'=reachable, S=spawn):\n");
@@ -74,18 +92,19 @@ int main(void) {
                 printf("    ");
                 for (int c = 0; c < MAP_COLS; c++) {
                     if (c==sc && r==sr) { putchar('S'); continue; }
+                    int raw = map_raw(&m, c, r);
                     TileType t = map_at(&m, c, r);
-                    char base = t==T_WALL?'#':t==T_LADDER?'H':t==T_WATER?'~':t==T_GOLD?'$':t==T_EXIT?'X':'.';
+                    char base = raw==10?'D':t==T_WALL?'#':t==T_LADDER?'H':t==T_WATER?'~':t==T_GOLD?'$':t==T_EXIT?'X':'.';
                     putchar(seen[r][c] ? '+' : base);
                 }
                 putchar('\n');
             }
         }
-        printf("level %2d: spawn(%d,%d)->settle r%d | reachable %3d cells, %ld moves | "
+        printf("level %2d: spawn(%d,%d)->r%d | reach %3d, %ld moves | key %-3s | "
                "gold %d/%d  exit %d/%d  %s\n",
-               lvl + 1, sc, sr0, sr, reach, edges,
+               lvl + 1, sc, sr0, sr, reach, edges, key_reached ? "YES" : "no",
                gold_reach, gold_total, exit_reach, exit_total,
-               ok ? "OK" : "** UNREACHABLE GOAL (stuck) **");
+               ok ? "OK" : "** STUCK **");
     }
     printf("\n%s\n", total_fail == 0
         ? "ALL LEVELS COMPLETABLE — no stuck/unreachable-goal levels"

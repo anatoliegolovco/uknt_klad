@@ -101,11 +101,14 @@ static void game_tick(Game *g, Input in, float dt) {
                 (int)((g->player.py + TILE_H*0.5f) / TILE_H));
             score_add_life(&g->score);
             break;
-        case PR_LEVEL_WIN:
-        case PR_EXIT:
+        case PR_LEVEL_WIN:   // KI-10: gold_c = CHEIA → DESCHIDE UȘA (NU avansează nivelul!)
             map_clear(&g->map,
                 (int)((g->player.px + TILE_W*0.5f) / TILE_W),
                 (int)((g->player.py + TILE_H*0.5f) / TILE_H));
+            map_open_door(&g->map);     // ușa (tile 10) devine pasabilă; sunet (TODO audio)
+            score_add_gold(&g->score);  // cheia dă și puncte
+            break;                      // continuă jocul — exit-ul (după ușă) termină nivelul
+        case PR_EXIT:        // tile 2 = IEȘIREA (atinsă după ușă + scara din dreapta) → final
             if (score_level_advance(&g->score))
                 g->state = GS_ALL_WIN;
             else {
