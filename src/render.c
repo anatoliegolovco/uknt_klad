@@ -142,13 +142,28 @@ static const char *PLAYER_ART[8] = {
     "....##......",
 };
 
-// Desenează o figură-sprite (block art) la (x,y), cu oglindire opțională.
-static void draw_sprite_art(const char *art[8], int x, int y, bool flip) {
+// KI-7: inamicul era HAȘURAT și cu siluetă diferită de jucător (creatură cu „coarne"/picioare).
+// Desenat cu hașură (checkerboard) → se distinge clar de jucătorul plin.
+static const char *ENEMY_ART[8] = {
+    "..##....##..",
+    "..##....##..",
+    "..########..",
+    ".##########.",
+    "###.####.###",
+    ".##########.",
+    "..##....##..",
+    ".##......##.",
+};
+
+// Desenează o figură-sprite (block art) la (x,y), cu oglindire opțională. Dacă hatch=true,
+// desenează doar pixelii pe „tabla de șah" → aspect hașurat (ca inamicul original).
+static void draw_sprite_art(const char *art[8], int x, int y, bool flip, bool hatch) {
     Color fg = render_fg();
     for (int row = 0; row < 8; row++)
         for (int col = 0; col < SPR_W; col++)
             if (art[row][col] == '#') {
                 int dx = flip ? (SPR_W - 1 - col) : col;
+                if (hatch && (((x + dx) + (y + row)) & 1)) continue;   // hașură
                 DrawRectangle(x + dx, y + row, 1, 1, fg);
             }
 }
@@ -160,15 +175,17 @@ void render_player(Renderer *r, const Player *p, GameState gs, float state_timer
     bool show = (gs == GS_PLAYING || gs == GS_LEVEL_WIN || gs == GS_ALL_WIN)
              || (gs == GS_DEAD && (int)(state_timer * 8) % 2 == 0);
     if (!show) return;
-    draw_sprite_art(PLAYER_ART, (int)p->px + 2, (int)p->py + PLAYFIELD_Y, p->facing < 0);
+    draw_sprite_art(PLAYER_ART, (int)p->px + 2, (int)p->py + PLAYFIELD_Y, p->facing < 0, false);
 }
 
 void render_enemy(Renderer *r, const Enemy *e) {
     (void)r;
     if (!e->active) return;
-    // enemy folosește aceeași figură (originalul are sprite-uri similare; sprite enemy
-    // dedicat = capturare separată, notat).
-    draw_sprite_art(PLAYER_ART, e->col * TILE_W + 2, e->row * TILE_H + PLAYFIELD_Y, e->dir < 0);
+    // KI-7: siluetă distinctă + hașurată (≠ jucătorul plin). În timpul warmup-ului clipește
+    // ușor (semnal că încă nu s-a activat).
+    bool blink = (e->warmup > 0.0f) && ((int)(e->warmup * 6) & 1);
+    if (blink) return;
+    draw_sprite_art(ENEMY_ART, e->col * TILE_W + 2, e->row * TILE_H + PLAYFIELD_Y, e->dir < 0, true);
 }
 
 // HUD_RENDER (003652): bara de sus — "Счет {scor}   Попытки {vieți}" (text rusesc, fidel).

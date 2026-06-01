@@ -334,3 +334,9 @@ relocare nici la 8× — un chaser perfect la nivel-de-celulă e imbatabil pe gr
 modelul turn-based. Asta e o limită a MODELULUI (jocul real e continuu, inamicul throttled la 0.5s,
 jucătorul poate face juke sub-celulă), nu o dovadă că nivelul e imposibil. Fix-ul elimină camp-uirea
 ieșirii de la start; corectitudinea fină se judecă la joc.
+
+## KI-7 — RESOLVED: distinct hatched enemy sprite
+The enemy reused PLAYER_ART (identical look). The raw sprite bank is dither (KI-4: clean figures
+only via the УКНЦ display transform), so — per the user's memory of a *hașurat* adversary — the
+enemy now uses a distinct silhouette (creature with horns/legs) rendered with a checkerboard
+HATCH (`render.c` ENEMY_ART + draw_sprite_art hatch=true). Also blinks during the 2s warmup.
