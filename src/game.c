@@ -3,6 +3,7 @@
 //            ACT_DISPATCH (001436), KBD_GAME_POLL (004674)
 #include "game.h"
 #include "level_data.h"
+#include "i18n.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -78,6 +79,9 @@ void game_init(Game *g) {
         if      (!strcmp(start, "play"))  start_game(g);
         else if (!strcmp(start, "speed")) g->state = GS_SPEED_SELECT;
     }
+    // hook limbă: KLAD_LANG=ro pornește în română (altfel rusă, fidel). Tasta L comută oricând.
+    const char *lang = getenv("KLAD_LANG");
+    if (lang && !strcmp(lang, "ro")) render_toggle_lang();
 }
 
 // Start efectiv al jocului după DIFF_SELECT: GAME_INIT (lives 0o333, scor 0) + nivel 1.
@@ -161,6 +165,8 @@ void game_frame(Game *g, float dt) {
 
     // Comutare paletă color/mono (tasta M) — emulator УКНЦ vs monitor monocrom
     if (IsKeyPressed(KEY_M)) render_toggle_mono();
+    // Comutare limbă (tasta L) — RU (fidel) <-> RO (versiunea română), i18n.h
+    if (IsKeyPressed(KEY_L)) render_toggle_lang();
 
     // State machine joc
     switch (g->state) {
@@ -220,14 +226,14 @@ void game_frame(Game *g, float dt) {
         int mx = VW/2, my = PLAYFIELD_Y + MAP_ROWS*TILE_H/2;
         Color cw = render_fg();
         if (g->state == GS_LEVEL_WIN)
-            render_text(&g->renderer, "Уровень пройден", mx-58, my-6, 12, cw);
+            render_text(&g->renderer, T(STR_LEVEL_CLEAR), mx-58, my-6, 12, cw);
         if (g->state == GS_GAME_OVER) {
-            render_text(&g->renderer, "Игра окончена", mx-52, my-10, 12, cw);
-            render_text(&g->renderer, "нажмите клавишу", mx-56, my+6, 10, cw);
+            render_text(&g->renderer, T(STR_GAME_OVER), mx-52, my-10, 12, cw);
+            render_text(&g->renderer, T(STR_PRESS_KEY), mx-56, my+6, 10, cw);
         }
         if (g->state == GS_ALL_WIN) {
-            render_text(&g->renderer, "Поздравляем!", mx-48, my-10, 12, cw);
-            render_text(&g->renderer, "нажмите клавишу", mx-56, my+6, 10, cw);
+            render_text(&g->renderer, T(STR_CONGRATS), mx-48, my-10, 12, cw);
+            render_text(&g->renderer, T(STR_PRESS_KEY), mx-56, my+6, 10, cw);
         }
     }
 

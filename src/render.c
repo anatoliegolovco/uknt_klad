@@ -3,8 +3,11 @@
 #include "render.h"
 #include "gfx_data.h"
 #include "uknc_font.h"     // font REAL УКНЦ 8×8, extras pixel-exact (font/)
+#include "i18n.h"
 #include <stdio.h>
 #include <string.h>
+
+Lang g_lang = LANG_RU;     // implicit: rusă (fidel originalului); L comută la română
 
 // ── paletă 2-culori cu comutare color/mono ───────────────────────────────────
 // КЛАД 1987 randează doar 2 culori. Mod color = ca emulatorul УКНЦ (fundal albastru
@@ -17,6 +20,7 @@ static bool g_mono = false;
 Color render_bg(void) { return g_mono ? PAL_MONO.bg : PAL_COLOR.bg; }
 Color render_fg(void) { return g_mono ? PAL_MONO.fg : PAL_COLOR.fg; }
 void  render_toggle_mono(void) { g_mono = !g_mono; }
+void  render_toggle_lang(void) { g_lang = (g_lang == LANG_RU) ? LANG_RO : LANG_RU; }
 // Apa randată distinct (galben), ca în emulatorul УКНЦ (banda de jos = apă). În mono → alb.
 static Color render_water(void) { return g_mono ? PAL_MONO.fg : (Color){236,204,64,255}; }
 
@@ -95,6 +99,10 @@ void render_text(Renderer *r, const char *utf8, int x, int y, int size, Color c)
                 (Rectangle){(float)(gi * 8), 0, 8, 8},
                 (Rectangle){fx, (float)y, adv, 8.0f * s},
                 (Vector2){0, 0}, 0.0f, c);
+        else if (cp > 32)
+            // Fallback (română/latin): fontul УКНЦ are doar chirilice → desenăm glifele latine
+            // cu fontul pixel implicit raylib, la aceeași înălțime.
+            DrawTextCodepoint(GetFontDefault(), cp, (Vector2){fx, (float)y}, 8.0f * s, c);
         fx += adv;   // lățime fixă (spațiul/lipsă glifă = avans gol)
     }
 }
@@ -210,10 +218,10 @@ void render_enemy(Renderer *r, const Enemy *e) {
 void render_hud(Renderer *r, const Score *s) {
     char buf[32];
     Color fg = render_fg();
-    render_text(r, "Счет", 80, 3, 11, fg);
+    render_text(r, T(STR_SCORE), 80, 3, 11, fg);
     snprintf(buf, sizeof buf, "%d", s->score);
     render_text(r, buf, 170, 3, 11, fg);
-    render_text(r, "Попытки", 280, 3, 11, fg);                 // "Attempts" (vieți)
+    render_text(r, T(STR_LIVES), 280, 3, 11, fg);              // "Попытки" / "Incercari"
     snprintf(buf, sizeof buf, "%d", s->lives);
     render_text(r, buf, 400, 3, 11, fg);
 }
@@ -241,20 +249,21 @@ void render_title(Renderer *r) {
         for (int col = 0; col < cols; col++)
             if (KLAD_ART[row][col] == '#')
                 DrawRectangle(x0 + col*bw, y0 + row*bh, bw, bh, fg);
-    render_text(r, "Николаев 1987",  VW/2 - 52, 120, 13, fg);
+    render_text(r, "Николаев 1987",  VW/2 - 52, 120, 13, fg);   // autor — nu se traduce
     render_text(r, "Баранов",        VW/2 - 28, 142, 13, fg);
+    render_text(r, T(STR_LANG_HINT), VW/2 - 52, 168, 10, fg);   // L = comută limba
 }
 
 // DIFF_SELECT (003234): alegere viteză 1-4 (1 = rapid, 4 = lent).
 void render_speed_select(Renderer *r, int speed) {
     Color fg = render_fg();
-    render_text(r, "Скорость", VW/2 - 84, 64, 16, fg);          // "Speed"
+    render_text(r, T(STR_SPEED), VW/2 - 84, 64, 16, fg);
     for (int i = 1; i <= 4; i++) {
         char b[4]; snprintf(b, sizeof b, "%d", i);
         Color c = (i == speed) ? (Color){255,230,120,255} : fg;
         render_text(r, b, VW/2 - 36 + (i-1)*24, 100, 18, c);
     }
-    render_text(r, "1 - быстро   4 - медленно", VW/2 - 110, 140, 11, fg); // fast/slow
+    render_text(r, T(STR_SPEED_HINT), VW/2 - 110, 140, 11, fg);
 }
 
 // Upscale la fereastră. MĂSURAT din emulatorul original (02_gameplay.png): tile-urile

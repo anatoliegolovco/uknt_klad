@@ -24,6 +24,7 @@ typedef struct {
 Color render_bg(void);
 Color render_fg(void);
 void  render_toggle_mono(void);
+void  render_toggle_lang(void);   // comută limba RU<->RO (i18n.h)
 
 void render_init(Renderer *r);
 void render_shutdown(Renderer *r);
