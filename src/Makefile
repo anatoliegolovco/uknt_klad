@@ -24,7 +24,7 @@ NATIVE  := $(OUT_DIR)/klad
 
 all: $(NATIVE)
 
-$(NATIVE): $(SRCS) klad.h map.h player.h enemy.h score.h render.h gfx_data.h level_data.h
+$(NATIVE): $(SRCS) klad.h map.h player.h enemy.h score.h render.h gfx_data.h level_data.h ../font/uknc_font.h
 	@mkdir -p $(OUT_DIR)
 	$(CC) $(CSTD) $(WARN) $(OPT) $(INC) $(SRCS) -o $@ $(LIBS)
 
@@ -35,7 +35,7 @@ run: $(NATIVE)
 RAYLIB_WEB ?= $(HOME)/raylib/src/libraylib.web.a
 WEB_OUT    := $(OUT_DIR)/web
 
-web: $(SRCS) klad.h map.h player.h enemy.h score.h render.h gfx_data.h level_data.h
+web: $(SRCS) klad.h map.h player.h enemy.h score.h render.h gfx_data.h level_data.h ../font/uknc_font.h
 	@mkdir -p $(WEB_OUT)
 	emcc $(CSTD) $(WARN) $(OPT) $(INC) $(SRCS) \
 	  -o $(WEB_OUT)/index.html \

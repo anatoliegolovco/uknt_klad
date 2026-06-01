@@ -93,7 +93,10 @@ SOURCES = {
         1:'ч', 7:'п', 14:'9',
     },
     REF+'01_title.png': {              # Поставка: Н-Шангская СШ
-        9:'Н', 11:'Ш', 18:'я',
+        11:'Ш', 18:'я',                # (9 was the dash, NOT Н — Н comes from credits)
+    },
+    REF+'title_credits.png': {         # Николаев 1987 / Баранов (centre crop, no side art)
+        0:'Н', 10:'8', 12:'Б',
     },
 }
 
