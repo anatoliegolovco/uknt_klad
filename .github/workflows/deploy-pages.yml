@@ -57,10 +57,14 @@ jobs:
 
       - name: Assemble Pages site
         run: |
-          mkdir -p _site/play
+          mkdir -p _site/play _site/font
           cp index.html _site/index.html
           cp build/web/index.* _site/play/
-          ls -la _site _site/play
+          # Font subpage + web-servable font assets (downloads).
+          cp web/font/index.html _site/font/index.html
+          cp font/uknc.woff2 font/uknc.woff font/uknc.ttf font/uknc.bdf \
+             font/uknc_font.png font/uknc_font.json font/uknc_font.h _site/font/
+          ls -la _site _site/play _site/font
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
