@@ -492,6 +492,37 @@ int main(int argc, char **argv){
         return 0;
     }
 
-    fprintf(stderr,"usage: %s selftest|game|video|blit <t>|call <addr>|psc|advance\n", argv[0]);
+    if(!strcmp(cmd,"fall")){   // does a fall go straight down (column-locked) or land offset?
+        if(load_sav(sav)<0) return 1;
+        C.r[7]=01000; C.trapped=false;
+        #define STF(n) do{ for(long i=0;i<(n)&&!C.trapped;i++){ step(&C); } }while(0)
+        C.keycode=015; STF(2000000);   // → title
+        C.keycode=061; STF(800000);    // speed '1' → level 1
+        C.keycode=0;   STF(500000);    // settle
+        // find a "gap" cell: tile==0 (air) with tile below ==0 (air) — a hole to fall through
+        int gap=-1;
+        for(int idx=32; idx<21*32; idx++){
+            uint8_t t=C.mem[014550+idx*2], tb=C.mem[014550+(idx+32)*2];
+            if(t==0 && tb==0){ gap=idx; break; }
+        }
+        if(gap<0){ printf("no gap cell found\n"); return 1; }
+        uint16_t pp=014550+gap*2;
+        printf("placing player at gap cell idx %d (col %d, row %d), tile below=%d\n",
+               gap, gap%32, gap/32, C.mem[014550+(gap+32)*2]);
+        wrw(&C,014422,pp);          // player tile ptr → gap cell
+        wrw(&C,014420,010);         // player state = active (8)
+        // run the per-frame loop (no key) and trace the player cell each ~frame
+        printf("trace (col,row) over frames:\n");
+        for(int f=0; f<14; f++){
+            C.keycode=0; STF(120000);
+            uint16_t cp=rdw(&C,014422); int ci=((int)cp-014550)/2;
+            printf("  frame %2d: cell idx %3d -> col %2d row %2d (tile=%d)%s\n",
+                   f, ci, ci%32, ci/32, C.mem[cp], C.trapped?" TRAP":"");
+            if(C.trapped) C.trapped=false;
+        }
+        return 0;
+    }
+
+    fprintf(stderr,"usage: %s selftest|game|video|blit <t>|call <addr>|psc|advance|fall\n", argv[0]);
     return 2;
 }
