@@ -44,6 +44,25 @@ a different width/scale or a different data layout than the map tiles.
 16-px figure from frame B; brute-force tile×decode against it; then fix `gen_gfx_c.py` char
 decode + `render.c` CHAR_* slots. Same method that solved the map-tile decode.
 
+**Progress (traced `SPRITE_DRAW` 014030):** the player is drawn as **TWO tiles** side by
+side (`JSR TILE_BLIT_REV` twice — "left tile" + right), each 8 px → 16 px sprite (figure
+fills ~12). Table @20270 holds per-direction X/Y offsets (not tile indices); the tile index
+is the entity record `6(R4)`, set by `SPRITE_HELPERS` 013216. **Decode still open:** char
+tile 16 OR-decodes to a figure-like half, but tiles 17-23 OR-decode to a `.#.#.#.` dither
+(same symptom the map tiles had before the side-by-side/OR split was found). Next: determine
+the sprite plane layout (likely NOT the same as map tiles), then which tile-pair = which
+animation frame, then render the player as 2 tiles in `render.c`.
+
+**Traced `TILE_BLIT_REV` 014302 (the sprite blit):** it computes the tile data address as
+`index*16 + 017450`, loops `R5=8` rows, and calls the **same `DISP_SCANLINE_WRITE`** (entry
+040140) the map tiles use (2 bytes/row). So sprites share the map-tile pixel format → each
+sprite tile is 8 px (OR of the two row bytes, like gold), and the player = 2 such tiles =
+16 px wide (figure fills ~12). **Remaining:** the figure-to-tile match is still fuzzy (tile
+16 OR ≈ a figure half; 17-23 OR ≈ dither), so the open question is *which char tiles are the
+standing/walking/climbing player frames* (via `SPRITE_HELPERS` 013216 + the entity record),
+not the decode rule. Implementation: char tiles 16-31 → OR(8px) in `gen_gfx_c.py`; render the
+player as the correct 2-tile pair in `render.c`.
+
 ## Verified OK
 - **Level 1 layout** — our maze tile-grid matches the original (`02_gameplay.png`) modulo a
   ~2-row alignment offset in the diff; the structure (borders, ladder columns, platforms)
