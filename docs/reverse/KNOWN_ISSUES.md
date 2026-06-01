@@ -94,6 +94,16 @@ plane1. Results (authoritative — the actual game code rendering):
 **Open:** use `uknc_emu` to execute the full `SPRITE_DRAW` (set up the player entity record)
 and read plane1 → the true player sprite, frame by frame.
 
+**✅ RESOLVED understanding (executed SPRITE_DRAW in uknc_emu).** Drove the real game to
+gameplay inside the C23 emulator and read the player from plane1 at its entity position
+(player entity @014420, `[6]`=plane pos). The raw plane1 player is **dither** (`#.#.#.#.`) —
+NOT a clean figure. The clean figure only appears after the УКНЦ **display transform**
+(3-plane combine + per-line scale + palette in `Emulator_PrepareScreenRGB32`). So the
+faithful player sprite is the **DISPLAYED output** (captured from the Qt/headless emulator,
+`reference_emu/sprites/player_spawn.png`), not the raw char-tile/plane bytes — those are
+dither by design. Conclusion: bake the captured displayed sprite into `render.c` (like the
+font, extracted from rendered output). Walk/climb frames: capture the same way at those poses.
+
 ## Verified OK
 - **Level 1 layout** — our maze tile-grid matches the original (`02_gameplay.png`) modulo a
   ~2-row alignment offset in the diff; the structure (borders, ladder columns, platforms)

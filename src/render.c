@@ -113,25 +113,49 @@ void render_map(Renderer *r, const Map *m) {
         }
 }
 
-// SPRITE_DRAW (014030): figură caracter în funcție de starea animației.
+// Figura player REALĂ — capturată din output-ul AFIȘAT al emulatorului УКНЦ (frame-diff:
+// reference_emu/sprites/player_spawn.png). Datele brute ale tile-urilor-caracter sînt dither;
+// figura curată apare doar prin transformarea de display УКНЦ (3 planuri + scale + paletă).
+// Vezi docs/reverse/KNOWN_ISSUES.md KI-4. 12px lat × 8 înalt. '#' = pixel fg.
+#define SPR_W 12
+static const char *PLAYER_ART[8] = {
+    "....####..##",
+    "....####..##",
+    "##....##..##",
+    "##########..",
+    "....####....",
+    "....##..##..",
+    "....##..##..",
+    "....##......",
+};
+
+// Desenează o figură-sprite (block art) la (x,y), cu oglindire opțională.
+static void draw_sprite_art(const char *art[8], int x, int y, bool flip) {
+    Color fg = render_fg();
+    for (int row = 0; row < 8; row++)
+        for (int col = 0; col < SPR_W; col++)
+            if (art[row][col] == '#') {
+                int dx = flip ? (SPR_W - 1 - col) : col;
+                DrawRectangle(x + dx, y + row, 1, 1, fg);
+            }
+}
+
+// SPRITE_DRAW (014030): figura player. NOTĂ: animația (walk/climb) folosește deocamdată
+// același frame; frame-urile de mers/cățărat se capturează la fel (frame-diff la acele poze).
 void render_player(Renderer *r, const Player *p, GameState gs, float state_timer) {
+    (void)r;
     bool show = (gs == GS_PLAYING || gs == GS_LEVEL_WIN || gs == GS_ALL_WIN)
              || (gs == GS_DEAD && (int)(state_timer * 8) % 2 == 0);
     if (!show) return;
-    int slot;
-    switch (p->anim) {
-        case PA_CLIMB: slot = CHAR_CLIMB; break;
-        case PA_WALK:  slot = (p->anim_frame & 1) ? CHAR_WALK1 : CHAR_WALK0; break;
-        default:       slot = CHAR_STAND; break;
-    }
-    draw_slot(r, slot, (int)p->px, (int)p->py + PLAYFIELD_Y, p->facing < 0);
+    draw_sprite_art(PLAYER_ART, (int)p->px + 2, (int)p->py + PLAYFIELD_Y, p->facing < 0);
 }
 
 void render_enemy(Renderer *r, const Enemy *e) {
+    (void)r;
     if (!e->active) return;
-    int frame = (int)(e->anim_t / ENEMY_ANIM_DT) % ENEMY_ANIM_HORIZ;
-    int slot = (frame & 1) ? CHAR_WALK1 : CHAR_WALK0;
-    draw_slot(r, slot, e->col * TILE_W, e->row * TILE_H + PLAYFIELD_Y, e->dir < 0);
+    // enemy folosește aceeași figură (originalul are sprite-uri similare; sprite enemy
+    // dedicat = capturare separată, notat).
+    draw_sprite_art(PLAYER_ART, e->col * TILE_W + 2, e->row * TILE_H + PLAYFIELD_Y, e->dir < 0);
 }
 
 // HUD_RENDER (003652): bara de sus — "Счет {scor}   Попытки {vieți}" (text rusesc, fidel).
