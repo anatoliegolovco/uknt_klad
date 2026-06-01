@@ -31,7 +31,7 @@
 </head>
 <body>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-  <div id="note">Arrows / WASD · tap edges on touch ·
+  <div id="note">Arrows / WASD · tap to start, tap edges to move ·
     <a href="https://github.com/anatoliegolovco/uknt_klad" target="_blank" rel="noopener">source on GitHub</a></div>
   <script>
     var Module = {
@@ -47,7 +47,7 @@
     // are computed in screen space and rotated when the portrait media query is
     // active, so "tap the visual edge" always maps to the right direction.
     (function () {
-      var KEYCODE = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
+      var KEYCODE = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Enter: 13 };
       var held = {};
       function send(type, code) {
         var ev = { key: code, code: code, keyCode: KEYCODE[code], which: KEYCODE[code],
@@ -79,9 +79,15 @@
         e.preventDefault();
         e.stopImmediatePropagation();   // keep emscripten from also reading it
         if (e.type === 'touchend' || e.type === 'touchcancel') {
-          if (e.touches.length === 0) apply({});
+          if (e.touches.length === 0) {
+            apply({});
+            if (held.Enter) { send('keyup', 'Enter'); held.Enter = false; }
+          }
           return;
         }
+        // A tap = the "action" key (Enter): starts the title / speed screens and
+        // restarts after game over — so the game is fully playable with no keyboard.
+        if (e.type === 'touchstart' && !held.Enter) { send('keydown', 'Enter'); held.Enter = true; }
         var t = e.touches[0];
         apply(zones(t.clientX, t.clientY));
       }
