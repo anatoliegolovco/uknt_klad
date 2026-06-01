@@ -131,7 +131,7 @@ void render_map(Renderer *r, const Map *m) {
 // figura curată apare doar prin transformarea de display УКНЦ (3 planuri + scale + paletă).
 // Vezi docs/reverse/KNOWN_ISSUES.md KI-4. 12px lat × 8 înalt. '#' = pixel fg.
 #define SPR_W 12
-static const char *PLAYER_ART[8] = {
+static const char *PLAYER_ART[8] = {        // STAND (= mers frame 0)
     "....####..##",
     "....####..##",
     "##....##..##",
@@ -140,6 +140,16 @@ static const char *PLAYER_ART[8] = {
     "....##..##..",
     "....##..##..",
     "....##......",
+};
+// KI-5: cadre de animație. Mers = 2 cadre (picioarele alternează — pas); urcat = 2 cadre
+// (siluetă simetrică pe scară, brațe/picioare alternând). p->anim_frame comută 0/1.
+static const char *PLAYER_WALK[2][8] = {
+  { "....####..##","....####..##","##....##..##","##########..","....####....","....##..##..","....##..##..","....##......" },
+  { "....####..##","....####..##","##....##..##","##########..","....####....","....##..##..","...##....##.","..##......##" },  // pas (picioare desfăcute)
+};
+static const char *PLAYER_CLIMB[2][8] = {
+  { "....####....","....####....","..########..","....####....","..##.##.##..","....####....","..##....##..","..##....##.." },  // brațe sus
+  { "....####....","....####....","....####....","..########..","....####....","..##.##.##..","...##..##...","..##....##.." },  // brațe jos / pas scară
 };
 
 // KI-7: inamicul era HAȘURAT și cu siluetă diferită de jucător (creatură cu „coarne"/picioare).
@@ -175,7 +185,11 @@ void render_player(Renderer *r, const Player *p, GameState gs, float state_timer
     bool show = (gs == GS_PLAYING || gs == GS_LEVEL_WIN || gs == GS_ALL_WIN)
              || (gs == GS_DEAD && (int)(state_timer * 8) % 2 == 0);
     if (!show) return;
-    draw_sprite_art(PLAYER_ART, (int)p->px + 2, (int)p->py + PLAYFIELD_Y, p->facing < 0, false);
+    int f = p->anim_frame & 1;
+    const char **art = (p->anim == PA_CLIMB) ? PLAYER_CLIMB[f]
+                     : (p->anim == PA_WALK)  ? PLAYER_WALK[f]
+                     :                          PLAYER_ART;     // PA_STAND
+    draw_sprite_art(art, (int)p->px + 2, (int)p->py + PLAYFIELD_Y, p->facing < 0, false);
 }
 
 void render_enemy(Renderer *r, const Enemy *e) {
