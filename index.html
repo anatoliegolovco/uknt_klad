@@ -35,17 +35,20 @@
   </h1>
 
   <a class="play" href="./play/">▶ Joacă build-ul curent</a>
-  <div class="note">Merge pe desktop și pe telefon: taste / WASD, sau atingi marginile ecranului. Build-ul WebAssembly e inclus direct în repo.</div>
+  <div class="note">Merge pe desktop și pe telefon: taste / WASD, sau atingi marginile ecranului.
+    Build-ul WebAssembly e generat din sursă de GitHub Actions la fiecare push.</div>
+  <div class="note">📦 Cod sursă, disassembly și documentație:
+    <a href="https://github.com/anatoliegolovco/uknt_klad" target="_blank" rel="noopener">github.com/anatoliegolovco/uknt_klad</a></div>
 
   <h2>Ce e gata</h2>
   <ul>
     <li class="done">Toolchain: disassembler PDP-11 propriu (<code>tools/pdp11dis.py</code>), extractor de date, scripturi</li>
-    <li class="done">Identificat blob-ul: build-ul <b>BK-0010</b> al КЛАД (framebuffer liniar la 040000)</li>
+    <li class="done">Target reverse-engineering: <b>КЛАД 1987 (Баранов), УКНЦ МС-0511</b> (video planar, port @#176640)</li>
     <li class="done">Documentație: arhitectură, memory map, registre I/O, date niveluri</li>
     <li class="done">Engine C23 + raylib: build nativ + WebAssembly din aceeași sursă</li>
     <li class="done">Slice jucabil: labirint, gravitație, scări, comori, apă = moarte</li>
     <li class="done">Interfață în <b>română</b> (i18n), input tastatură + touch</li>
-    <li class="done">Publicat pe GitHub Pages (build WASM inclus în repo); CI opțional disponibil</li>
+    <li class="done">Publicat pe GitHub Pages — build WASM automat prin GitHub Actions (CI/CD)</li>
   </ul>
 
   <h2>Următorii pași</h2>
