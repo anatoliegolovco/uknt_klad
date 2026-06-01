@@ -189,3 +189,23 @@ platforme consecutive (trecere prin "două tavane").
 - Docs: GFX_MAP.md secțiunea "Colour model — RESOLVED" + Known Limitations #1 marcat RESOLVED.
 - **Next:** dacă se dorește fidelitate de FORMĂ scară (șine mai subțiri + trepte mai dese în
   gfx_data tile 1) — separat de culoare; sau exercitat build-ul WebAssembly.
+
+## 2026-06-02 (sesiunea webfont + subpagină font + mobile landscape)
+
+`[2026-06-02 UTC] DONE` — Font web-servabil + subpagină dedicată + folder font/ regândit:
+- `tools/gen_webfont.py` = packager unic: din `font/uknc_font.h` (sursa de adevăr, 99 glife)
+  generează TOATE formatele consistent: uknc.{ttf,woff2,woff,bdf} + uknc_font.{json,png}.
+  Webfont vectorial (pixel→pătrate, runs orizontale unite) → clar la orice mărime.
+- Reparate inconsistențe: .bdf/.json/.png erau stale (45 glife) → acum 99, la fel ca .h.
+- Subpagină `web/font/index.html` → servită la /font/ (hero live în font, grilă glife,
+  download-uri, @font-face howto). Hero folosește doar glife acoperite (lipsesc majuscule Л/Д).
+- Workflow Pages deployează acum și /font/ + asseturile font.
+- `font/README.md` rescris: single source of truth + toate formatele derivate.
+
+`[2026-06-02 UTC] DONE` — Play page mobile landscape (observat cu Playwright pe live):
+- Portret = jocul (lat ~2.24:1) apărea bandă mică. Acum canvas rotit 90° în portret (CSS
+  `@media (orientation:portrait)`) → umple ecranul ca landscape. Landscape rămâne nerotat, încadrat.
+- Touch: shell-ul (`src/web/shell.html`) preia touch-ul (capture + stopImmediatePropagation ca
+  emscripten să nu-l mai vadă) și injectează taste săgeți, cu zone rotite corect în portret.
+  Verificat că tastele sintetice mișcă playerul (Playwright). `src/game.c` touch nativ păstrat
+  sub `#ifndef PLATFORM_WEB`.

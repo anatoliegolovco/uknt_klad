@@ -19,6 +19,10 @@ static Input read_input(void) {
     in.up     = IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W);
     in.down   = IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S);
     in.action = IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_ENTER);
+#ifndef PLATFORM_WEB
+    // Native touch → screen-edge zones. On web the shell (web/shell.html) owns
+    // touch and injects arrow-key events instead — it must, because the canvas
+    // is CSS-rotated in portrait, which would scramble GetTouchPosition() here.
     if (GetTouchPointCount() > 0) {
         Vector2 t = GetTouchPosition(0);
         float w = (float)GetScreenWidth(), h = (float)GetScreenHeight();
@@ -27,6 +31,7 @@ static Input read_input(void) {
         if      (t.y < h / 4)       in.up    = true;
         else if (t.y > 3.0f * h/4)  in.down  = true;
     }
+#endif
     return in;
 }
 
