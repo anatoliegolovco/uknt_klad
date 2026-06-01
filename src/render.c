@@ -17,6 +17,8 @@ static bool g_mono = false;
 Color render_bg(void) { return g_mono ? PAL_MONO.bg : PAL_COLOR.bg; }
 Color render_fg(void) { return g_mono ? PAL_MONO.fg : PAL_COLOR.fg; }
 void  render_toggle_mono(void) { g_mono = !g_mono; }
+// Apa randată distinct (galben), ca în emulatorul УКНЦ (banda de jos = apă). În mono → alb.
+static Color render_water(void) { return g_mono ? PAL_MONO.fg : (Color){236,204,64,255}; }
 
 // Tile-uri caracter (16-31), 16×8 1bpp. Indicii vin din tabela de animație 012410
 // (indexată (state-0o21)*2 + dir): climb=18 (verificat: table[10]=18), walk=20/21/22.
@@ -28,12 +30,12 @@ void  render_toggle_mono(void) { g_mono = !g_mono; }
 #define CHAR_CLIMB  18
 
 // tileset: pixeli fg = alb opac, fond = transparent. La desenare aplicăm tenta fg.
-static void draw_slot(const Renderer *r, int slot, int x, int y, bool flip) {
+static void draw_slot(const Renderer *r, int slot, int x, int y, bool flip, Color tint) {
     float w = flip ? -(float)TILE_W : (float)TILE_W;
     DrawTexturePro(r->tileset,
         (Rectangle){(float)(slot * TILE_W), 0, w, (float)TILE_H},
         (Rectangle){(float)x, (float)y, (float)TILE_W, (float)TILE_H},
-        (Vector2){0, 0}, 0.0f, render_fg());
+        (Vector2){0, 0}, 0.0f, tint);
 }
 
 void render_init(Renderer *r) {
@@ -122,7 +124,9 @@ void render_map(Renderer *r, const Map *m) {
                 else              DrawRectangle(dx, dy, TILE_W, TILE_H, fg);           // ușă închisă
                 continue;
             }
-            draw_slot(r, idx, dx, dy, false);
+            // apa (7 mică, 13/14 adâncă) galbenă ca în emulator; restul = alb (fg)
+            Color tint = (idx == 7 || idx == 13 || idx == 14) ? render_water() : render_fg();
+            draw_slot(r, idx, dx, dy, false, tint);
         }
 }
 
