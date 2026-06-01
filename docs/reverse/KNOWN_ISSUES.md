@@ -195,3 +195,21 @@ side margins).
 draw glyphs/UI at their true 8×8 aspect un-stretched while only the tile art carries the 2:1
 pixel ratio), so tiles AND font keep correct proportions. Decide the canonical internal
 resolution (likely 640×288 to match the УКНЦ exactly) and map tiles/sprites/font onto it.
+
+## KI-10 — level completion: KEY → opens DOOR → exit up-right (NOT auto-advance)
+**What (user-confirmed mechanic):** in our impl, collecting the key (gold_c, tile 6) instantly
+advances level 1→2 (`player.c` → `PR_LEVEL_WIN`, `game.c` → GS_LEVEL_WIN). **WRONG.**
+**Correct:** collecting the key **OPENS A DOOR** (does NOT complete the level). The player
+must then go **through the opened door** and **climb up the ladder on the right** to the exit;
+only THEN does the level complete.
+**Ties together earlier findings:**
+  - `SPRITE_HELPERS`/`PLAYER_STATE_CHECK` 012656: collecting tile 6 calls routine 12716 on
+    cells @17424 / @17426 — i.e. it **rewrites two map cells = opens the door** (not a win).
+  - KI-8: the EXIT (tile 2) was unreachable in 7/10 levels because **the door is closed until
+    the key is taken** — the reachability analyzer didn't open it. With the door opened the
+    exit should become reachable. So those levels are likely NOT mis-extracted.
+**To implement (later):**
+  1. `gold_c` (tile 6) → run the 12716 cell-rewrite (open the door: set @17424/@17426 cells
+     passable), play a sound — do NOT advance the level.
+  2. keep the real `T_EXIT` (tile 2) as the level-complete trigger (reach it after the door).
+  3. update the reachability E2E to open the door before checking exit-reachability.
