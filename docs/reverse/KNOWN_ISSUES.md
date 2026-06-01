@@ -20,14 +20,29 @@ in `tools/extract_uknc_font.py` GLYPH_MAP for the title source) and `Б`, `8` ar
 index for `Н`, fix the map; extract `Б`/`8` from the "Баранов"/"1987" credit lines
 (group-detection restricted to the centre columns, away from the КЛАД tile-art).
 
-## KI-4 — character sprite decode (tiles 16-31) likely wrong
+## KI-4 — character sprite decode (tiles 16-31) — IN PROGRESS
 **What:** the player/enemy sprite tiles (char 16-31) decoded with the current map rules
-(structural=side-by-side, gold=OR) come out as scattered dither (`..#.#.#.`), not a human
-figure. Tile 16 has body/legs-like blocks but the rest looks scrambled.
-**Impact:** player/enemy may not render as the faithful figure.
-**Path:** same investigation as the tile decode (TILE_FIDELITY.md) but for sprites — compare
-against the player figure in `02_gameplay.png` (top-left at spawn) and find the right rule
-(likely OR like gold, or 8×8). Verify in `tools/gen_gfx_c.py` + `render.c` CHAR_* slots.
+come out as scattered dither, not a figure.
+**Reference captured:** the headless emulator's `sprite` mode (frame-diff: screenshot at
+spawn, move right, screenshot again — the changed pixels isolate the player) gives the real
+player figure (`assets/uknc/reference_emu/sprites/player_spawn.png`):
+```
+....####..##
+....####..##
+##....##..##
+##########..   ← arms out
+....####....
+....##..##..   ← legs
+....##..##..
+....##......
+```
+**Open puzzle:** the figure renders **12 px wide** on screen (tiles are 16 px), so it does
+NOT map cleanly onto an 8-px char tile under OR/planes/side-by-side (best brute-force match
+only 44/64). The УКНЦ sprite blit (`SPRITE_DRAW` 014030, XOR-based 014772/015072/…) may use
+a different width/scale or a different data layout than the map tiles.
+**Path:** trace `SPRITE_DRAW` to see how many bytes/scale per sprite row; re-extract a clean
+16-px figure from frame B; brute-force tile×decode against it; then fix `gen_gfx_c.py` char
+decode + `render.c` CHAR_* slots. Same method that solved the map-tile decode.
 
 ## Verified OK
 - **Level 1 layout** — our maze tile-grid matches the original (`02_gameplay.png`) modulo a

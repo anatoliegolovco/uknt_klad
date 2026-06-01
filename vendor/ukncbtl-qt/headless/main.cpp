@@ -49,6 +49,13 @@ static void write_ppm(const char* path, const uint32_t* argb) {
     printf("screenshot -> %s (%dx%d)\n", path, SCR_W, SCR_H);
 }
 
+static void shoot(const char* path){
+    static uint32_t img[SCR_W * SCR_H];
+    memset(img, 0, sizeof img);
+    Emulator_PrepareScreenRGB32(img, ScreenView_StandardRGBColors);
+    write_ppm(path, img);
+}
+
 // --- key injection (УКНЦ scancodes, octal) --------------------------------------
 enum { K_1=0030, K_R=0074, K_K=0052, K_L=0056, K_A=0072, K_D=0057,
        K_SPACE=0113, K_ENTER=0153, K_ALF=0106 };
@@ -73,6 +80,21 @@ static void boot_klad(CMotherboard* b){
     run_frames(b, 200);
     key(b, K_1);                        // speed select 1 → start the game
     run_frames(b, 600);                 // into the maze
+}
+
+static void shoot(const char* path);   // fwd
+
+// Capture the player sprite by frame-diff: screenshot at spawn, move right, screenshot
+// again. The pixels that change isolate the player figure from the static maze.
+enum { K_RIGHT=0133, K_LEFT=0116, K_UP=0154, K_DOWN=0134 };
+static void boot_sprite(CMotherboard* b){
+    boot_klad(b);                       // into the maze at spawn
+    shoot("/tmp/spr_a.ppm");
+    b->KeyboardEvent(K_RIGHT, true);    // walk right
+    run_frames(b, 40);
+    b->KeyboardEvent(K_RIGHT, false);
+    run_frames(b, 8);
+    shoot("/tmp/spr_b.ppm");
 }
 
 // Boot to the ФОДОС prompt (РУС mode) and type the missing Cyrillic letters with spaces,
@@ -129,6 +151,9 @@ int main(int argc, char** argv) {
     } else if (!strcmp(arg3, "glyphs")) {   // type missing Cyrillic letters at ФОДОС prompt
         boot_glyphs(board);
         printf("typed missing glyphs at ФОДОС prompt\n");
+    } else if (!strcmp(arg3, "sprite")) {   // capture player sprite via frame-diff
+        boot_sprite(board);
+        printf("captured spr_a + spr_b for sprite diff\n");
     } else {
         frames = atoi(arg3);
         for (int i = 0; i < frames; i++) board->SystemFrame();
