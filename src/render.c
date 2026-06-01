@@ -99,11 +99,9 @@ void render_text(Renderer *r, const char *utf8, int x, int y, int size, Color c)
                 (Rectangle){(float)(gi * 8), 0, 8, 8},
                 (Rectangle){fx, (float)y, adv, 8.0f * s},
                 (Vector2){0, 0}, 0.0f, c);
-        else if (cp > 32)
-            // Fallback (română/latin): fontul УКНЦ are doar chirilice → desenăm glifele latine
-            // cu fontul pixel implicit raylib, la aceeași înălțime.
-            DrawTextCodepoint(GetFontDefault(), cp, (Vector2){fx, (float)y}, 8.0f * s, c);
-        fx += adv;   // lățime fixă (spațiul/lipsă glifă = avans gol)
+        // Toate glifele (chirilic + latin acum în matrice) au aceeași celulă 8×8 → fără
+        // font de rezervă (care trunchia), grilă uniformă. Glifă lipsă = avans gol.
+        fx += adv;
     }
 }
 

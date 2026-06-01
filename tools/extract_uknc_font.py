@@ -180,6 +180,8 @@ def build():
         f.write('ENDFONT\n')
     print(f"font/: {len(order)} glyphs -> uknc_font.{{png,json,h}} + uknc.bdf")
     print("chars:", ''.join(order))
+    # Apendăm blocul latin (A-Z a-z ! :) în aceeași matrice 8x8 → română/ASCII fără font de rezervă.
+    import gen_latin_font; gen_latin_font.main()
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'build': build()
