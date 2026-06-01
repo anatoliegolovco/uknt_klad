@@ -11,7 +11,7 @@ RAYLIB_SRC ?= /tmp/raylib-5.5/src
 XLIB       ?= /tmp/xlibs/usr/lib/x86_64-linux-gnu
 
 SRCS := main.c game.c map.c player.c enemy.c score.c render.c
-INC  := -I$(RAYLIB_SRC) -I.
+INC  := -I$(RAYLIB_SRC) -I. -I../font
 LIBS := $(RAYLIB_SRC)/libraylib.a \
         -L$(XLIB) -lGL -lm -lpthread -ldl -lrt -lX11 \
         -lXcursor -lXi -lXinerama -lXrandr

@@ -17,7 +17,7 @@ enum { TILESET_SLOTS = 32 };
 typedef struct {
     Texture2D       tileset;
     RenderTexture2D target;   // 512×192 render target (upscalat la fereastră)
-    Font            font;     // glife chirilice (HUD/titlu în rusă — port fidel)
+    Texture2D       fonttex;  // atlas font REAL УКНЦ 8×8 (font/uknc_font.h), nu DejaVu
 } Renderer;
 
 // Paletă 2-culori cu comutare color (УКНЦ) / mono (monitor școlar).

@@ -16,8 +16,8 @@ from PIL import Image, ImageDraw
 
 SRC = 'assets/uknc/reference_emu/headless/00_boot_menu.png'
 
-def load():
-    img = Image.open(SRC).convert('RGB'); W, H = img.size; px = img.load()
+def load(src=None):
+    img = Image.open(src or SRC).convert('RGB'); W, H = img.size; px = img.load()
     def white(x, y): return 0 <= x < W and 0 <= y < H and px[x, y][0] > 140 and px[x, y][1] > 140
     return W, H, white
 
@@ -52,8 +52,8 @@ def col_groups(white, x_range, y0, y1, gap=3):
 def glyph_at(white, x0, y0, w=8, h=8):
     return [[1 if white(x0 + c, y0 + r) else 0 for c in range(w)] for r in range(h)]
 
-def main():
-    W, H, white = load()
+def main(src=None):
+    W, H, white = load(src)
     bands = row_bands(W, H, white)
     glyphs = []   # list of (band_i, group_i, cell_i, 8x8 bitmap)
     for bi, (y0, y1) in enumerate(bands):
@@ -80,20 +80,27 @@ def main():
     json.dump([g for *_ , g in glyphs], open('/tmp/glyphs.json', 'w'))
     print(f"{len(glyphs)} glyphs -> /tmp/glyph_dump.png  (bands={len(bands)})")
 
-# index (in the dump atlas) -> character, read off /tmp/glyph_dump.png (boot menu source).
-GLYPH_MAP = {
-    0:'З', 1:'А', 2:'Г', 3:'Р', 4:'У', 6:'К', 8:'1', 9:'-', 10:'д', 11:'и',
-    12:'с', 13:'к', 14:'(', 17:'3', 18:')', 19:':', 20:'0', 21:'2', 24:'а',
-    27:'е', 28:'т', 30:'П', 44:'с', 45:'е', 46:'т', 47:'ь', 50:'ы', 52:'С',
-    54:'5', 56:'м', 58:'г', 59:'н', 62:'о', 63:'ф', 66:'6', 70:'л', 72:'д',
-    73:'к', 75:'7', 80:'т', 82:'р', 83:'о', 84:'в', 86:'н', 88:'е',
+REF = 'assets/uknc/reference_emu/headless/'
+# Per-source index -> character (read off each `dump <src>` atlas).
+SOURCES = {
+    REF+'00_boot_menu.png': {
+        0:'З', 1:'А', 2:'Г', 3:'Р', 4:'У', 6:'К', 8:'1', 9:'-', 10:'д', 11:'и',
+        12:'с', 13:'к', 14:'(', 17:'3', 18:')', 19:':', 20:'0', 21:'2', 24:'а',
+        27:'е', 28:'т', 30:'П', 47:'ь', 50:'ы', 52:'С', 54:'5', 56:'м', 58:'г',
+        59:'н', 62:'о', 63:'ф', 66:'6', 70:'л', 72:'д', 75:'7', 82:'р', 84:'в', 88:'е',
+    },
+    REF+'02_gameplay.png': {           # HUD line: Счет 0 Попытки 2 1 9
+        1:'ч', 7:'п', 14:'9',
+    },
+    REF+'01_title.png': {              # Поставка: Н-Шангская СШ
+        9:'Н', 11:'Ш', 18:'я',
+    },
 }
 
-def extract_all():
-    W, H, white = load()
-    bands = row_bands(W, H, white)
+def extract_src(src):
+    W, H, white = load(src)
     glyphs = []
-    for bi, (y0, y1) in enumerate(bands):
+    for y0, y1 in row_bands(W, H, white):
         for gx0, gx1 in col_groups(white, (0, W), y0, y1):
             wpx = gx1 - gx0; n = max(1, round(wpx / 8)); cw = wpx / n
             for ci in range(n):
@@ -102,11 +109,12 @@ def extract_all():
     return glyphs
 
 def build():
-    glyphs = extract_all()
     chars = {}                       # char -> 8x8 bitmap (first clean occurrence)
-    for idx, ch in GLYPH_MAP.items():
-        if idx < len(glyphs) and ch not in chars:
-            chars[ch] = glyphs[idx]
+    for src, gmap in SOURCES.items():
+        glyphs = extract_src(src)
+        for idx, ch in gmap.items():
+            if idx < len(glyphs) and ch not in chars:
+                chars[ch] = glyphs[idx]
     order = sorted(chars, key=lambda c: ord(c))
     # labelled verification atlas
     S = 5; cell = 8*S + 16; cols = 12; rows = (len(order)+cols-1)//cols
@@ -162,4 +170,5 @@ def build():
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'build': build()
+    elif len(sys.argv) > 2 and sys.argv[1] == 'dump': main(sys.argv[2])
     else: main()

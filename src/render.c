@@ -2,7 +2,9 @@
 // LEVEL_RENDER (004776) + DISP_SCANLINE_WRITE (040060): tile = 16px lat × 8 înalt, 1bpp.
 #include "render.h"
 #include "gfx_data.h"
+#include "uknc_font.h"     // font REAL УКНЦ 8×8, extras pixel-exact (font/)
 #include <stdio.h>
+#include <string.h>
 
 // ── paletă 2-culori cu comutare color/mono ───────────────────────────────────
 // КЛАД 1987 randează doar 2 culori. Mod color = ca emulatorul УКНЦ (fundal albastru
@@ -49,25 +51,50 @@ void render_init(Renderer *r) {
     r->target = LoadRenderTexture(VW, VH);
     SetTextureFilter(r->target.texture, TEXTURE_FILTER_POINT);
 
-    // Font cu glife chirilice — port fidel: HUD/titlu în rusă ("Счет", "Попытки").
-    // (УНКЦ ROM-font extraction = rafinare de fidelitate, notat în PORT_PLAN.md.)
-    int cps[256]; int n = 0;
-    for (int c = 32; c <= 126; c++) cps[n++] = c;          // ASCII
-    for (int c = 0x0410; c <= 0x044F; c++) cps[n++] = c;   // А..я
-    cps[n++] = 0x0401; cps[n++] = 0x0451;                  // Ё ё
-    r->font = LoadFontEx("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 16, cps, n);
-    SetTextureFilter(r->font.texture, TEXTURE_FILTER_POINT);
+    // Atlas font REAL УКНЦ 8×8 (font/uknc_font.h) — glife albe opace pe transparent,
+    // tentate la desenare. Înlocuiește DejaVu: text pixel-exact ca originalul, și merge
+    // în WASM (date embedded, nu fișier TTF de pe disc).
+    Image fimg = GenImageColor(UKNC_FONT_COUNT * 8, 8, (Color){0,0,0,0});
+    for (int i = 0; i < UKNC_FONT_COUNT; i++)
+        for (int row = 0; row < 8; row++)
+            for (int col = 0; col < 8; col++)
+                if ((UKNC_FONT[i].rows[row] >> (7 - col)) & 1)
+                    ImageDrawPixel(&fimg, i * 8 + col, row, (Color){255,255,255,255});
+    r->fonttex = LoadTextureFromImage(fimg);
+    SetTextureFilter(r->fonttex, TEXTURE_FILTER_POINT);
+    UnloadImage(fimg);
 }
 
 void render_shutdown(Renderer *r) {
     UnloadTexture(r->tileset);
     UnloadRenderTexture(r->target);
-    UnloadFont(r->font);
+    UnloadTexture(r->fonttex);
 }
 
-// text rusesc cu fontul chirilic
+// index glifei pentru un codepoint (UKNC_FONT e mic; scan liniar e suficient)
+static int font_index(uint32_t cp) {
+    for (int i = 0; i < UKNC_FONT_COUNT; i++)
+        if (UKNC_FONT[i].cp == cp) return i;
+    return -1;
+}
+
+// Text cu fontul REAL УКНЦ. `size` = înălțimea glifei în px (8 = nativ). Lățime fixă 8px.
 void render_text(Renderer *r, const char *utf8, int x, int y, int size, Color c) {
-    DrawTextEx(r->font, utf8, (Vector2){(float)x, (float)y}, (float)size, 0, c);
+    float s = (float)size / 8.0f;
+    float adv = 8.0f * s;
+    float fx = (float)x;
+    for (int i = 0; utf8[i];) {
+        int bytes = 0;
+        int cp = GetCodepointNext(utf8 + i, &bytes);
+        i += bytes;
+        int gi = font_index((uint32_t)cp);
+        if (gi >= 0)
+            DrawTexturePro(r->fonttex,
+                (Rectangle){(float)(gi * 8), 0, 8, 8},
+                (Rectangle){fx, (float)y, adv, 8.0f * s},
+                (Vector2){0, 0}, 0.0f, c);
+        fx += adv;   // lățime fixă (spațiul/lipsă glifă = avans gol)
+    }
 }
 
 // LEVEL_RENDER (004776): 22 rânduri × 32 tile-uri. Tile 0 = aer.
@@ -119,17 +146,31 @@ void render_hud(Renderer *r, const Score *s) {
     render_text(r, buf, 400, 3, 11, fg);
 }
 
-// TITLE_SEQ (002072): titlu КЛАД + credite. NOTĂ fidelitate: originalul desenează "КЛАД"
-// din tile-uri (un "title level"); aici e font mare ca prim pas — tile-art = task 3.
+// "КЛАД" mare ca TILE-ART (din blocuri, ca originalul care încarcă un "title level").
+// 7 rânduri; fiecare literă ~6 coloane de blocuri.  '#' = bloc.
+static const char *KLAD_ART[7] = {
+    "##..##  ######  .####.  ##### ",
+    "##.##.  ##......#....#..##...#.",
+    "####..  ##......#....#..##...#.",
+    "###...  ##......######..##...#.",
+    "####..  ##......#....#..##...#.",
+    "##.##.  ##......#....#..##...#.",
+    "##..##  ######  #....#..#####  ",
+};
+
+// TITLE_SEQ (002072): КЛАД (tile-art) + credite (font REAL УКНЦ).
 void render_title(Renderer *r) {
     Color fg = render_fg();
-    const char *t = "КЛАД";
-    int size = 72;
-    Vector2 m = MeasureTextEx(r->font, t, (float)size, 0);
-    render_text(r, t, (VW - (int)m.x) / 2, 26, size, fg);
-    render_text(r, "Николаев 1987", VW/2 - 64, 120, 13, fg);
-    render_text(r, "Баранов",       VW/2 - 36, 140, 13, fg);
-    render_text(r, "нажмите клавишу", VW/2 - 74, 168, 11, fg);  // "press a key"
+    int bw = 7, bh = 7;                          // mărimea unui bloc (px)
+    int cols = (int)strlen(KLAD_ART[0]);
+    int x0 = (VW - cols * bw) / 2, y0 = 28;
+    for (int row = 0; row < 7; row++)
+        for (int col = 0; col < cols; col++)
+            if (KLAD_ART[row][col] == '#')
+                DrawRectangle(x0 + col*bw, y0 + row*bh, bw, bh, fg);
+    render_text(r, "Николаев 1987",  VW/2 - 52, 120, 13, fg);
+    render_text(r, "Баранов",        VW/2 - 28, 140, 13, fg);
+    render_text(r, "нажмите клавишу", VW/2 - 60, 168, 11, fg);  // "press a key"
 }
 
 // DIFF_SELECT (003234): alegere viteză 1-4 (1 = rapid, 4 = lent).
