@@ -84,17 +84,21 @@ bool enemy_tick(Enemy *e, const Map *m, const Player *p, float dt) {
     // Animație continuă (SPRITE_ANIM_A/C: 8-frame horiz)
     e->anim_t += dt;
 
-    // Warmup (ENEMY2_TICK 006562): inamicul stă pe loc la începutul nivelului, apoi pornește.
-    if (e->warmup > 0.0f) {
-        e->warmup -= dt;
-    } else {
-        // Throttle mișcare (echivalent CMP #400, @#TICK_CTR)
-        e->move_cd -= dt;
-        if (e->move_cd <= 0.0f) {
-            e->move_cd = ENEMY_MOVE_INTERVAL;
+    // Warmup (ENEMY2_TICK 006562): inamicul nu URMĂREȘTE la începutul nivelului — DAR
+    // gravitația acționează (altfel ar „zbura"/pluti dacă apare în aer). Cade spre podea.
+    e->move_cd -= dt;
+    if (e->move_cd <= 0.0f) {
+        e->move_cd = ENEMY_MOVE_INTERVAL;
+        if (e->warmup > 0.0f) {
+            // doar gravitație: cade un rând dacă nu e pe scară și are aer dedesubt
+            if (e->row + 1 < MAP_ROWS && map_raw(m, e->col, e->row) != 8
+                && map_raw(m, e->col, e->row + 1) <= 6)
+                e->row++;
+        } else {
             do_move(e, m, p);
         }
     }
+    if (e->warmup > 0.0f) e->warmup -= dt;
 
     // LEVEL_END_CHECK (001636): player și inamic pe același tile → moarte player
     int pcol = (int)((p->px + TILE_W * 0.5f) / TILE_W);

@@ -64,6 +64,13 @@ G = {
  ':':["........","..##....","..##....","........","........","..##....","..##....","........"],
 }
 
+# Corecții pentru glife chirilice extrase greșit din screenshot-uri (8x8, '#'=pixel).
+# 'р' ieșea ca o cutie închisă (nu se citea „Баранов"); 'а' avea un pixel rătăcit.
+CORRECT = {
+ 'р':["........","........",".####...",".#...#..",".#...#..",".####...",".#......",".#......"],
+ 'а':["........","........",".####...","....##..",".#####..","#....#..","#...##..",".###.#.."],
+}
+
 def to_bytes(art):
     out=[]
     for row in art:
@@ -79,6 +86,10 @@ def main():
     # strip any previously appended Latin block (idempotent)
     src=re.sub(r"\n  // --- Latin block.*?(?=\n};)", "", src, flags=re.S)
     base_count=len(re.findall(r"^\s*\{0x[0-9a-fA-F]+, \{", src, flags=re.M))
+    # corectează glifele chirilice extrase greșit (înlocuiește octeții în loc, în matrice)
+    for ch,art in CORRECT.items():
+        cp=ord(ch); hexs=",".join("0x%02x"%b for b in to_bytes(art))
+        src=re.sub(r"\{0x%04x, \{[^}]*\}\}"%cp, "{0x%04x, {%s}}"%(cp,hexs), src, count=1)
     lines=[]
     lines.append("  // --- Latin block (tools/gen_latin_font.py): A-Z a-z ! : pentru română/ASCII ---")
     for ch,art in G.items():
