@@ -63,6 +63,22 @@ standing/walking/climbing player frames* (via `SPRITE_HELPERS` 013216 + the enti
 not the decode rule. Implementation: char tiles 16-31 → OR(8px) in `gen_gfx_c.py`; render the
 player as the correct 2-tile pair in `render.c`.
 
+**Traced `SPRITE_HELPERS` 013216 + table 012410:** the player tile index for state s is
+`tile = byte[012410 + (s-0o21)*2 + dir]`; the non-zero entries are tiles **18 and 20**
+(0o22/0o24) — climb=18, walk=20 (matches the indices `render.c` already uses). BUT a
+brute-force of the captured player figure against every char tile × {OR, plane0, plane1,
+side-by-side L/R, plane-OR} tops out at **42/64** — no clean match. Two complications make
+the raw tile ≠ the on-screen figure:
+  1. `SPRITE_DRAW` composes the sprite from **two tiles at X/Y offsets** (table 020270 holds
+     per-direction dx/dy), so the figure is not a simple col-0/col-8 split of one decode.
+  2. The blit is **XOR onto the background** (`074437 XOR ...` in the 040140 path, and
+     014772/015072), so a captured figure = sprite ⊕ background unless the player stands on
+     pure blue (rare in КЛАД).
+**Next (deeper):** model the exact `SPRITE_DRAW` offset+XOR composition (or run the two char
+tiles through the C23 `uknc_emu` against a blank framebuffer) to reconstruct the true sprite,
+then set `render.c` to draw tiles 18/20 (+ their partner) at the right offset. This is a
+multi-step modeling task — the architecture is fully traced, the pixel reconstruction isn't.
+
 ## Verified OK
 - **Level 1 layout** — our maze tile-grid matches the original (`02_gameplay.png`) modulo a
   ~2-row alignment offset in the diff; the structure (borders, ladder columns, platforms)
