@@ -61,6 +61,12 @@ static void load_level(Game *g) {
         enemy_spawn_override(lvl, i, &ec, &er);
         enemy_init(&g->enemies[i], ec, er);
     }
+
+    // Cheia (gold_c, tile 6): nivelul o cere ÎNAINTE de ieșire (design B). Scanăm dacă există.
+    g->has_key = false; g->key_collected = false;
+    for (int r = 0; r < MAP_ROWS; r++)
+        for (int c = 0; c < MAP_COLS; c++)
+            if (g->map.raw[r][c] == TIDX_GOLD_C) g->has_key = true;
 }
 
 // ── GAME_INIT (004000) ────────────────────────────────────────────────────────
@@ -125,9 +131,11 @@ static void game_tick(Game *g, Input in, float dt) {
                 (int)((g->player.px + TILE_W*0.5f) / TILE_W),
                 (int)((g->player.py + TILE_H*0.5f) / TILE_H));
             map_open_door(&g->map);     // ușa (tile 10) devine pasabilă; sunet (TODO audio)
+            g->key_collected = true;    // design B: cheia luată → ieșirea devine validă
             score_add_gold(&g->score);  // cheia dă și puncte
             break;                      // continuă jocul — exit-ul (după ușă) termină nivelul
-        case PR_EXIT:        // tile 2 = IEȘIREA (atinsă după ușă + scara din dreapta) → final
+        case PR_EXIT:        // tile 2 = IEȘIREA. Design B: validă DOAR dacă ai luat cheia
+            if (g->has_key && !g->key_collected) break;   // încă n-ai cheia → ieșirea nu termină
             if (score_level_advance(&g->score))
                 g->state = GS_ALL_WIN;
             else {

@@ -19,6 +19,8 @@ typedef struct {
     GameState state;
     float    state_timer;
     int      speed;        // VAR_SPEED (001312): viteză 1-4 aleasă în DIFF_SELECT
+    bool     has_key;      // nivelul ARE o cheie (gold_c) de colectat?
+    bool     key_collected;// cheia a fost luată (deschide ușa + permite ieșirea)
 } Game;
 
 // GAME_INIT (004000): init complet de la zero

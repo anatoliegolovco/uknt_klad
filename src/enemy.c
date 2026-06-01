@@ -66,8 +66,10 @@ static void do_move(Enemy *e, const Map *m, const Player *p) {
         }
     }
 
-    // Dacă a pășit în gol (nu pe scară, fără podea dedesubt) → începe o cădere angajată.
-    if (!moved && map_raw(m, e->col, e->row) != 8 && map_raw(m, e->col, e->row + 1) <= 6) {
+    // Gravitație DUPĂ mișcare (ca originalul 006712), INDIFERENT dacă s-a mișcat orizontal:
+    // dacă nu e pe scară și are aer dedesubt → cade. Altfel ar „merge prin aer" orizontal (zbura).
+    (void)moved;
+    if (map_raw(m, e->col, e->row) != 8 && map_raw(m, e->col, e->row + 1) <= 6) {
         e->falling = true;
         if (e->row + 1 < MAP_ROWS) e->row++;
     }
