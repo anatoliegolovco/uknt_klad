@@ -52,6 +52,9 @@ static void write_ppm(const char* path, const uint32_t* argb) {
 // --- key injection (УКНЦ scancodes, octal) --------------------------------------
 enum { K_1=0030, K_R=0074, K_K=0052, K_L=0056, K_A=0072, K_D=0057,
        K_SPACE=0113, K_ENTER=0153, K_ALF=0106 };
+// Cyrillic letter scancodes (phonetic УКНЦ keyboard) for missing-glyph capture.
+enum { K_cB=0076, K_cI=0073, K_cJ=0027, K_cZH=0137, K_cZ=0157, K_cSH=0036,
+       K_cU=0051, K_cCH=0110, K_c8=0145 /*numpad 8*/ };
 static void run_frames(CMotherboard* b, int n){ for (int i=0;i<n;i++) b->SystemFrame(); }
 static void key(CMotherboard* b, uint8_t scan){          // press + release one key
     b->KeyboardEvent(scan, true);  run_frames(b, 5);
@@ -70,6 +73,20 @@ static void boot_klad(CMotherboard* b){
     run_frames(b, 200);
     key(b, K_1);                        // speed select 1 → start the game
     run_frames(b, 600);                 // into the maze
+}
+
+// Boot to the ФОДОС prompt (РУС mode) and type the missing Cyrillic letters with spaces,
+// so they echo on screen and can be sliced into glyphs. Б И Й Ж З Ш У Ч 8.
+static void boot_glyphs(CMotherboard* b){
+    run_frames(b, 150);
+    key(b, K_1); key(b, K_ENTER);       // boot from disk
+    run_frames(b, 500);                 // ФОДОС prompt
+    key(b, K_ALF);                      // toggle keyboard to РУС (Cyrillic) — was ЛАТ
+    run_frames(b, 20);
+    const uint8_t seq[] = { K_cB, K_SPACE, K_cI, K_SPACE, K_cJ, K_SPACE, K_cZH, K_SPACE,
+                            K_cZ, K_SPACE, K_cSH, K_SPACE, K_cU, K_SPACE, K_cCH };
+    for (uint8_t k : seq) key(b, k);
+    run_frames(b, 60);
 }
 
 static uint8_t* load_file(const char* path, long* out_len) {
@@ -108,7 +125,10 @@ int main(int argc, char** argv) {
     int frames = 0;
     if (!strcmp(arg3, "klad")) {        // scripted: boot the game via key injection
         boot_klad(board);
-        printf("booted КЛАД (scripted key injection)\n");
+        printf("booted КЛАD (scripted key injection)\n");
+    } else if (!strcmp(arg3, "glyphs")) {   // type missing Cyrillic letters at ФОДОС prompt
+        boot_glyphs(board);
+        printf("typed missing glyphs at ФОДОС prompt\n");
     } else {
         frames = atoi(arg3);
         for (int i = 0; i < frames; i++) board->SystemFrame();

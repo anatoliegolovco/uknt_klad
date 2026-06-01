@@ -147,30 +147,30 @@ void render_hud(Renderer *r, const Score *s) {
 }
 
 // "КЛАД" mare ca TILE-ART (din blocuri, ca originalul care încarcă un "title level").
-// 7 rânduri; fiecare literă ~6 coloane de blocuri.  '#' = bloc.
+// 7 rânduri; litere de 5 coloane + 1 gap.  '#' = bloc.   К  Л  А  Д
 static const char *KLAD_ART[7] = {
-    "##..##  ######  .####.  ##### ",
-    "##.##.  ##......#....#..##...#.",
-    "####..  ##......#....#..##...#.",
-    "###...  ##......######..##...#.",
-    "####..  ##......#....#..##...#.",
-    "##.##.  ##......#....#..##...#.",
-    "##..##  ######  #....#..#####  ",
+    "#...# .#### .###. .####.",
+    "#..#. .#..# #...# .#..#.",
+    "#.#.. .#..# #...# .#..#.",
+    "##... .#..# ##### .#..#.",
+    "#.#.. .#..# #...# .#..#.",
+    "#..#. .#..# #...# ######",
+    "#...# #...# #...# #....#",
 };
 
-// TITLE_SEQ (002072): КЛАД (tile-art) + credite (font REAL УКНЦ).
+// TITLE_SEQ (002072): КЛАД (tile-art) + credite (font REAL УКНЦ). Originalul NU are
+// prompt "нажмите клавишу" pe titlu — doar КЛАД + Николаев 1987 + Баранов.
 void render_title(Renderer *r) {
     Color fg = render_fg();
-    int bw = 7, bh = 7;                          // mărimea unui bloc (px)
+    int bw = 8, bh = 8;                          // mărimea unui bloc (px)
     int cols = (int)strlen(KLAD_ART[0]);
-    int x0 = (VW - cols * bw) / 2, y0 = 28;
+    int x0 = (VW - cols * bw) / 2, y0 = 30;
     for (int row = 0; row < 7; row++)
         for (int col = 0; col < cols; col++)
             if (KLAD_ART[row][col] == '#')
                 DrawRectangle(x0 + col*bw, y0 + row*bh, bw, bh, fg);
     render_text(r, "Николаев 1987",  VW/2 - 52, 120, 13, fg);
-    render_text(r, "Баранов",        VW/2 - 28, 140, 13, fg);
-    render_text(r, "нажмите клавишу", VW/2 - 60, 168, 11, fg);  // "press a key"
+    render_text(r, "Баранов",        VW/2 - 28, 142, 13, fg);
 }
 
 // DIFF_SELECT (003234): alegere viteză 1-4 (1 = rapid, 4 = lent).
