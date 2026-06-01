@@ -122,3 +122,38 @@ font, extracted from rendered output). Walk/climb frames: capture the same way a
 **What:** `()-012345679:АГЗКНПРСУШавгдеиклмнопрстфчыья`. Missing: `Б И й ж з ш у 8`.
 **Path:** KI-1 / KI-2 resolve these. The game text falls back to a blank advance for
 missing glyphs (no crash).
+
+## KI-5 — player not animated like the original
+**What:** in our impl the player figure doesn't animate the way the original does. (Earlier
+frame-diff captures of walk looked static, but the user observes the original animates.)
+**Impact:** visual fidelity. **Path:** re-capture player frames at finer anim phases
+(ANIM_THROTTLE_PLAYER 007432 changes frame every 4 ticks) via the headless `sprite` mode;
+the original may cycle 2 leg-position frames. Investigate later.
+
+## KI-6 — enemy chase AI not working visibly
+**What:** `enemy.c do_move` has greedy chase code (toward player, horiz-first, vertical on
+ladders, from ENEMY2_MOVE 006602), but the adversary doesn't appear to chase in-game.
+**Impact:** gameplay. **Path:** verify enemy_init spawns + enemy_tick runs each frame; check
+speed/throttle; compare to ENEMY1/2/3_TICK. Investigate.
+
+## KI-7 — enemy sprite identical to the player
+**What:** `render_enemy` now draws PLAYER_ART, so enemies look exactly like the player. The
+original enemies were **hatched/different** (distinct texture).
+**Impact:** can't tell player from enemy. **Path:** capture the enemy figure via frame-diff
+(the enemy moves on its own — diff two frames isolates it), bake a separate ENEMY_ART.
+
+## KI-8 — player can't reach level goals (gets stuck) — FOUND BY REACHABILITY E2E
+**What:** `tools/reachability.c` (BFS over the movement graph, same collision as map.c) shows
+the player reaches only the bottom rows + a few ladder stubs in EVERY level; the exit is
+unreachable (0/1) in all 10 levels and most gold is unreachable. The player gets stuck.
+**Overlay (level 1):** climbs e.g. the col-9 ladder to its top (row 17) but is walled in
+left/right there — ladders dead-end instead of connecting to platforms.
+**Likely causes (to investigate):**
+  1. Movement too strict — the climb-up rule (`player.c can_climb_into`, up only into a
+     T_LADDER cell) stops at a ladder top and can't step onto the platform above. (Loosening
+     it risks the old "climb through ceiling" bug — delicate.)
+  2. Level-data vertical offset — the earlier tile-grid diff vs the original showed a ~2-row
+     offset; if real, ladders wouldn't line up with platforms.
+**Ground truth needed (KI/T8):** extract the real per-level reachability from uknc_emu
+(COLLISION_MAP_BUILD flags) — if the real game reaches everything but we don't, it's our
+movement/data. This is the concrete next step before changing the climb rule.
