@@ -18,8 +18,11 @@
      band. Rotate it 90° to landscape and fill the screen. Touch is remapped in
      JS (below) to match the rotated view. */
   @media (orientation:portrait){
-    canvas{aspect-ratio:auto;width:100vh;height:100vw;max-height:none;
-      transform:rotate(90deg);transform-origin:center;}
+    /* position:fixed takes the canvas out of flex flow so it can't be shrunk;
+       size it to the rotated viewport (w=100vh, h=100vw) and centre+rotate. */
+    canvas{position:fixed;top:50%;left:50%;
+      width:100vh;height:100vw;max-height:none;aspect-ratio:auto;
+      transform:translate(-50%,-50%) rotate(90deg);transform-origin:center;}
   }
   #note{position:fixed;bottom:6px;left:0;right:0;text-align:center;
     font-size:12px;opacity:.55;pointer-events:none;z-index:2;}
