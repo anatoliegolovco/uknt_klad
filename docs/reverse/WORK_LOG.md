@@ -173,3 +173,19 @@ reproduce exact aceste texturi → următorul pas: EXTRAGERE tile-uri direct din
 ecranul randat al emulatorului (singura cale fidelă). Format video УКНЦ prea complex
 pt decodare statică din octeți. Coliziune: can_climb_into() acum scanează prin
 platforme consecutive (trecere prin "două tavane").
+
+## 2026-06-01 (sesiunea culori scări — firmware УКНЦ)
+
+`[2026-06-01 UTC] DONE` — Culori scări/stairs: investigat firmware УКНЦ + capturi emulator color mode.
+- **Concluzie**: jocul NU încarcă o paletă custom. Culoarea e atribut per-scanline:
+  blit-ul (`DISP_SCANLINE_WRITE` 040060+) scrie bitmap-ul la `@#176640` apoi octetul
+  colour-plane la `@#176642/3` (`MOVB (R2),@#176642` / `MOVB (R2)+,@#176643`). Niciun
+  palette-latch load în 001000–041777 → render-ul color al emulatorului ESTE paleta ground-truth.
+- **Scările = ALB pe ALBASTRU** (2 șine subțiri + trepte frecvente). Podea/apă = GALBEN.
+  Confirmat din `reference_emu/compare/level1_emulator.png`, `ladder_emulator_zoom.png`,
+  `sprites/uknc_emu_gameplay_render.png`.
+- **Reimplementarea deja se potrivește**: `src/render.c` PAL_COLOR={bg(0,0,255), fg(255,255,255)}
+  + render_water() galben (236,204,64). Niciun fix de culoare necesar.
+- Docs: GFX_MAP.md secțiunea "Colour model — RESOLVED" + Known Limitations #1 marcat RESOLVED.
+- **Next:** dacă se dorește fidelitate de FORMĂ scară (șine mai subțiri + trepte mai dese în
+  gfx_data tile 1) — separat de culoare; sau exercitat build-ul WebAssembly.

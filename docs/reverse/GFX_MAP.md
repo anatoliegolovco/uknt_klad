@@ -32,8 +32,34 @@ verified pixel-exact vs УКНЦ emulator screenshots; consistent with `DISP_SCA
 A uniform decode can't do both (ladder needs adjacent columns, chest needs overlap). Code:
 `tools/gen_gfx_c.py:decode_tile_16x8`.
 
-> ⚠ The 4-colour "Black/Green/Yellow" table below is **superseded** — this build is 2-colour.
-> Kept only as a record of the investigation.
+### ⭐ Colour model — RESOLVED from firmware (2026-06-01)
+
+The УКНЦ does **not** load a custom palette table at game init. Colour is produced
+**per-scanline by hardware attribute**: the column-blit routine (`DISP_SCANLINE_WRITE`
+040060+) writes the bitmap word to the pixel-data port `@#176640`, then writes the
+tile's **colour-plane byte** to the colour register `@#176642/3` (`MOVB (R2),@#176642`
+/ `MOVB (R2)+,@#176643`, R2 = colour-plane pointer). There is no separate palette latch
+load anywhere in `001000`–`041777`, so the displayed colour is just the УКНЦ hardware
+decode of the per-scanline (pixel-byte, colour-byte) pair — the emulator's colour render
+**is** the ground-truth palette.
+
+Confirmed from the emulator colour-mode captures (`reference_emu/compare/level1_emulator.png`,
+`ladder_emulator_zoom.png`, `sprites/uknc_emu_gameplay_render.png`):
+
+| Element | Colour | Note |
+|---------|--------|------|
+| Background / air | **Blue** `(0,0,255)` | УКНЦ index 0 in colour mode |
+| **Ladders / stairs** | **White** `(255,255,255)` | two thin rails + frequent rungs; colour-plane = pixel-plane → white |
+| Walls / earth / sprites | **White** `(255,255,255)` | same attribute as ladders |
+| Floor / water band | **Yellow** `(236,204,64)` | bottom band in level1 capture |
+
+→ **Stairs are white-on-blue.** The reimplementation already matches: `src/render.c`
+`PAL_COLOR={bg (0,0,255), fg (255,255,255)}` + `render_water()` yellow. No code fix needed
+for colours. School monitors were monochrome, so on real hardware this was white-on-black;
+the colour values above are the emulator's colour-mode rendering (kept as our "color" toggle).
+
+> ⚠ The 4-colour "Black/Green/Yellow" table below is **superseded** — this build is 2-colour
+> (+ a yellow floor attribute). Kept only as a record of the investigation.
 
 **Colour encoding (OLD/superseded — 4-colour hypothesis, NOT how this build renders):**
 
@@ -139,7 +165,7 @@ assets/uknc/
 
 ## Known Limitations
 
-1. **Palette**: exact УКНЦ palette values (palette register contents at game init) not yet confirmed — would require emulator trace. Current colours are approximations.
+1. ~~**Palette**: exact УКНЦ palette values not yet confirmed.~~ **RESOLVED 2026-06-01** — no palette table is loaded; colour is per-scanline attribute written to `@#176642/3`. See "Colour model — RESOLVED" above. Stairs = white-on-blue, floor = yellow.
 2. **Tile 12 pixel data**: complex pattern at T12 (`2A 2A A8 A8 22 22 8A 8A | A2 A2 88 88 2A 2A 88 A8`) renders as a diagonal-stripe earth texture.
 3. **Frame groupings**: sprite animation groupings are estimated. FN_SPRITE_DRAW (014030) + SPRITE_HELPERS (013216) control frame selection — see ANIMATIONS.md (not yet written) for details.
 4. **Tile 2 = EXIT**: identified from level data (single occurrence at top row near ladder) but not yet confirmed against collision code.
