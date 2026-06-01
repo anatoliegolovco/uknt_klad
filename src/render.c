@@ -106,8 +106,14 @@ void render_map(Renderer *r, const Map *m) {
             if (idx == TIDX_AIR) continue;
             int dx = col*TILE_W, dy = row*TILE_H + PLAYFIELD_Y;
             if (idx == TIDX_EXIT) {
-                Color fg = render_fg(); fg.a = 60;
-                DrawRectangleLines(dx, dy, TILE_W, TILE_H, fg);
+                // În original ieșirea e invizibilă (pixeli = aer). Design B: jucătorul TREBUIE
+                // să o vadă → ușă vizibilă: cadru + săgeată-sus (▲) = „ieși pe aici".
+                Color fg = render_fg();
+                DrawRectangleLines(dx, dy, TILE_W, TILE_H, fg);                 // cadrul ușii
+                DrawTriangle((Vector2){ dx + TILE_W/2.0f, dy + 1 },             // vârf sus
+                             (Vector2){ dx + 3,           dy + TILE_H - 2 },    // bază stânga
+                             (Vector2){ dx + TILE_W - 3,  dy + TILE_H - 2 },    // bază dreapta
+                             fg);
                 continue;
             }
             if (idx == 10) {   // KI-10: UȘA. Închisă = bloc plin; deschisă (cheia luată) = cadru gol.
