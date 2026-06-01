@@ -11,10 +11,12 @@
 #include <stdio.h>
 #include <string.h>
 
-// Gravity: fall while not on a climbable ladder (raw 8) and nothing supporting below
-// (below tile ≤ 6 = air/gold). Matches map_grounded (#4000).
+// Gravity: fall while not on a climbable ladder (raw 8) and not grounded. Matches map_grounded:
+// below ≤ 6 = air (fall), below ≥ 13 = deep water (fall THROUGH into it → drown). Tile 7 (shallow
+// water) and 8..12 are footing — the fall stops there. bfs() flags deep-water landings via map_drowns.
 static int settle(const Map *m, int c, int r) {
-    while (r < MAP_ROWS - 1 && map_raw(m, c, r) != 8 && map_raw(m, c, r + 1) <= 6)
+    while (r < MAP_ROWS - 1 && map_raw(m, c, r) != 8 &&
+           (map_raw(m, c, r + 1) <= 6 || map_raw(m, c, r + 1) >= 13))
         r++;
     return r;
 }
@@ -31,10 +33,16 @@ static bool try_move(const Map *m, int c, int r, int dir, int *nc, int *nr) {
     return false;
 }
 
-// BFS from (sc,sr) over the flag-based moves; fills `seen`, returns reachable-cell count.
+// BFS from (sc,sr) over the flag-based moves; fills `seen`, returns SAFE reachable-cell count.
+// Water-aware (user req): a move that lands the player in/on water is a DROWN death — the cell
+// is reachable-but-fatal, so we tally it as a hazard and do NOT expand from it (the safe path
+// routes around water, exactly like the real game where stepping into water = PLAYER_DEATH).
 static int g_qc[MAP_ROWS*MAP_COLS], g_qr[MAP_ROWS*MAP_COLS];
+static long g_drown;   // count of distinct drown-landings touched this BFS
 static int bfs(const Map *m, int sc, int sr, bool seen[MAP_ROWS][MAP_COLS], long *edges) {
-    int head = 0, tail = 0; *edges = 0;
+    static bool hazard[MAP_ROWS][MAP_COLS];
+    int head = 0, tail = 0; *edges = 0; g_drown = 0;
+    memset(hazard, 0, sizeof hazard);
     seen[sr][sc] = true; g_qc[0] = sc; g_qr[0] = sr; tail = 1;
     while (head < tail) {
         int c = g_qc[head], r = g_qr[head]; head++;
@@ -42,7 +50,12 @@ static int bfs(const Map *m, int sc, int sr, bool seen[MAP_ROWS][MAP_COLS], long
             int nc, nr;
             if (try_move(m, c, r, d, &nc, &nr)) {
                 (*edges)++;
-                if (nr >= 0 && nr < MAP_ROWS && !seen[nr][nc]) {
+                if (nr < 0 || nr >= MAP_ROWS) continue;
+                if (map_drowns(m, nc, nr)) {          // landing in/on water = drown
+                    if (!hazard[nr][nc]) { hazard[nr][nc] = true; g_drown++; }
+                    continue;                          // do NOT traverse through water
+                }
+                if (!seen[nr][nc]) {
                     seen[nr][nc] = true; g_qc[tail] = nc; g_qr[tail] = nr; tail++;
                 }
             }
@@ -101,9 +114,9 @@ int main(void) {
             }
         }
         printf("level %2d: spawn(%d,%d)->r%d | reach %3d, %ld moves | key %-3s | "
-               "gold %d/%d  exit %d/%d  %s\n",
+               "gold %d/%d  exit %d/%d  drown-tiles %ld  %s\n",
                lvl + 1, sc, sr0, sr, reach, edges, key_reached ? "YES" : "no",
-               gold_reach, gold_total, exit_reach, exit_total,
+               gold_reach, gold_total, exit_reach, exit_total, g_drown,
                ok ? "OK" : "** STUCK **");
     }
     printf("\n%s\n", total_fail == 0

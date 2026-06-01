@@ -31,7 +31,7 @@ typedef enum {
     PR_BONUS,      // TIDX_GOLD_B (5): CLRB + BONUS_LIFE_ADD
     PR_LEVEL_WIN,  // TIDX_GOLD_C (6): LEVEL_COMPLETE
     PR_EXIT,       // TIDX_EXIT   (2): ieșire nivel
-    PR_WATER,      // TIDX_WATER (7,14): PLAYER_DEATH
+    PR_WATER,      // apă adâncă (13,14): PLAYER_DEATH (tile 7 = apă mică, pasabilă, ne-letală)
     PR_ENEMY,      // coliziune inamic: LEVEL_END_CHECK (001636)
 } PlayerResult;
 

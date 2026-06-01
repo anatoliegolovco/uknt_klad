@@ -41,6 +41,7 @@ bool map_can_left (const Map *m, int col, int row);  // #400 : tile stânga ≤ 
 bool map_can_up   (const Map *m, int col, int row);  // #20000: curent==8 ȘI sus ≤ 8
 bool map_can_down (const Map *m, int col, int row);  // #10000: jos == 8
 bool map_grounded (const Map *m, int col, int row);  // #4000: suport (curent==8 sau jos>6)
+bool map_drowns   (const Map *m, int col, int row);  // apă letală: în apă sau pe suprafața apei
 
 // PLAYER_STATE_CHECK (012570): CLRB (R3) → tile → EMPTY după colectare aur
 void map_clear(Map *m, int col, int row);

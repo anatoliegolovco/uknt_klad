@@ -27,9 +27,10 @@ enum {
     TIDX_GOLD_A  =  4,  // 017550: aur → SCORE_ADD (003764)
     TIDX_GOLD_B  =  5,  // 017570: aur → BONUS_LIFE_ADD (003746)
     TIDX_GOLD_C  =  6,  // 017610: aur → LEVEL_COMPLETE (001034)
-    TIDX_WATER   =  7,  // 017630: apă, letal
+    TIDX_SHALLOW =  7,  // 017630: apă MICĂ — pasabilă, NU letală (mergi prin/peste ea)
     TIDX_LADDER2 =  8,  // 017650: scară tip 2 (pixels identici cu tip 1)
-    TIDX_WATER2  = 14,  // 020010: apă animată, letal
+    TIDX_WATER   = 13,  // apă adâncă — LETALĂ (ACT_DISPATCH 001500: cur tile==0o15 → moarte)
+    TIDX_WATER2  = 14,  // 020010: apă adâncă animată — LETALĂ
 };
 
 // ── tipuri logice tile, derivate din orig_to_tile în PLAYER_STATE_CHECK ──────
@@ -47,9 +48,10 @@ static inline TileType tidx_to_type(TileIdx i) {
         case 1: case 8:              return T_LADDER;
         case 2:                      return T_EXIT;
         case 4: case 5: case 6:     return T_GOLD;
-        case 7: case 14:            return T_WATER;
+        case 13: case 14:           return T_WATER;   // apă adâncă LETALĂ (cur tile==13/14 → moarte)
         case 9: case 10: case 11:
-        case 12: case 13:           return T_WALL;
+        case 12:                    return T_WALL;
+        // tile 7 (apă mică) cade în default → T_EMPTY: pasabilă, ne-letală
         default:                    return T_EMPTY;
     }
 }

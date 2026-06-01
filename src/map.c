@@ -43,18 +43,36 @@ static int raw_w(const Map *m, int c, int r) {
     if (c < 0 || c >= MAP_COLS || r < 0 || r >= MAP_ROWS) return 11; // wall
     return map_raw(m, c, r);
 }
-// Pasabil = non-wall (≤8), SAU ușa (tile 10) când e deschisă (KI-10: cheia o deschide).
-static bool pass(const Map *m, int c, int r) {
+// Pasabil pentru JUCĂTOR = tile ≤ 9, SAU ușa (tile 10) deschisă (KI-10).
+// CMAP_FLAGS (013570) calculează DOUĂ seturi de flag-uri orizontale:
+//   #1000/#400   : vecin ≤ 8  (folosit de INAMICI — nu pot trece tile 9)
+//   #100000/#40000: vecin ≤ 9  (folosit de JUCĂTOR — calcă pe tile 9 = podea/ușă deschisă)
+// Deschiderea ușii (ENEMY_RESPAWN 012716, la luarea cheii) face MOVB #11=9 în celula ușii
+// + setează #100000/#40000 pe vecini → ușa (tile 10) devine tile 9 = pasabilă pentru jucător.
+// SPRITE_HELPERS (013346) confirmă: jucătorul testează #101000 (#1000|#100000) / #40400.
+static bool pass(const Map *m, int c, int r) {       // JUCĂTOR: ≤9
     int t = raw_w(m, c, r);
-    return t <= 8 || (t == 10 && m->door_open);
+    return t <= 9 || (t == 10 && m->door_open);
 }
 // Per-cell movement flags — EXACT from COLLISION_MAP_BUILD (013570). RAW tile index:
-// ≤8 = non-wall (air/ladder/gold/water), 8 = climbable ladder (ladder2), 10 = ușă.
-bool map_can_right(const Map *m, int c, int r) { return pass(m, c+1, r); }              // #1000
-bool map_can_left (const Map *m, int c, int r) { return pass(m, c-1, r); }              // #400
-bool map_can_up   (const Map *m, int c, int r) { return raw_w(m, c, r) == 8 && pass(m, c, r-1); } // #20000
+// ≤9 = pasabil jucător (aer/scară/aur/apă/podea-9), 8 = scară climbable, 10 = ușă.
+bool map_can_right(const Map *m, int c, int r) { return pass(m, c+1, r); }              // #100000
+bool map_can_left (const Map *m, int c, int r) { return pass(m, c-1, r); }              // #40000
+bool map_can_up   (const Map *m, int c, int r) { return raw_w(m, c, r) == 8 && raw_w(m, c, r-1) <= 8; } // #20000: cur==8 && above≤8
 bool map_can_down (const Map *m, int c, int r) { return raw_w(m, c, r+1) == 8; }        // #10000
-bool map_grounded (const Map *m, int c, int r) { return raw_w(m, c, r) == 8 || raw_w(m, c, r+1) > 6; } // #4000
+// #4000 grounded: cur==8 SAU jos>6 — DAR CMAP (014012) ȘTERGE #4000 dacă jos≥13 (apă
+// adâncă). Verificat pe bufferul real УКНЦ: (10..17,20) deasupra tile-13 au GND=0, H2O=1 →
+// NU ești grounded deasupra apei adânci → cazi ÎN ea. (cols 2..9 deasupra tile-11 → GND=1.)
+bool map_grounded (const Map *m, int c, int r) {
+    if (raw_w(m, c, r+1) >= 13) return false;            // apă adâncă jos → cazi prin (CMAP clears #4000)
+    return raw_w(m, c, r) == 8 || raw_w(m, c, r+1) > 6;
+}
+
+// Apă LETALĂ = tile 13/14 (apă adâncă). ACT_DISPATCH (001500): CMPB #15,@2(R4) → dacă tile-ul
+// celulei CURENTE == 0o15 (13) → moarte (drown). Tile 7 = apă MICĂ, pasabilă, NU letală.
+// Cazi în apa adâncă fiindcă deasupra ei nu ești grounded (vezi map_grounded), apoi cur==13/14.
+static bool is_deep_water(int t) { return t == 13 || t == 14; }
+bool map_drowns(const Map *m, int c, int r) { return is_deep_water(raw_w(m, c, r)); }
 
 void map_open_door(Map *m) { m->door_open = true; }
 

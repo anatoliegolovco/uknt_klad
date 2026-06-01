@@ -9,30 +9,6 @@ static void center_tile(const Player *p, int *col, int *row) {
     *row = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 }
 
-// "Pe scară" = celula centrală e scară (regula strictă din ASM: PLAYER_STATE_CHECK
-// lucrează pe tile-ul curent). Fără passthrough — segmentele separate de platforme
-// rămîn separate (nu urci prin poduri/platforme).
-static bool on_ladder(const Player *p, const Map *m) {
-    int cx = (int)((p->px + TILE_W * 0.5f) / TILE_W);
-    int cy = (int)((p->py + TILE_H * 0.5f) / TILE_H);
-    return map_ladder(m, cx, cy);
-}
-
-// CMAP_FLAGS (013570): scările trec PRIN platforme — dar doar dacă scara continuă
-// dincolo de platformă. Permite mișcarea verticală în celula țintă dacă:
-//   - e scară, sau goală/pasabilă (nu zid), sau
-//   - e zid DAR celula imediat următoare în aceeași direcție e scară (climb-through).
-// dir < 0 = sus, dir > 0 = jos.
-// Mișcarea verticală pe scară, din ASM dar fără oscilație (modelul nostru e continuu):
-//   SUS  (dir<0): doar într-o celulă SCARĂ → te oprești curat la vârful scării
-//                 (nu urci în aer ca să cazi înapoi; nu treci prin platforme).
-//   JOS  (dir>0): în orice celulă care NU e zid (scară/aer/aur/ieșire) → cobori
-//                 segmentul și pășești jos; zidul (podea/platformă) te oprește.
-static bool can_climb_into(const Map *m, int cx, int cell_row, int dir) {
-    if (dir < 0) return map_at(m, cx, cell_row) == T_LADDER;   // sus: doar pe scară
-    return map_at(m, cx, cell_row) != T_WALL;                  // jos: orice non-zid
-}
-
 // ── API ───────────────────────────────────────────────────────────────────────
 
 // GAME_INIT (004000) → spawnul playerului la coord din entity record
@@ -122,10 +98,12 @@ PlayerResult player_update(Player *p, const Map *m, Input in, float dt) {
     // CMPB #6,(R3): tile = GOLD_C → LEVEL_COMPLETE
     if (idx == TIDX_GOLD_C) return PR_LEVEL_WIN;
 
-    TileType typ = map_at(m, col, row);
-    // WATER_COLLISION (006462): tile = water → PLAYER_DEATH
-    if (typ == T_WATER) return PR_WATER;
+    // WATER_COLLISION (006462) + flag #2000 (ACT_DISPATCH 001450 → drown → state 0o15):
+    // mori dacă ești ÎN apă sau stai pe SUPRAFAȚA apei (jos e apă, nu pe scară). Asta acoperă
+    // și "căderea în apă": deasupra apei adânci (13/14) nu ești grounded → cazi → te îneci.
+    if (map_drowns(m, col, row)) return PR_WATER;
     // EXIT: tile = exit → nivel complet
+    TileType typ = map_at(m, col, row);
     if (typ == T_EXIT)  return PR_EXIT;
 
     return PR_NONE;

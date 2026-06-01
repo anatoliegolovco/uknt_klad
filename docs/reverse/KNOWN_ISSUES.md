@@ -230,3 +230,39 @@ key chest (gold_c) disappears on collection (map_clear) and opens the door.
 through levels / set CUR_MAP_ADDR 001300 + LEVEL_TBL_PTR 001304 per level and read the player
 entity 014420), fix LEVEL_SPAWNS, then re-run reachability (door-open) — exits should become
 reachable. Levels = base TBL_LEVEL_MAP_1 022100, stride 0o540=352 bytes.
+
+## KI-12 — Water mechanic (RESOLVED, ground-truth-verified) + water-aware routing
+**User report:** "când caracterul cade în apă nu se întâmplă nimic" — water wasn't lethal.
+**Root cause (verified against the real УКНЦ collision buffer /tmp/cmap.bin):**
+- Water is split: **tile 7 = shallow water** (passable, NOT lethal — you wade through/over it),
+  **tiles 13/14 = deep water** (LETHAL). We previously had it backwards (7/14 lethal, 13 = wall).
+- `ACT_DISPATCH` (001500) `CMPB #15,@2(R4)` → death iff the **current cell tile == 0o15 (13)**.
+- `CMAP_FLAGS` (014012) **clears #4000 (grounded) when the tile below ≥ 13** → you are NOT
+  grounded above deep water, so you fall INTO it → current tile becomes 13/14 → drown.
+- Confirmed on the dumped buffer: row 20 cols 2–9 (above tile-11 border) have GND=1; cols 10–17
+  (above tile-13 border) have GND=0, H2O(#2000)=1 — i.e. the real game makes that footing fatal.
+**Fix (src/):**
+- `klad.h`: tile 7 → T_EMPTY (passable shallow water); tiles 13/14 → T_WATER (lethal); tile 12
+  stays T_WALL (tile 13 is no longer a wall).
+- `map.c`: `map_grounded` clears grounding when below ≥ 13 (fall into deep water); `map_drowns`
+  = current cell is deep water (13/14).
+- `player.c`: entering/falling into deep water → PR_WATER → PLAYER_DEATH.
+- **E2E unchanged: 10 checks / 0 failures, 0 wall-overlaps.** Verified collision model: tiles
+  0/704 mismatch, flags only differ on the bottom border row 21 (off-playfield).
+**Router (A*) now accounts for water (user req):** `tools/reachability.c` `settle()` falls THROUGH
+deep water; `bfs()` treats a deep-water landing as a DROWN death — reachable-but-fatal, NOT
+traversed (the safe path routes around it). New per-level `drown-tiles` column reports avoided
+water. With the corrected, water-aware model: **5/10 completable (1,4,6,9,10)**; level 1
+(ground-truth-known-good) is completable again (199 cells, key+exit) — validating the fix.
+NOTE: the prior "5/10 OK" was OPTIMISTIC — those paths walked along the bottom row OVER the
+tile-13 water border (= death in the real game). Water-awareness makes the router honest.
+
+## KI-13 — 5 levels' EXIT still unreachable (door→exit link, NOT water/collision)
+Levels 2,3,5,7,8 reach the KEY (gold_c, tile 6) but not the EXIT (tile 2). The collision model
+is now ground-truth-verified, so this is a game-logic gap: the door (`hdr[2]` per spawn record,
+e.g. L3=(26,1)) is opened by the key, but the exit (e.g. L3=(15,0)) is reached by climbing a
+ladder to the top row — and our discrete router/movement can't yet trace that vertical path.
+OPEN QUESTION (win condition): `PLAYER_STATE_CHECK` (012570) checks tiles 4/5/6/11 but NEVER
+tile 2; collecting gold_c (key) opens the door + plays a sound (2060) but the JSR to
+LEVEL_COMPLETE (1034) was not found from there — need to trace whether reaching the EXIT tile,
+or collecting the key, is what actually advances the level. Resolve before claiming 10/10.

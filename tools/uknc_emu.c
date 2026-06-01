@@ -401,6 +401,14 @@ int main(int argc, char **argv){
         int pidx=((int)pp-014550)/2;
         printf("player tile ptr @014422=%06o -> cell index %d (row %d, col %d if /32)\n",
                pp, pidx, pidx/32, pidx%32);
+        // DOOR cells: 12716 (key-collect) rewrites cells @17424 / @17426.
+        for (int k=0; k<2; k++) {
+            uint16_t dp = rdw(&C, (uint16_t)(017424 + k*2));
+            int di = ((int)dp - 014550)/2;
+            uint16_t cellw = rdw(&C, dp);
+            printf("door ptr @%o=%06o -> cell idx %d (row %d, col %d) tile=%d flags=%06o\n",
+                   017424+k*2, dp, di, di/32, di%32, cellw&0xff, cellw&0177400);
+        }
         return 0;
     }
 
