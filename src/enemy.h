@@ -21,6 +21,7 @@ typedef struct {
     int   col, row;      // poziție tile curentă
     bool  active;        // EREC_STATE: 0=inactiv, 010=activ
     int   dir;           // direcție orizontală: -1 stânga, +1 dreapta
+    bool  falling;       // în cădere liberă (nu se agață de scări cât cade — ca jucătorul)
     float move_cd;       // cooldown până la mișcare (TICK_CTR throttle)
     float anim_t;        // timer animație continuă
     int   anim_horiz;    // frame orizontal curent (0-7)

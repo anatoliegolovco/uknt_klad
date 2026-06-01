@@ -8,6 +8,7 @@ void enemy_init(Enemy *e, int col, int row) {
         .row      = row,
         .active   = (col >= 0),  // col < 0 = absent în acest nivel
         .dir      = 1,
+        .falling  = false,
         .move_cd  = ENEMY_MOVE_INTERVAL,
         .anim_t   = 0.0f,
         .anim_horiz = 0,
@@ -20,10 +21,6 @@ void enemy_init(Enemy *e, int col, int row) {
 // (CMPB #11,2(R1) → BEQ skip), deci net = ≤8. Inamicul NU calcă pe tile 9 (podea/ușă),
 // spre deosebire de jucător (≤9) — de-asta inamicul e mai limitat.
 static bool epass(const Map *m, int c, int r) { return map_raw(m, c, r) <= 8; }
-// Grounded inamic = #4000: pe scară (raw==8) SAU jos solid (jos>6).
-static bool egrounded(const Map *m, int c, int r) {
-    return map_raw(m, c, r) == 8 || map_raw(m, c, r + 1) > 6;
-}
 // Flag-uri verticale, exact ca CMAP (013724/013740/013702): #20000 SUS (cur==8 && sus≤8),
 // #10000 JOS (jos==8 → pășești pe scara de dedesubt, SAU cur==8 && jos≤6 → cobori în aer).
 static bool ecan_up  (const Map *m, int c, int r) { return map_raw(m, c, r) == 8 && map_raw(m, c, r-1) <= 8; }
@@ -37,6 +34,17 @@ static bool ecan_down(const Map *m, int c, int r) { return map_raw(m, c, r+1) ==
 //   - apoi cade UN rând dacă nu e grounded (006712). Se mai blochează (greedy), dar acum
 //     chiar coboară scările ca să ajungă la tine — nici prea deștept, nici inert.
 static void do_move(Enemy *e, const Map *m, const Player *p) {
+    // ── cădere ANGAJATĂ: cât cade NU se agață de scări (ca jucătorul) ─────────────
+    // Ignoră scara din celula curentă; cade un rând/tick până are PODEA dedesubt (jos>6).
+    // (Fără termenul cur==8 din egrounded → nu „revine pe scară" cât e în cădere.)
+    if (e->falling) {
+        if (e->row + 1 < MAP_ROWS && map_raw(m, e->col, e->row + 1) <= 6)
+            e->row++;                       // încă aer/aur dedesubt → continuă căderea
+        else
+            e->falling = false;             // podea dedesubt → a aterizat
+        return;                             // nu urmărește cât cade
+    }
+
     int pcol = (int)((p->px + TILE_W * 0.5f) / TILE_W);
     int prow = (int)((p->py + TILE_H * 0.5f) / TILE_H);
 
@@ -57,9 +65,11 @@ static void do_move(Enemy *e, const Map *m, const Player *p) {
         }
     }
 
-    // Gravitație UN rând/tick (006712), nu instant — coboară lent, ca originalul.
-    if (!moved && e->row + 1 < MAP_ROWS && !egrounded(m, e->col, e->row))
-        e->row++;
+    // Dacă a pășit în gol (nu pe scară, fără podea dedesubt) → începe o cădere angajată.
+    if (!moved && map_raw(m, e->col, e->row) != 8 && map_raw(m, e->col, e->row + 1) <= 6) {
+        e->falling = true;
+        if (e->row + 1 < MAP_ROWS) e->row++;
+    }
 }
 
 // ENEMY2_TICK (006552):
