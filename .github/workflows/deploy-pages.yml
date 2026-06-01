@@ -42,24 +42,18 @@ jobs:
           version: ${{ env.EMSDK_VERSION }}
           actions-cache-folder: emsdk-cache
 
-      - name: Cache raylib web library
-        id: raylib-cache
-        uses: actions/cache@v4
-        with:
-          path: raylib/src/libraylib.web.a
-          key: raylib-${{ env.RAYLIB_REF }}-web-emsdk-${{ env.EMSDK_VERSION }}
-
       - name: Build raylib for web
-        if: steps.raylib-cache.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 --branch "${RAYLIB_REF}" https://github.com/raysan5/raylib.git raylib
           make -C raylib/src PLATFORM=PLATFORM_WEB -B
+          # raylib 5.5's web build emits libraylib.a (wasm objects), not libraylib.web.a.
+          test -f raylib/src/libraylib.a
 
       - name: Build КЛАД to WebAssembly
         run: |
           make -C src web \
             RAYLIB_SRC="${GITHUB_WORKSPACE}/raylib/src" \
-            RAYLIB_WEB="${GITHUB_WORKSPACE}/raylib/src/libraylib.web.a"
+            RAYLIB_WEB="${GITHUB_WORKSPACE}/raylib/src/libraylib.a"
 
       - name: Assemble Pages site
         run: |
