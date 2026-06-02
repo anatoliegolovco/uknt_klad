@@ -149,6 +149,31 @@ La mișcare permisă:
 
 **Gravitație:** dacă nu există direcție și tile-ul de sub player nu e solid (flag `#10000` absent): player cade un tile în jos.
 
+### 6.1 Ipoteza „cazi prin pod" — VERIFICATĂ și RESPINSĂ (cod + emulator headless)
+
+Ipoteză testată: *mergi pe pod (tile 8) → gravitația nu acționează (ești sprijinit); dar dacă
+**cazi** peste pod → treci prin el (coliziunea nu se declanșează).*
+
+**Partea 1 (sprijinit când mergi): CONFIRMATĂ.** **Partea 2 (cazi prin: NU).**
+
+Flag-ul de sprijin `#10000` (CMAP_FLAGS, 013724–013756) se setează în **două** cazuri:
+- `013724`: `tile_jos == 8` → sprijinit (stai pe pod, deasupra lui);
+- `013740`: `tile_curent == 8 ȘI tile_jos ≤ 6` → sprijinit **chiar și într-o celulă de pod
+  suspendat cu aer dedesubt**.
+
+A doua clauză este exact o **garanție anti-trecere-prin**: gravitația oprește jucătorul pe pod
+indiferent dacă merge sau cade. Nu există o cale de cădere care să ignore `#10000`.
+
+**E2E pe emulatorul headless** (`vendor/ukncbtl-qt/headless`, mod `bridge` în `main.cpp` —
+teleportează jucătorul deasupra unui tile țintă, citește pointerul de celulă `014422` cadru cu
+cadru cât acționează gravitația):
+- drop peste **tile 8 (pod/scară)**: pornit r9 → **oprit r12, PE pod** (r13). ATERIZAT.
+- drop peste **tile 12 (cărămidă)**: → **aterizat deasupra**.
+- stat pe **tile 8**, 40 cadre fără input: **rămâne pe loc (sprijinit)**.
+
+Concluzie: în original, jucătorul **aterizează pe pod**, nu cade prin el. (Sanity emulator:
+`017436 = 0o333 = 219` vieți, cod la `001000` — chiar КЛАД rulând.)
+
 ---
 
 ## 7. Coliziunea cu apa (WATER_COLLISION)

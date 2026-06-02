@@ -209,3 +209,17 @@ platforme consecutive (trecere prin "două tavane").
   emscripten să nu-l mai vadă) și injectează taste săgeți, cu zone rotite corect în portret.
   Verificat că tastele sintetice mișcă playerul (Playwright). `src/game.c` touch nativ păstrat
   sub `#ifndef PLATFORM_WEB`.
+
+## 2026-06-02 (verificare ipoteză coliziune pod — cod + E2E headless)
+
+`[2026-06-02 UTC] DONE` — Ipoteză user: „mergi pe pod → fără gravitație; cazi peste pod →
+treci prin el". Verificat pe DOUĂ căi independente:
+- **Cod** (CMAP_FLAGS 013724–013756): flag sprijin #10000 setat dacă tile_jos==8 SAU
+  (tile_curent==8 ȘI tile_jos≤6). A doua clauză = garanție anti-trecere-prin (pod suspendat
+  cu aer dedesubt te sprijină tot).
+- **E2E headless** (mod `bridge` adăugat în `vendor/ukncbtl-qt/headless/main.cpp`): citește CPU
+  RAM via GetCPUMemoryController()->GetWordView, teleportează jucătorul deasupra unui tile și
+  urmărește pointerul celulă 014422 sub gravitație. Drop pe tile8 și tile12 → ATERIZEAZĂ
+  deasupra; stat pe tile8 → sprijinit.
+- **Concluzie: Partea 1 CONFIRMATĂ (sprijinit), Partea 2 RESPINSĂ (NU trece prin pod).**
+- Documentat în MECHANICS.md §6.1.
