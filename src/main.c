@@ -19,10 +19,16 @@ static void web_frame(void) {
     // Use the canvas LAYOUT box (clientWidth/Height), which ignores CSS transforms — in
     // portrait we rotate the canvas 90°, and the scene must render into the pre-rotation
     // box (e.g. 844×390) and then be rotated, NOT into the post-transform 390×844 box.
+    // emscripten mis-sizes the drawing buffer under our rotation, and SetWindowSize alone
+    // doesn't fix the buffer — so force the buffer (canvas.width/height) from JS, then sync
+    // raylib's viewport/screen to match.
     int w = emscripten_run_script_int("document.getElementById('canvas').clientWidth");
     int h = emscripten_run_script_int("document.getElementById('canvas').clientHeight");
-    if (w > 0 && h > 0 && (w != GetScreenWidth() || h != GetScreenHeight()))
+    if (w > 0 && h > 0 && (w != GetScreenWidth() || h != GetScreenHeight())) {
+        emscripten_run_script("var c=document.getElementById('canvas');"
+                              "c.width=c.clientWidth;c.height=c.clientHeight;");
         SetWindowSize(w, h);
+    }
     game_frame(&g_game, GetFrameTime());
 }
 #endif
