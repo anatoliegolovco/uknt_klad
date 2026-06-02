@@ -31,7 +31,7 @@
 </head>
 <body>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-  <div id="note">Arrows / WASD · tap to start, tap edges to move ·
+  <div id="note">Tap centre = start / confirm · hold an edge to move (↑ top · ↓ bottom · ←→ sides) ·
     <a href="https://github.com/anatoliegolovco/uknt_klad" target="_blank" rel="noopener">source on GitHub</a></div>
   <script>
     var Module = {
@@ -75,21 +75,26 @@
         }
         return a;
       }
+      function releaseEnter() { if (held.Enter) { send('keyup', 'Enter'); held.Enter = false; } }
+      // Touch the EDGES to move (←→ sides, ↑↓ top/bottom); touch the CENTRE for the
+      // action key (Enter) — start the title/speed screens, confirm a speed, restart
+      // after game over. On the speed screen ↑/↓ change the speed, centre confirms.
+      function update(x, y) {
+        var z = zones(x, y);
+        var center = !z.ArrowLeft && !z.ArrowRight && !z.ArrowUp && !z.ArrowDown;
+        apply(z);
+        if (center && !held.Enter) { send('keydown', 'Enter'); held.Enter = true; }
+        else if (!center) releaseEnter();
+      }
       function onTouch(e) {
         e.preventDefault();
         e.stopImmediatePropagation();   // keep emscripten from also reading it
         if (e.type === 'touchend' || e.type === 'touchcancel') {
-          if (e.touches.length === 0) {
-            apply({});
-            if (held.Enter) { send('keyup', 'Enter'); held.Enter = false; }
-          }
+          if (e.touches.length === 0) { apply({}); releaseEnter(); }
           return;
         }
-        // A tap = the "action" key (Enter): starts the title / speed screens and
-        // restarts after game over — so the game is fully playable with no keyboard.
-        if (e.type === 'touchstart' && !held.Enter) { send('keydown', 'Enter'); held.Enter = true; }
         var t = e.touches[0];
-        apply(zones(t.clientX, t.clientY));
+        update(t.clientX, t.clientY);
       }
       ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (t) {
         window.addEventListener(t, onTouch, { capture: true, passive: false });

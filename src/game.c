@@ -194,8 +194,13 @@ void game_frame(Game *g, float dt) {
             else if (IsKeyPressed(KEY_TWO)   || IsKeyPressed(KEY_KP_2)) { g->speed = 2; start_game(g); }
             else if (IsKeyPressed(KEY_THREE) || IsKeyPressed(KEY_KP_3)) { g->speed = 3; start_game(g); }
             else if (IsKeyPressed(KEY_FOUR)  || IsKeyPressed(KEY_KP_4)) { g->speed = 4; start_game(g); }
-            // Tap / Enter (no keyboard on mobile): start with a moderate default speed.
-            else if (in.action) { g->speed = 2; start_game(g); }
+            else {
+                // Touch (no keyboard): edge taps up/down change the speed (1=fast … 4=slow),
+                // a centre tap (Enter) confirms the highlighted speed and starts.
+                if (IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W)) g->speed = (g->speed > 1) ? g->speed - 1 : 1;
+                if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S)) g->speed = (g->speed < 4) ? g->speed + 1 : 4;
+                if (in.action) start_game(g);
+            }
             break;
 
         case GS_PLAYING:
