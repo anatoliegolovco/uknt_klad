@@ -296,18 +296,26 @@ conștient de apă). E2E 10/10, 0 wall-overlaps. Diferența completabil/blocat v
 celor 5 nivele „blocate" plutesc cu aer dedesubt (vs zid/scară la cele 5 OK) — se ajunge urcând
 în ele de pe rândul-platformă de sub ele.
 
-## KI-14 — DEFERRED DECISION: mid-fall horizontal control (2 uncollectable chests, lvl 1)
-**Finding (verified):** this build's fall is **column-locked** — straight down, keyboard ignored
-while ungrounded (`ACT_DISPATCH` 001562 forces `MOV #10,R0`=down and loops without re-polling;
-`uknc_emu fall` probe: col2→falls to row20, col unchanged). So there is NO mid-fall steering.
-**Consequence:** level 1's 2 chests at `(4,15)` (bonus) + `(4,17)` (gold) sit in walled pockets
-reachable only by drifting left mid-fall (col5→col4) → **uncollectable bonus** in this build.
-Score-only (tile 4/5); does NOT affect completion (key+exit reachable).
-**Decision DEFERRED (user, 2026-06):** revisit later whether to ADD mid-fall horizontal control
-to our reimplementation (hold ←/→ while falling to drift one column) — a deliberate design
-deviation (like KI-13 design B) that would make those chests reachable and match the remembered
-mechanic. Options: (a) stay fidel/column-locked; (b) add drift-while-falling. If (b): then
-re-check level 1 reaches 8/8 chests via the reachability tool. NOT decided yet — noted for later.
+## KI-14 — RESOLVED: the 2 left chests ARE collectible (prior "uncollectable" was wrong)
+**Fall is column-locked** (verified): straight down, keyboard ignored while ungrounded
+(`ACT_DISPATCH` 001562 forces `MOV #10,R0`=down). That part stands.
+
+**But the 2 left chests — gold at `(col4, row15)` (tile 5) and `(col4, row17)` (tile 4) — ARE
+collectible in the original.** Re-verified on the headless emulator (`vendor/ukncbtl-qt/headless`,
+mode `chest`):
+1. The c4 ladder dead-ends at brick (r13), so you can't drop down c4 itself — BUT
+2. column **c5 is open**; stepping right off the c4 ladder, the player falls straight down c5,
+   **through the shallow water at r13** (`tile 7` — passable & non-lethal per KI-12; lives stay
+   219), and lands at **r15 c5** (grounded on the r16 brick);
+3. from r15 c5 a single step **LEFT** lands on the chest → `gold@(15,4)` goes `5 → 0` (collected).
+   Same for the lower chest via r17 c5 → c4 (`4 → 0`).
+
+So **no mid-fall steering is needed** — you fall, land, then walk left. The earlier
+"uncollectable / reachable only by mid-fall drift" claim was a mistake: it assumed the only
+approach was falling down c4, and treated the shallow water as a blocker. Both wrong.
+**Consequence for the reimplementation:** if our build can't collect them, that's a fidelity
+bug to fix (shallow-water pass-through + walk-off-landing), NOT an intended limitation — and no
+mid-fall drift feature is warranted. E2E proof committed (`chest` mode).
 
 ## KI-6 — UPDATE: enemy AI was "too smart"; made it faithfully primitive
 Verified the original `ENEMY2_MOVE` (006602): it is a **primitive greedy chase, NOT pathfinding**.

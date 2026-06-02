@@ -223,3 +223,9 @@ treci prin el". Verificat pe DOUĂ căi independente:
   deasupra; stat pe tile8 → sprijinit.
 - **Concluzie: Partea 1 CONFIRMATĂ (sprijinit), Partea 2 RESPINSĂ (NU trece prin pod).**
 - Documentat în MECHANICS.md §6.1.
+
+`[2026-06-02 UTC] DONE` — Verificat ipoteza chests stânga-jos (KI-14). REZULTAT: COLECTABILE
+(KI-14 anterior era greșit). E2E headless `chest`: de pe scara c4 (r10) → pas dreapta în c5 →
+cădere dreaptă prin apa MICĂ (tile7 @r13, ne-letală, vieți rămân 219) → aterizare r15 c5 → pas
+STÂNGA → gold@(15,4) 5→0 (colectat); la fel (17,4) 4→0. Nu e nevoie de control în cădere.
+Corectat KNOWN_ISSUES KI-14. Adăugate moduri E2E `chest` + `reach` în headless main.cpp.

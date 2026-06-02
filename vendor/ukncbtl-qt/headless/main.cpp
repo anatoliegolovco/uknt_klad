@@ -139,7 +139,7 @@ static int  ptr_col(uint16_t p){ return (int)(((p - TWORK) % ROWB) / 2); }
 
 static void dump_map(CMotherboard* b, uint16_t plyptr){
     printf("=== tile-work map (tile index per cell; '@'=player, 'B'=bridge tile 8) ===\n");
-    for (int r=0; r<16; r++){
+    for (int r=0; r<22; r++){
         printf("r%02d ", r);
         for (int c=0; c<32; c++){
             uint16_t p = TWORK + r*ROWB + c*2;
@@ -252,6 +252,98 @@ static void run_bridge_test(CMotherboard* b){
     }
 }
 
+// --- E2E: level-1 chest reachability (column-locked fall, verified KI-14 physics) ----
+// Movement model (matches the verified mechanics): walls (tile>=9) block & support;
+// ladders (1,8) are climbable & passable; fall is STRAIGHT DOWN (no mid-fall steering);
+// gold (4,5,6) is collected on contact (incl. passing through during a fall). Water (7)
+// is treated as PASSABLE here (generous — gives chests the best chance to be reachable).
+enum { COLS=32, ROWS=22 };
+static int g_tile[ROWS][COLS];
+static bool g_rest[ROWS][COLS], g_seen[ROWS][COLS], g_passed[ROWS][COLS];
+static bool solid(int t){ return t>=9; }                  // wall / brick / border
+static bool ladder(int t){ return t==1 || t==8; }
+static bool passable(int t){ return !solid(t); }          // air, ladder, gold, exit, water
+static bool rest_at(int r,int c){
+    if (r>=ROWS-1) return true;                            // bottom floor
+    int below=g_tile[r+1][c];
+    return ladder(g_tile[r][c]) || solid(below) || ladder(below);
+}
+static int fall_to(int r,int c){                          // straight down until a rest cell
+    while (r<ROWS-1 && !rest_at(r,c)){ g_passed[r][c]=true; r++; }
+    g_passed[r][c]=true; return r;
+}
+static void reach_bfs(CMotherboard* b){
+    for (int r=0;r<ROWS;r++) for(int c=0;c<COLS;c++){
+        g_tile[r][c]=cell_tile(b, TWORK+r*ROWB+c*2);
+        g_rest[r][c]=g_seen[r][c]=g_passed[r][c]=false;
+    }
+    uint16_t sp=rdw(PLY_PTR); int sr=ptr_row(sp), sc=ptr_col(sp);
+    sr=fall_to(sr,sc);                                     // spawn settles onto ground
+    // BFS over rest cells
+    static int qr[ROWS*COLS], qc[ROWS*COLS]; int head=0,tail=0;
+    auto push=[&](int r,int c){ if(r>=0&&r<ROWS&&c>=0&&c<COLS&&!g_seen[r][c]){ g_seen[r][c]=true; g_passed[r][c]=true; qr[tail]=r; qc[tail]=c; tail++; } };
+    push(sr,sc);
+    while(head<tail){
+        int r=qr[head],c=qc[head]; head++;
+        // walk left / right, then fall
+        for(int dc=-1; dc<=1; dc+=2){ int nc=c+dc;
+            if(nc>=0&&nc<COLS && passable(g_tile[r][nc])){ g_passed[r][nc]=true; push(fall_to(r,nc),nc); } }
+        // climb up
+        if((ladder(g_tile[r][c])||(r>0&&ladder(g_tile[r-1][c]))) && r>0 && passable(g_tile[r-1][c])) push(r-1,c);
+        // climb down
+        if(r+1<ROWS && (ladder(g_tile[r+1][c])) && passable(g_tile[r+1][c])) push(r+1,c);
+    }
+    printf("=== level-1 reachability (spawn r%d c%d) ===\n", sr, sc);
+    int goldTot=0, goldReach=0;
+    for(int r=0;r<ROWS;r++) for(int c=0;c<COLS;c++){
+        int t=g_tile[r][c]; if(t==4||t==5||t==6){ goldTot++;
+            bool got=g_passed[r][c];
+            if(got) goldReach++;
+            printf("  GOLD tile%d at r%d c%d : %s\n", t, r, c, got?"REACHABLE":"*** UNREACHABLE ***");
+        }
+    }
+    printf("  -> %d/%d gold reachable\n", goldReach, goldTot);
+}
+
+// --- E2E: can the two LEFT chests (c4 r15, c4 r17) actually be collected? -----------
+// Uses REAL physics: teleport the player to a plausible approach cell, inject real key
+// presses, and check whether the gold tile clears (collected) and the player survives.
+static void run_chest_test(CMotherboard* b){
+    boot_klad(b); MC = b->GetCPUMemoryController();
+    auto cell=[&](int r,int c){ return (uint16_t)(TWORK + r*ROWB + c*2); };
+    printf("lives=%d  gold@(r15,c4)=%d  gold@(r17,c4)=%d\n",
+           rdw(017436), cell_tile(b,cell(15,4)), cell_tile(b,cell(17,4)));
+
+    // TEST A (natural): stand on the c4 ladder at r10, step RIGHT off it into c5, and let
+    // the real fall carry the player down c5 (through shallow water @r13). Where do we land?
+    printf("\n=== A: on c4 ladder (r10), step RIGHT into c5, natural fall ===\n");
+    wrw(PLY_STATE,000010); wrw(PLY_PTR, cell(10,4)); run_frames(b,4);
+    b->KeyboardEvent(K_RIGHT,true);
+    for(int i=0;i<14;i++){ run_frames(b,4); uint16_t p=rdw(PLY_PTR);
+        printf("  f%02d r%d c%d tile@=%d state=%06o lives=%d\n",
+               i*4, ptr_row(p), ptr_col(p), cell_tile(b,p), rdw(PLY_STATE), rdw(017436)); }
+    b->KeyboardEvent(K_RIGHT,false); run_frames(b,4);
+
+    // TEST B: from the landing spot r15 c5, walk LEFT toward the chest at c4
+    printf("\n=== B: from r15 c5, hold LEFT (reach chest c4?) ===\n");
+    wrw(PLY_STATE,000010); wrw(PLY_PTR, cell(15,5)); run_frames(b,3);
+    b->KeyboardEvent(K_LEFT,true);
+    for(int i=0;i<10;i++){ run_frames(b,4); uint16_t p=rdw(PLY_PTR);
+        printf("  f%02d r%d c%d  gold@c4r15=%d  score=%d\n",
+               i*4, ptr_row(p), ptr_col(p), cell_tile(b,cell(15,4)), rdw(017434)); }
+    b->KeyboardEvent(K_LEFT,false);
+    printf("  -> gold@(r15,c4) now = %d  (0 = COLLECTED)\n", cell_tile(b,cell(15,4)));
+
+    // TEST C: lower chest — from r17 c5, walk LEFT toward c4 r17
+    printf("\n=== C: from r17 c5, hold LEFT (reach chest c4 r17?) ===\n");
+    wrw(PLY_STATE,000010); wrw(PLY_PTR, cell(17,5)); run_frames(b,3);
+    b->KeyboardEvent(K_LEFT,true);
+    for(int i=0;i<8;i++){ run_frames(b,4); uint16_t p=rdw(PLY_PTR);
+        printf("  f%02d r%d c%d  gold@c4r17=%d\n", i*4, ptr_row(p), ptr_col(p), cell_tile(b,cell(17,4))); }
+    b->KeyboardEvent(K_LEFT,false);
+    printf("  -> gold@(r17,c4) now = %d  (0 = COLLECTED)\n", cell_tile(b,cell(17,4)));
+}
+
 static uint8_t* load_file(const char* path, long* out_len) {
     FILE* f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "cannot open %s\n", path); return nullptr; }
@@ -297,6 +389,12 @@ int main(int argc, char** argv) {
         printf("captured spr_a + spr_b for sprite diff\n");
     } else if (!strcmp(arg3, "bridge")) {   // E2E: bridge collision hypothesis
         run_bridge_test(board);
+    } else if (!strcmp(arg3, "chest")) {
+        run_chest_test(board);
+    } else if (!strcmp(arg3, "reach")) {    // E2E: level-1 chest reachability
+        boot_klad(board); MC = board->GetCPUMemoryController();
+        dump_map(board, rdw(PLY_PTR));
+        reach_bfs(board);
     } else {
         frames = atoi(arg3);
         for (int i = 0; i < frames; i++) board->SystemFrame();
