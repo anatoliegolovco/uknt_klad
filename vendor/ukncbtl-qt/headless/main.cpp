@@ -15,6 +15,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdint>
+#include <vector>
+#include <algorithm>
+#include <utility>
 
 // --- external symbols the emubase core references, stubbed for headless ---------
 void DebugLog(const char*) {}
@@ -393,6 +396,146 @@ static void run_play(CMotherboard* b, const char* script){
     printf("done: %d frames, final r%d c%d\n", f, ptr_row(rdw(PLY_PTR)), ptr_col(rdw(PLY_PTR)));
 }
 
+// ===================================================================================
+// LEVEL SOLVER: BFS to the tile-6 "key" (= LEVEL_COMPLETE), executed by real key
+// injection, capturing frames. Loops level→level as each completes (CUR_MAP_ADDR 001300).
+enum { CUR_MAP_ADDR=001300 };
+static int   sv_t[ROWS][COLS];
+static bool  sv_dw(int t){ return t==13||t==14; }              // deep water (lethal)
+static bool  sv_wall(int t){ return t>=9 && !sv_dw(t); }       // wall/brick/border (stand/block)
+static bool  sv_ladder(int t){ return t==1||t==8; }
+static bool  sv_pass(int t){ return t<9; }                     // air/ladder/gold/exit/shallow
+static bool  sv_rest(int r,int c){
+    if(sv_ladder(sv_t[r][c])) return true;
+    if(r>=ROWS-1) return false;
+    int bb=sv_t[r+1][c];
+    if(sv_dw(bb)) return false;                                // above deep water → fall in
+    return sv_wall(bb) || sv_ladder(bb);
+}
+static int sv_fall(int r,int c){                               // straight down; -1 if drowns
+    while(r<ROWS-1 && !sv_rest(r,c)){ if(sv_dw(sv_t[r][c])) return -1; r++; }
+    return sv_dw(sv_t[r][c]) ? -1 : r;
+}
+static void sv_load(CMotherboard* b){
+    for(int r=0;r<ROWS;r++) for(int c=0;c<COLS;c++) sv_t[r][c]=cell_tile(b,(uint16_t)(TWORK+r*ROWB+c*2));
+}
+// BFS → move string (L/R/U/D) from (sr,sc) to the tile-6 goal; "" if none.
+static const char* sv_plan(int sr,int sc,int& gr,int& gc){
+    static char par[ROWS][COLS], moves[2048]; static int pR[ROWS][COLS],pC[ROWS][COLS];
+    static bool seen[ROWS][COLS];
+    gr=gc=-1;
+    for(int r=0;r<ROWS;r++) for(int c=0;c<COLS;c++){ seen[r][c]=false; if(sv_t[r][c]==6){gr=r;gc=c;} }
+    if(gr<0) return "";
+    static int qr[ROWS*COLS],qc[ROWS*COLS]; int h=0,t=0;
+    sr=sv_fall(sr,sc); if(sr<0) return "";
+    seen[sr][sc]=true; qr[t]=sr;qc[t]=sc;t++;
+    auto add=[&](int r,int c,int fr,int fc,char m){ if(r<0||r>=ROWS||c<0||c>=COLS||seen[r][c])return;
+        seen[r][c]=true; par[r][c]=m; pR[r][c]=fr; pC[r][c]=fc; qr[t]=r;qc[t]=c;t++; };
+    while(h<t){
+        int r=qr[h],c=qc[h];h++;
+        if(r==gr&&c==gc) break;
+        for(int dc=-1;dc<=1;dc+=2){ int nc=c+dc; if(nc<0||nc>=COLS) continue;
+            if(sv_pass(sv_t[r][nc])){ int nr=sv_fall(r,nc); if(nr>=0) add(nr,nc,r,c, dc<0?'L':'R'); } }
+        if(r>0 && (sv_ladder(sv_t[r][c])||sv_ladder(sv_t[r-1][c])) && sv_pass(sv_t[r-1][c])) add(r-1,c,r,c,'U');
+        if(r+1<ROWS && sv_ladder(sv_t[r+1][c]) && sv_pass(sv_t[r+1][c])) add(r+1,c,r,c,'D');
+    }
+    if(!seen[gr][gc]) return "";
+    int rr=gr,cc=gc,n=0; static char tmp[2048];
+    while(!(rr==sr&&cc==sc)){ tmp[n++]=par[rr][cc]; int a=pR[rr][cc],bb=pC[rr][cc]; rr=a;cc=bb; }
+    for(int i=0;i<n;i++) moves[i]=tmp[n-1-i]; moves[n]=0;
+    return moves;
+}
+// ---- emulator-guided BFS: uses the REAL emulator (save-states) as the physics+enemy
+//      oracle. Snapshot each reached cell; from it try L/R/U/D (real injection, run to
+//      settle); restore for the next try. Records the winning (key,chunks) path, then
+//      replays it from the level start to capture frames. Deterministic (snapshots fix
+//      enemy positions), so the replay reproduces the win.
+static const uint8_t DIRK[4] = { K_LEFT, K_RIGHT, K_UP, K_DOWN };
+static const char    DIRC[4] = { 'L','R','U','D' };
+struct SNode{ int r,c,par; char mv; int pch,ich; uint8_t* img; };
+
+// ONE-CELL move from the current state: hold key only until the player enters a new cell
+// (pch chunks), then release and let any fall settle (ich chunks). 2 frames/chunk. This
+// keeps walks to a single column so the search branches correctly. Sets died/adv.
+static void sv_runmove(CMotherboard* b, uint8_t key, uint16_t map0, int lives0,
+                       int& pch, int& ich, bool& died, bool& adv){
+    died=adv=false; pch=ich=0;
+    uint16_t start=rdw(PLY_PTR);
+    b->KeyboardEvent(key,true);
+    for(int i=0;i<24;i++){ run_frames(b,2); pch++;
+        if((int)rdw(017436)<lives0){ died=true; break; }
+        if(rdw(CUR_MAP_ADDR)!=map0){ adv=true; break; }
+        if(rdw(PLY_PTR)!=start) break;
+    }
+    b->KeyboardEvent(key,false);
+    if(died||adv) return;
+    int last=-1, stuck=0;
+    for(int i=0;i<30;i++){ run_frames(b,2); ich++;
+        if((int)rdw(017436)<lives0){ died=true; break; }
+        if(rdw(CUR_MAP_ADDR)!=map0){ adv=true; break; }
+        int p=rdw(PLY_PTR); if(p==last){ if(++stuck>=4) break; } else stuck=0; last=p;
+    }
+}
+static void run_solve(CMotherboard* b){
+    const int IMG = UKNCIMAGE_SIZE;
+    boot_klad(b); MC=b->GetCPUMemoryController();
+    uint8_t* start = (uint8_t*)malloc(IMG); b->SaveToImage(start);   // level-1 start
+    for(int lvl=1; lvl<=10; lvl++){
+        uint16_t map0=rdw(CUR_MAP_ADDR); int lives0=rdw(017436);
+        // locate the tile-6 goal cell
+        int gr=-1,gc=-1; for(int r=0;r<ROWS;r++) for(int c=0;c<COLS;c++) if(cell_tile(b,(uint16_t)(TWORK+r*ROWB+c*2))==6){gr=r;gc=c;}
+        printf("=== LEVEL %d: spawn r%d c%d, key(tile6) r%d c%d ===\n",
+               lvl, ptr_row(rdw(PLY_PTR)), ptr_col(rdw(PLY_PTR)), gr, gc);
+        // BFS over cells using the emulator
+        std::vector<SNode> nd; static bool seen[ROWS][COLS]; memset(seen,0,sizeof seen);
+        uint8_t* s0=(uint8_t*)malloc(IMG); memcpy(s0,start,IMG);
+        nd.push_back({ptr_row(rdw(PLY_PTR)),ptr_col(rdw(PLY_PTR)),-1,0,0,0,s0});
+        seen[nd[0].r][nd[0].c]=true;
+        int found=-1; char foundMv=0; int foundP=0,foundI=0;
+        for(int h=0; h<(int)nd.size() && found<0 && (int)nd.size()<800; h++){
+            for(int d=0; d<4 && found<0; d++){
+                b->LoadFromImage(nd[h].img);
+                bool died,adv; int pch,ich; sv_runmove(b,DIRK[d],map0,lives0,pch,ich,died,adv);
+                if(adv){ found=h; foundMv=DIRC[d]; foundP=pch; foundI=ich; break; }   // tile-6 collected
+                if(died) continue;
+                int r=ptr_row(rdw(PLY_PTR)), c=ptr_col(rdw(PLY_PTR));
+                if(r<0||r>=ROWS||c<0||c>=COLS||seen[r][c]) continue;
+                seen[r][c]=true;
+                uint8_t* img=(uint8_t*)malloc(IMG); b->SaveToImage(img);
+                nd.push_back({r,c,h,DIRC[d],pch,ich,img});
+            }
+        }
+        if(found<0){ int minr=99,upper=0; for(auto& n:nd){ if(n.r<minr)minr=n.r; if(n.r<=9)upper++; }
+            printf("  no route found (explored %d cells; min row reached=%d, cells in rows0-9=%d) — stop.\n",
+                   (int)nd.size(), minr, upper);
+            for(auto& n:nd) free(n.img); break; }
+        // reconstruct (move, pch, ich) path: parents up to root, then the winning move
+        struct Step{ char m; int p,i; };
+        std::vector<Step> seq; seq.push_back({foundMv,foundP,foundI});
+        for(int i=found; i>0; i=nd[i].par) seq.push_back({nd[i].mv,nd[i].pch,nd[i].ich});
+        std::reverse(seq.begin(),seq.end());
+        // replay from level start, capturing frames (deterministic → reproduces the win)
+        b->LoadFromImage(start);
+        int f=0; char path[80];
+        auto snap=[&](){ snprintf(path,sizeof path,"/tmp/lvl%d_%03d.ppm", lvl, f++); shoot(path); };
+        snap();
+        for(auto& st : seq){
+            uint8_t key = st.m=='L'?K_LEFT:st.m=='R'?K_RIGHT:st.m=='U'?K_UP:K_DOWN;
+            b->KeyboardEvent(key,true);
+            for(int i=0;i<st.p;i++){ run_frames(b,2); if(i%2==0) snap(); }
+            b->KeyboardEvent(key,false);
+            for(int i=0;i<st.i;i++){ run_frames(b,2); if(i%2==0) snap(); }
+        }
+        for(int i=0;i<8;i++){ run_frames(b,3); snap(); }
+        bool done = rdw(CUR_MAP_ADDR)!=map0;
+        printf("  level %d: %s — %d moves, %d frames captured\n", lvl, done?"SOLVED":"replay mismatch", (int)seq.size(), f);
+        for(auto& n:nd) free(n.img);
+        if(!done) break;
+        b->SaveToImage(start);   // emulator is now at the next level's start → search from here
+    }
+    free(start);
+}
+
 static uint8_t* load_file(const char* path, long* out_len) {
     FILE* f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "cannot open %s\n", path); return nullptr; }
@@ -438,6 +581,8 @@ int main(int argc, char** argv) {
         printf("captured spr_a + spr_b for sprite diff\n");
     } else if (!strcmp(arg3, "bridge")) {   // E2E: bridge collision hypothesis
         run_bridge_test(board);
+    } else if (!strcmp(arg3, "solve")) {
+        run_solve(board);
     } else if (!strcmp(arg3, "play")) {
         run_play(board, (argc>=5)?argv[4]:"");
     } else if (!strcmp(arg3, "chestgif")) {

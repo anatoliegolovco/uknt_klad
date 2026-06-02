@@ -234,3 +234,13 @@ Corectat KNOWN_ISSUES KI-14. Adăugate moduri E2E `chest` + `reach` în headless
 în headless main.cpp: script "R20 U50 R7 ..." → taste reale, capturi PPM → GIF). Găsit:
 spawn = sus-stânga într-un puț; teleport NU mută sprite-ul (doar logica) → animația corectă
 necesită navigare reală. Hostat GIF la /demo/klad_original_play.gif + link pe landing.
+
+`[2026-06-02 UTC] WIP` — Per-level completion animations: built emulator-guided solver
+(`solve` mode, headless main.cpp) using save-states (SaveToImage/LoadFromImage) as a
+deterministic physics+enemy oracle: BFS over cells, one-cell moves via real key injection,
+replay winning path to capture frames. Win condition = step on tile-6 (gold_c) → LEVEL_COMPLETE
+(CUR_MAP_ADDR 001300 advances). RESULT level 1: explores 189 cells (climbs to row 0, 83 cells
+in rows 0-9) but does NOT reach the tile-6 pocket — almost certainly because ENEMIES kill the
+bot during rollouts on the route, and the BFS has no waiting/timing to dodge them. Conclusion:
+robust 10-level completion needs an enemy-aware timing search (substantial). Real injected-command
+demo GIF already hosted at /demo/. Solver tooling committed as WIP for future work.
