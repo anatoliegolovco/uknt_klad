@@ -16,12 +16,13 @@ static void web_frame(void) {
     // rotation) leaves a STALE buffer → the scene renders into the wrong-shaped buffer and
     // looks squashed / clipped / off-centre. Re-sync raylib's size to the canvas's live CSS
     // box every frame so render_present always centres into the size actually on screen.
-    double cw = 0, ch = 0;
-    if (emscripten_get_element_css_size("#canvas", &cw, &ch) == EMSCRIPTEN_RESULT_SUCCESS) {
-        int w = (int)(cw + 0.5), h = (int)(ch + 0.5);
-        if (w > 0 && h > 0 && (w != GetScreenWidth() || h != GetScreenHeight()))
-            SetWindowSize(w, h);
-    }
+    // Use the canvas LAYOUT box (clientWidth/Height), which ignores CSS transforms — in
+    // portrait we rotate the canvas 90°, and the scene must render into the pre-rotation
+    // box (e.g. 844×390) and then be rotated, NOT into the post-transform 390×844 box.
+    int w = emscripten_run_script_int("document.getElementById('canvas').clientWidth");
+    int h = emscripten_run_script_int("document.getElementById('canvas').clientHeight");
+    if (w > 0 && h > 0 && (w != GetScreenWidth() || h != GetScreenHeight()))
+        SetWindowSize(w, h);
     game_frame(&g_game, GetFrameTime());
 }
 #endif
