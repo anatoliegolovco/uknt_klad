@@ -64,7 +64,10 @@ jobs:
           cp web/font/index.html _site/font/index.html
           cp font/uknc.woff2 font/uknc.woff font/uknc.ttf font/uknc.bdf \
              font/uknc_font.png font/uknc_font.json font/uknc_font.h _site/font/
-          ls -la _site _site/play _site/font
+          # Demo capture (original game, headless emulator, injected commands).
+          mkdir -p _site/demo
+          cp web/demo/klad_original_play.gif _site/demo/
+          ls -la _site _site/play _site/font _site/demo
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

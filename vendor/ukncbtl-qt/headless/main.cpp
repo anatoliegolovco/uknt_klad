@@ -344,6 +344,55 @@ static void run_chest_test(CMotherboard* b){
     printf("  -> gold@(r17,c4) now = %d  (0 = COLLECTED)\n", cell_tile(b,cell(17,4)));
 }
 
+// --- E2E animation: capture the left-chest collection route as a frame sequence -----
+static void run_chest_gif(CMotherboard* b){
+    boot_klad(b); MC = b->GetCPUMemoryController();
+    auto cell=[&](int r,int c){ return (uint16_t)(TWORK + r*ROWB + c*2); };
+    char path[64]; int f=0;
+    auto snap=[&](){ snprintf(path,sizeof path,"/tmp/cg_%03d.ppm", f++); shoot(path); };
+
+    // Start on the col-4 ladder (a normal level feature), then play the route naturally.
+    wrw(PLY_STATE,000010); wrw(PLY_PTR, cell(7,4)); run_frames(b,4); snap(); snap();
+    // step RIGHT off the ladder into col 5, fall straight down (through shallow water) to row 15
+    b->KeyboardEvent(K_RIGHT,true);
+    for(int i=0;i<26;i++){ run_frames(b,2); snap(); if(ptr_row(rdw(PLY_PTR))>=15) break; }
+    b->KeyboardEvent(K_RIGHT,false); run_frames(b,2); snap();
+    // walk LEFT onto the chest at col 4 → collected
+    b->KeyboardEvent(K_LEFT,true);
+    for(int i=0;i<14;i++){ run_frames(b,2); snap(); if(cell_tile(b,cell(15,4))==0 && ptr_col(rdw(PLY_PTR))<=4) break; }
+    b->KeyboardEvent(K_LEFT,false);
+    for(int i=0;i<4;i++){ run_frames(b,3); snap(); }
+    printf("captured %d frames; gold@(15,4) now=%d (0=collected)\n", f, cell_tile(b,cell(15,4)));
+}
+
+// --- Drive the REAL game by injecting movement keys (no teleport) ------------------
+// argv[4] = move script: space-separated "<DIR><frames>" tokens, DIR in L/R/U/D/N(idle).
+// e.g. "R30 U60 L8". Captures /tmp/cg_NNN.ppm every few frames and logs the player
+// cell (row,col) after each token so the route can be tuned iteratively.
+static void run_play(CMotherboard* b, const char* script){
+    boot_klad(b); MC = b->GetCPUMemoryController();
+    run_frames(b,12);                                   // let the spawn settle
+    int f=0; char path[64];
+    auto snap=[&](){ snprintf(path,sizeof path,"/tmp/cg_%03d.ppm", f++); shoot(path); };
+    printf("spawn r%d c%d\n", ptr_row(rdw(PLY_PTR)), ptr_col(rdw(PLY_PTR)));
+    snap();
+    for (const char* p=script; *p; ){
+        while(*p==' ') p++;
+        if(!*p) break;
+        char dir=*p++; int n=atoi(p); while(*p && *p!=' ') p++;
+        uint8_t key = dir=='R'?K_RIGHT : dir=='L'?K_LEFT : dir=='U'?K_UP : dir=='D'?K_DOWN : 0;
+        if(key) b->KeyboardEvent(key,true);
+        for(int i=0;i<n;i++){ run_frames(b,2); if(i%2==0) snap(); }
+        if(key) b->KeyboardEvent(key,false);
+        run_frames(b,3); snap();
+        uint16_t pp=rdw(PLY_PTR);
+        printf("  %c%-3d -> r%d c%d tile@=%d  gold(15,4)=%d gold(17,4)=%d\n",
+               dir, n, ptr_row(pp), ptr_col(pp), cell_tile(b,pp),
+               cell_tile(b,(uint16_t)(TWORK+15*ROWB+4*2)), cell_tile(b,(uint16_t)(TWORK+17*ROWB+4*2)));
+    }
+    printf("done: %d frames, final r%d c%d\n", f, ptr_row(rdw(PLY_PTR)), ptr_col(rdw(PLY_PTR)));
+}
+
 static uint8_t* load_file(const char* path, long* out_len) {
     FILE* f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "cannot open %s\n", path); return nullptr; }
@@ -389,6 +438,10 @@ int main(int argc, char** argv) {
         printf("captured spr_a + spr_b for sprite diff\n");
     } else if (!strcmp(arg3, "bridge")) {   // E2E: bridge collision hypothesis
         run_bridge_test(board);
+    } else if (!strcmp(arg3, "play")) {
+        run_play(board, (argc>=5)?argv[4]:"");
+    } else if (!strcmp(arg3, "chestgif")) {
+        run_chest_gif(board);
     } else if (!strcmp(arg3, "chest")) {
         run_chest_test(board);
     } else if (!strcmp(arg3, "reach")) {    // E2E: level-1 chest reachability

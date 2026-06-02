@@ -229,3 +229,8 @@ treci prin el". Verificat pe DOUĂ căi independente:
 cădere dreaptă prin apa MICĂ (tile7 @r13, ne-letală, vieți rămân 219) → aterizare r15 c5 → pas
 STÂNGA → gold@(15,4) 5→0 (colectat); la fel (17,4) 4→0. Nu e nevoie de control în cădere.
 Corectat KNOWN_ISSUES KI-14. Adăugate moduri E2E `chest` + `reach` în headless main.cpp.
+
+`[2026-06-02 UTC] DONE` — Animație: condus jocul ORIGINAL prin comenzi injectate (mod `play`
+în headless main.cpp: script "R20 U50 R7 ..." → taste reale, capturi PPM → GIF). Găsit:
+spawn = sus-stânga într-un puț; teleport NU mută sprite-ul (doar logica) → animația corectă
+necesită navigare reală. Hostat GIF la /demo/klad_original_play.gif + link pe landing.
