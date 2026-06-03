@@ -8,7 +8,8 @@
   html,body{margin:0;height:100%;background:#000;overflow:hidden;
     display:flex;align-items:center;justify-content:center;
     font-family:system-ui,sans-serif;color:#ccc;
-    touch-action:none;overscroll-behavior:none;}
+    touch-action:none;overscroll-behavior:none;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
   /* Centre the game both axes; the engine letterboxes its content in blue, so
      the canvas box just needs to fit the viewport. Crisp retro pixels. */
   canvas{image-rendering:pixelated;display:block;outline:none;
@@ -28,33 +29,43 @@
   #note a{color:#f0d23c;pointer-events:auto;text-decoration:none;}
   /* Restart-level button (anti-soft-lock): КЛАД has no jump, so a few dead-end
      pockets can't be escaped or died-out-of. This reloads the current level. */
-  #restart{position:fixed;top:8px;right:10px;z-index:5;width:40px;height:40px;
-    border-radius:50%;border:1px solid #f0d23c;background:rgba(0,0,30,.55);
-    color:#f0d23c;font-size:22px;line-height:38px;text-align:center;cursor:pointer;
-    -webkit-tap-highlight-color:transparent;user-select:none;}
+  #restart{position:fixed;top:8px;right:10px;z-index:5;width:38px;height:38px;
+    border-radius:50%;border:1px solid rgba(240,210,60,.5);background:rgba(0,0,30,.4);
+    color:#f0d23c;font-size:20px;line-height:36px;text-align:center;cursor:pointer;opacity:.6;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 
-  /* Minecraft-style on-screen D-pad — drawn over the game, bottom-left.
-     Touch devices only (keyboard is used on desktop). */
-  #dpad{position:fixed;left:18px;bottom:20px;z-index:4;width:156px;height:156px;
-    display:none;touch-action:none;user-select:none;}
+  /* Minecraft-style on-screen D-pad — drawn over the game, bottom-left, discreet.
+     Touch devices only (keyboard is used on desktop). Arrows are CSS triangles, NOT
+     text glyphs, so iOS never offers to select/copy them. */
+  #dpad{position:fixed;left:16px;bottom:18px;z-index:4;width:150px;height:150px;
+    display:none;touch-action:none;opacity:.5;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
   @media (pointer:coarse){ #dpad{display:block} }
-  .dbtn{position:absolute;width:50px;height:50px;border-radius:12px;
-    background:rgba(8,8,36,.40);border:2px solid rgba(240,210,60,.85);color:#f0d23c;
-    font:24px/46px system-ui,sans-serif;text-align:center;
-    -webkit-tap-highlight-color:transparent;user-select:none;}
-  .dbtn.act{background:rgba(240,210,60,.5);color:#101000;}
-  .dbtn.up{left:53px;top:0}      .dbtn.down{left:53px;bottom:0}
-  .dbtn.left{left:0;top:53px}    .dbtn.right{right:0;top:53px}
+  .dbtn{position:absolute;width:48px;height:48px;border-radius:11px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(240,210,60,.45);
+    -webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  .dbtn.act{background:rgba(240,210,60,.30);}
+  .dbtn.up{left:51px;top:0}      .dbtn.down{left:51px;bottom:0}
+  .dbtn.left{left:0;top:51px}    .dbtn.right{right:0;top:51px}
+  /* arrow heads via the border-triangle trick (no selectable text) */
+  .dbtn::before{content:"";position:absolute;left:50%;top:50%;width:0;height:0;
+    transform:translate(-50%,-50%);}
+  .dbtn.up::before   {border:8px solid transparent;border-bottom-color:rgba(240,210,60,.9);margin-top:-4px;}
+  .dbtn.down::before {border:8px solid transparent;border-top-color:rgba(240,210,60,.9);margin-top:4px;}
+  .dbtn.left::before {border:8px solid transparent;border-right-color:rgba(240,210,60,.9);margin-left:-4px;}
+  .dbtn.right::before{border:8px solid transparent;border-left-color:rgba(240,210,60,.9);margin-left:4px;}
 </style>
 </head>
 <body>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
   <div id="restart" title="Restart level (R)">⟲</div>
   <div id="dpad" aria-hidden="true">
-    <div class="dbtn up"    data-dir="u">▲</div>
-    <div class="dbtn left"  data-dir="l">◀</div>
-    <div class="dbtn right" data-dir="r">▶</div>
-    <div class="dbtn down"  data-dir="d">▼</div>
+    <div class="dbtn up"    data-dir="u"></div>
+    <div class="dbtn left"  data-dir="l"></div>
+    <div class="dbtn right" data-dir="r"></div>
+    <div class="dbtn down"  data-dir="d"></div>
   </div>
   <div id="note">D-pad to move · tap the game to start / confirm · ⟲ / R = restart · keyboard: arrows / WASD ·
     <a href="https://github.com/anatoliegolovco/uknt_klad" target="_blank" rel="noopener">source on GitHub</a></div>
