@@ -17,8 +17,8 @@
     height:auto;max-height:100vh;aspect-ratio:4 / 3;}
 
   /* Portrait phones: the game is wide, so a portrait viewport leaves it a tiny
-     band. Rotate it 90° to landscape and fill the screen. The D-pad below maps
-     each button to the rotated visual direction. */
+     band. Rotate it 90° to landscape and fill the screen. The touch zones below
+     are remapped to match the rotated view. */
   @media (orientation:portrait){
     canvas{position:fixed;top:50%;left:50%;
       width:100vh;height:100vw;max-height:none;aspect-ratio:auto;
@@ -34,59 +34,31 @@
     color:#f0d23c;font-size:20px;line-height:36px;text-align:center;cursor:pointer;opacity:.6;
     -webkit-tap-highlight-color:transparent;
     -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
-
-  /* Minecraft-style on-screen D-pad — drawn over the game, bottom-left, discreet.
-     Touch devices only (keyboard is used on desktop). Arrows are CSS triangles, NOT
-     text glyphs, so iOS never offers to select/copy them. */
-  #dpad{position:fixed;left:16px;bottom:18px;z-index:4;width:150px;height:150px;
-    display:none;touch-action:none;opacity:.5;
-    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
-  @media (pointer:coarse){ #dpad{display:block} }
-  .dbtn{position:absolute;width:48px;height:48px;border-radius:11px;
-    background:rgba(255,255,255,.05);border:1px solid rgba(240,210,60,.45);
-    -webkit-tap-highlight-color:transparent;
-    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
-  .dbtn.act{background:rgba(240,210,60,.30);}
-  .dbtn.up{left:51px;top:0}      .dbtn.down{left:51px;bottom:0}
-  .dbtn.left{left:0;top:51px}    .dbtn.right{right:0;top:51px}
-  /* arrow heads via the border-triangle trick (no selectable text) */
-  .dbtn::before{content:"";position:absolute;left:50%;top:50%;width:0;height:0;
-    transform:translate(-50%,-50%);}
-  .dbtn.up::before   {border:8px solid transparent;border-bottom-color:rgba(240,210,60,.9);margin-top:-4px;}
-  .dbtn.down::before {border:8px solid transparent;border-top-color:rgba(240,210,60,.9);margin-top:4px;}
-  .dbtn.left::before {border:8px solid transparent;border-right-color:rgba(240,210,60,.9);margin-left:-4px;}
-  .dbtn.right::before{border:8px solid transparent;border-left-color:rgba(240,210,60,.9);margin-left:4px;}
 </style>
 </head>
 <body>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
   <div id="restart" title="Restart level (R)">⟲</div>
-  <div id="dpad" aria-hidden="true">
-    <div class="dbtn up"    data-dir="u"></div>
-    <div class="dbtn left"  data-dir="l"></div>
-    <div class="dbtn right" data-dir="r"></div>
-    <div class="dbtn down"  data-dir="d"></div>
-  </div>
-  <div id="note">D-pad to move · tap the game to start / confirm · ⟲ / R = restart · keyboard: arrows / WASD ·
+  <div id="note">Tap left / right to move · top / bottom for ladders · tap centre to start · ⟲ / R = restart · keyboard: arrows / WASD ·
     <a href="https://github.com/anatoliegolovco/uknt_klad" target="_blank" rel="noopener">source on GitHub</a></div>
   <script>
     var Module = {
       canvas: (function () { return document.getElementById('canvas'); })(),
       print: function (t) { console.log(t); },
       printErr: function (t) { console.error(t); },
-      // Cache-bust the wasm per deploy (the build SHA is injected by CI into __KLAD_VER__).
-      // Without this the CDN/browser kept serving a stale index.wasm, so new code (e.g. the
-      // restart handler) didn't reach users even though the page HTML had updated.
+      // Cache-bust the wasm per deploy (CI injects the build SHA into __KLAD_VER__) so a
+      // stale index.wasm never lingers behind an updated page.
       locateFile: function (path, prefix) {
         return prefix + path + (path.slice(-5) === '.wasm' ? '?v=__KLAD_VER__' : '');
       },
     };
 
-    // ── Touch controls ──────────────────────────────────────────────────────
-    // The shell owns touch and dispatches keyboard events (raylib's own touch
-    // mapping breaks under the portrait CSS rotation). An on-screen D-pad drives
-    // movement; a tap on the game area is the action key (Enter) for the title /
-    // speed / game-over screens.
+    // ── Touch controls: tap/hold a screen EDGE to move ──────────────────────────
+    // Left/right thirds = move left/right; top/bottom quarters = up/down (ladders);
+    // centre = the action key (start title, confirm speed, restart after game over).
+    // The shell dispatches keyboard events (raylib's own touch mapping breaks under the
+    // portrait CSS rotation), and the zones are remapped when rotated so the visual edge
+    // always matches the direction.
     (function () {
       var KEYCODE = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Enter: 13 };
       var held = {};
@@ -96,50 +68,44 @@
         document.dispatchEvent(new KeyboardEvent(type, ev));
         window.dispatchEvent(new KeyboardEvent(type, ev));
       }
-      function portrait() { return matchMedia('(orientation: portrait)').matches; }
-      function releaseEnter() { if (held.Enter) { send('keyup', 'Enter'); held.Enter = false; } }
-
-      // D-pad: each button → the arrow key that moves the player in the VISUAL
-      // direction. In portrait the canvas is rotated 90° CW, so remap accordingly.
-      function dirKey(dir) {
-        var land = { u: 'ArrowUp',   d: 'ArrowDown',  l: 'ArrowLeft', r: 'ArrowRight' };
-        var port = { u: 'ArrowLeft', d: 'ArrowRight', l: 'ArrowDown', r: 'ArrowUp'    };
-        return (portrait() ? port : land)[dir];
+      function apply(active) {
+        ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].forEach(function (code) {
+          if (active[code] && !held[code]) { send('keydown', code); held[code] = true; }
+          else if (!active[code] && held[code]) { send('keyup', code); held[code] = false; }
+        });
       }
-      Array.prototype.forEach.call(document.querySelectorAll('#dpad .dbtn'), function (btn) {
-        var dir = btn.getAttribute('data-dir'), active = null;
-        function down(e) {
-          e.preventDefault(); e.stopPropagation();
-          var k = dirKey(dir);
-          if (active && active !== k) { send('keyup', active); held[active] = false; }
-          if (!held[k]) { send('keydown', k); held[k] = true; }
-          active = k; btn.classList.add('act');
+      function portrait() { return matchMedia('(orientation: portrait)').matches; }
+      function zones(x, y) {
+        var nx = x / window.innerWidth, ny = y / window.innerHeight, a = {};
+        if (portrait()) {
+          // canvas rotated 90° CW: screen-down→right, screen-up→left,
+          // screen-left→down, screen-right→up.
+          if (ny > 0.6) a.ArrowRight = 1; else if (ny < 0.4) a.ArrowLeft = 1;
+          if (nx < 0.4) a.ArrowDown  = 1; else if (nx > 0.6) a.ArrowUp   = 1;
+        } else {
+          if (nx < 1 / 3) a.ArrowLeft = 1; else if (nx > 2 / 3) a.ArrowRight = 1;
+          if (ny < 1 / 4) a.ArrowUp   = 1; else if (ny > 3 / 4) a.ArrowDown  = 1;
         }
-        function up(e) {
-          if (e) e.preventDefault();
-          if (active) { send('keyup', active); held[active] = false; active = null; }
-          btn.classList.remove('act');
-        }
-        btn.addEventListener('touchstart', down, { passive: false });
-        btn.addEventListener('touchend',   up,   { passive: false });
-        btn.addEventListener('touchcancel',up,   { passive: false });
-        btn.addEventListener('mousedown',  down);
-        btn.addEventListener('mouseup',    up);
-        btn.addEventListener('mouseleave', up);
-      });
-
-      // Tap the game area = action key (Enter). Skip taps on the D-pad / restart, but ALWAYS
-      // preventDefault first so the browser never scrolls / shows its chrome (incl. touchmove
-      // while a D-pad button is held) — that was the "browser UI reappears" regression.
+        return a;
+      }
+      function releaseEnter() { if (held.Enter) { send('keyup', 'Enter'); held.Enter = false; } }
+      function update(x, y) {
+        var z = zones(x, y);
+        var center = !z.ArrowLeft && !z.ArrowRight && !z.ArrowUp && !z.ArrowDown;
+        apply(z);
+        if (center && !held.Enter) { send('keydown', 'Enter'); held.Enter = true; }
+        else if (!center) releaseEnter();
+      }
       function onTouch(e) {
-        e.preventDefault();
-        if (e.target && e.target.closest && (e.target.closest('#dpad') || e.target.id === 'restart')) return;
-        e.stopImmediatePropagation();   // keep emscripten from also reading it
+        e.preventDefault();                       // stop browser scroll / chrome (stay fullscreen)
+        if (e.target && e.target.id === 'restart') return;   // restart button handles its own tap
+        e.stopImmediatePropagation();             // keep emscripten from also reading it
         if (e.type === 'touchend' || e.type === 'touchcancel') {
-          if (e.touches.length === 0) releaseEnter();
+          if (e.touches.length === 0) { apply({}); releaseEnter(); }
           return;
         }
-        if (!held.Enter) { send('keydown', 'Enter'); held.Enter = true; }
+        var t = e.touches[0];
+        update(t.clientX, t.clientY);
       }
       ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (t) {
         window.addEventListener(t, onTouch, { capture: true, passive: false });
