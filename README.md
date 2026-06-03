@@ -1,4 +1,25 @@
-# Klad-Reimagined
+<h1 align="center">Klad-Reimagined 🪙</h1>
+
+<p align="center">
+  <a href="https://anatoliegolovco.github.io/uknt_klad/play/">
+    <img src="https://img.shields.io/badge/▶_PLAY_IT_NOW-online-f0d23c?style=for-the-badge&logo=gamepad&logoColor=black" alt="Play online">
+  </a>
+</p>
+
+<p align="center">
+  <b><a href="https://anatoliegolovco.github.io/uknt_klad/play/">Jump straight into the dungeon →</a></b><br>
+  No install, works on desktop <i>and</i> phone. Climb the ladders, grab the gold,
+  give the guard the slip…<br>and <b>whatever you do, don't fall in the water.</b> 💧⚰️
+</p>
+
+<p align="center">
+  <sub>
+    <a href="https://anatoliegolovco.github.io/uknt_klad/">project page</a> ·
+    <a href="https://anatoliegolovco.github.io/uknt_klad/font/">the extracted УКНЦ font</a>
+  </sub>
+</p>
+
+---
 
 A clean-room re-imagining of the Soviet maze game **КЛАД** — built from scratch
 in **C23**, compiled to **WebAssembly** so it runs in any browser, including on
