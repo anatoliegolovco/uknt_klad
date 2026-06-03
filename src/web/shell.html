@@ -7,7 +7,8 @@
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden;
     display:flex;align-items:center;justify-content:center;
-    font-family:system-ui,sans-serif;color:#ccc;touch-action:none;}
+    font-family:system-ui,sans-serif;color:#ccc;
+    touch-action:none;overscroll-behavior:none;}
   /* Centre the game both axes; the engine letterboxes its content in blue, so
      the canvas box just needs to fit the viewport. Crisp retro pixels. */
   canvas{image-rendering:pixelated;display:block;outline:none;
@@ -62,6 +63,12 @@
       canvas: (function () { return document.getElementById('canvas'); })(),
       print: function (t) { console.log(t); },
       printErr: function (t) { console.error(t); },
+      // Cache-bust the wasm per deploy (the build SHA is injected by CI into __KLAD_VER__).
+      // Without this the CDN/browser kept serving a stale index.wasm, so new code (e.g. the
+      // restart handler) didn't reach users even though the page HTML had updated.
+      locateFile: function (path, prefix) {
+        return prefix + path + (path.slice(-5) === '.wasm' ? '?v=__KLAD_VER__' : '');
+      },
     };
 
     // ── Touch controls ──────────────────────────────────────────────────────
@@ -110,10 +117,12 @@
         btn.addEventListener('mouseleave', up);
       });
 
-      // Tap the game area = action key (Enter). Skip taps on the D-pad / restart.
+      // Tap the game area = action key (Enter). Skip taps on the D-pad / restart, but ALWAYS
+      // preventDefault first so the browser never scrolls / shows its chrome (incl. touchmove
+      // while a D-pad button is held) — that was the "browser UI reappears" regression.
       function onTouch(e) {
-        if (e.target && e.target.closest && (e.target.closest('#dpad') || e.target.id === 'restart')) return;
         e.preventDefault();
+        if (e.target && e.target.closest && (e.target.closest('#dpad') || e.target.id === 'restart')) return;
         e.stopImmediatePropagation();   // keep emscripten from also reading it
         if (e.type === 'touchend' || e.type === 'touchcancel') {
           if (e.touches.length === 0) releaseEnter();

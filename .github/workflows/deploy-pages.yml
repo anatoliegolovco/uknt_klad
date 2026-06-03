@@ -60,6 +60,8 @@ jobs:
           mkdir -p _site/play _site/font
           cp index.html _site/index.html
           cp build/web/index.* _site/play/
+          # Cache-bust the wasm: stamp the build SHA into Module.locateFile's __KLAD_VER__.
+          sed -i "s/__KLAD_VER__/${GITHUB_SHA::8}/g" _site/play/index.html
           # Font subpage + web-servable font assets (downloads).
           cp web/font/index.html _site/font/index.html
           cp font/uknc.woff2 font/uknc.woff font/uknc.ttf font/uknc.bdf \
