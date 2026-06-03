@@ -536,6 +536,31 @@ static void run_solve(CMotherboard* b){
     free(start);
 }
 
+// Dump level N's tile grid straight from the original's PACKED map data in RAM.
+// CUR_MAP_ADDR (001300) points at the current (level-1) map; level N map = base + (N-1)*0540.
+// Packed: 22 rows × 16 bytes; each byte = 2 tiles (low nibble = left/even col, high = odd).
+static void run_lvlgrid(CMotherboard* b, int lvl){
+    boot_klad(b); MC=b->GetCPUMemoryController();
+    uint16_t base = rdw(CUR_MAP_ADDR) + (uint16_t)((lvl-1)*0540);
+    printf("=== LEVEL %d packed map @ %06o  (.=air B=ladder #=wall ~=shallowH2O X=DEEP-WATER g=gold K=key E=exit) ===\n", lvl, base);
+    printf("    "); for(int c=0;c<32;c++) putchar('0'+(c/10)); putchar('\n');
+    printf("    "); for(int c=0;c<32;c++) putchar('0'+(c%10)); putchar('\n');
+    for(int r=0;r<22;r++){
+        printf("r%02d ", r);
+        for(int c=0;c<32;c++){
+            uint16_t a = base + r*16 + c/2;
+            int word = rdw(a & ~1); uint8_t bb = (a&1)? (word>>8)&0xFF : word&0xFF;
+            int t = (c&1) ? (bb>>4)&0xF : bb&0xF;
+            char ch;
+            if(t==0) ch='.'; else if(t==1||t==8) ch='B'; else if(t==2) ch='E';
+            else if(t==4||t==5) ch='g'; else if(t==6) ch='K'; else if(t==7) ch='~';
+            else if(t==13||t==14) ch='X'; else if(t>=9) ch='#'; else ch='0'+t;
+            putchar(ch);
+        }
+        putchar('\n');
+    }
+}
+
 static uint8_t* load_file(const char* path, long* out_len) {
     FILE* f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "cannot open %s\n", path); return nullptr; }
@@ -581,6 +606,8 @@ int main(int argc, char** argv) {
         printf("captured spr_a + spr_b for sprite diff\n");
     } else if (!strcmp(arg3, "bridge")) {   // E2E: bridge collision hypothesis
         run_bridge_test(board);
+    } else if (!strcmp(arg3, "lvlgrid")) {
+        run_lvlgrid(board, (argc>=5)?atoi(argv[4]):3);
     } else if (!strcmp(arg3, "solve")) {
         run_solve(board);
     } else if (!strcmp(arg3, "play")) {
