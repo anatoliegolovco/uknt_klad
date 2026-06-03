@@ -51,3 +51,6 @@ void render_text(Renderer *r, const char *utf8, int x, int y, int size, Color c)
 
 // Composite: upscale nearest-neighbour target → fereastră
 void render_present(Renderer *r);
+
+// Web only: live canvas framebuffer size (set by main.c web_frame); 0 = use GetScreenWidth.
+extern int render_web_w, render_web_h;

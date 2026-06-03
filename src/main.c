@@ -11,21 +11,19 @@
 #include <emscripten/html5.h>
 static Game g_game;
 static void web_frame(void) {
-    // Keep the canvas DRAWING BUFFER matched to its CSS layout box (clientWidth/Height —
-    // ignores the portrait rotation transform), and then fire a 'resize' event so raylib's
-    // own emscripten resize handler re-runs: it updates the screen size AND the GL viewport.
-    // (SetWindowSize alone left the viewport stale → render_present drew into the bottom-left
-    // 768×576 corner of a larger buffer; a manual window resize fixed it because it triggers
-    // exactly this handler. We trigger it ourselves on load / orientation / size change.)
-    // Guard on the buffer being out of sync so we don't dispatch every frame.
-    int stale = emscripten_run_script_int(
-        "(function(){var c=document.getElementById('canvas');"
-        "return (c.width!=c.clientWidth||c.height!=c.clientHeight)?1:0;})()");
-    if (stale) {
+    // Match the canvas DRAWING BUFFER to its CSS layout box (clientWidth/Height — ignores the
+    // portrait rotation transform) and hand that size to render_present, which sets the GL
+    // viewport/projection itself. (raylib's own web viewport stays at the init size and
+    // SetWindowSize / synthetic 'resize' don't fix it, so the scene rendered into the
+    // bottom-left corner. Driving the viewport from render_present fixes it deterministically
+    // on every size + orientation.)
+    int w = emscripten_run_script_int("document.getElementById('canvas').clientWidth");
+    int h = emscripten_run_script_int("document.getElementById('canvas').clientHeight");
+    if (w > 0 && h > 0) {
+        render_web_w = w; render_web_h = h;
         emscripten_run_script(
             "var c=document.getElementById('canvas');"
-            "c.width=c.clientWidth; c.height=c.clientHeight;"
-            "window.dispatchEvent(new Event('resize'));");
+            "if(c.width!=c.clientWidth||c.height!=c.clientHeight){c.width=c.clientWidth;c.height=c.clientHeight;}");
     }
     game_frame(&g_game, GetFrameTime());
 }

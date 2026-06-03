@@ -4,8 +4,14 @@
 #include "gfx_data.h"
 #include "uknc_font.h"     // font REAL УКНЦ 8×8, extras pixel-exact (font/)
 #include "i18n.h"
+#include "rlgl.h"          // rlViewport/rlOrtho — fix the web GL viewport (see render_present)
 #include <stdio.h>
 #include <string.h>
+
+// On web, raylib leaves the GL viewport/projection at the init size while emscripten resizes
+// the framebuffer to the canvas → the scene draws into the bottom-left corner. main.c feeds
+// the live canvas buffer size here so render_present can set the viewport/projection itself.
+int render_web_w = 0, render_web_h = 0;
 
 Lang g_lang = LANG_RU;     // implicit: rusă (fidel originalului); L comută la română
 
@@ -270,19 +276,28 @@ void render_speed_select(Renderer *r, int speed) {
 // ×1.19 (8→9.5px/tile), fundal albastru ca УКНЦ, centrat cu margini (~0.9 din fereastră).
 void render_present(Renderer *r) {
     BeginDrawing();
+    int SW = GetScreenWidth(), SH = GetScreenHeight();
+#ifdef PLATFORM_WEB
+    // raylib's web viewport/projection get left at the init size; force them to the actual
+    // canvas framebuffer (fed by main.c) so the scene fills/centres correctly on every screen
+    // size and orientation (fixes "renders in the bottom-left corner" / squashing).
+    if (render_web_w > 0 && render_web_h > 0) {
+        SW = render_web_w; SH = render_web_h;
+        rlViewport(0, 0, SW, SH);
+        rlMatrixMode(RL_PROJECTION); rlLoadIdentity();
+        rlOrtho(0, SW, SH, 0, 0.0, 1.0);             // top-left origin, like raylib's default
+        rlMatrixMode(RL_MODELVIEW);  rlLoadIdentity();
+    }
+#endif
     ClearBackground(render_bg());                  // ecran УКНЦ albastru (nu negru)
     const float aspect_w = (float)VW;              // 512 — tile-uri 16px late (ca originalul)
     const float aspect_h = (float)VH * 1.19f;      // ~228 — tile-uri ~9.5px înalte
-    float sx = (float)GetScreenWidth()  / aspect_w;
-    float sy = (float)GetScreenHeight() / aspect_h;
+    float sx = (float)SW / aspect_w;
+    float sy = (float)SH / aspect_h;
     float s  = ((sx < sy) ? sx : sy) * 0.92f;      // 0.92 → margine albastră de jur împrejur
     float dw = aspect_w * s, dh = aspect_h * s;
     Rectangle src = {0, 0, (float)VW, -(float)VH};   // flip Y
-    Rectangle dst = {
-        (GetScreenWidth()  - dw) * 0.5f,
-        (GetScreenHeight() - dh) * 0.5f,
-        dw, dh,
-    };
+    Rectangle dst = { (SW - dw) * 0.5f, (SH - dh) * 0.5f, dw, dh };
     DrawTexturePro(r->target.texture, src, dst, (Vector2){0,0}, 0, WHITE);
     EndDrawing();
 }
