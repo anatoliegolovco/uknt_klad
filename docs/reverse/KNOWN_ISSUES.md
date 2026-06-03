@@ -348,3 +348,20 @@ The enemy reused PLAYER_ART (identical look). The raw sprite bank is dither (KI-
 only via the УКНЦ display transform), so — per the user's memory of a *hașurat* adversary — the
 enemy now uses a distinct silhouette (creature with horns/legs) rendered with a checkerboard
 HATCH (`render.c` ENEMY_ART + draw_sprite_art hatch=true). Also blinks during the 2s warmup.
+
+## KI-16 — level 3 right-side soft-lock is a FAITHFUL dead-end; mitigated by a restart key
+**Report:** on level 3, walking into the right region you can neither progress nor die.
+**Investigation (no jump in the original — confirmed; walk/climb/fall only):**
+- Our level-3 tile data is **byte-identical** to the original (same extraction).
+- A reachability sim using our faithfully-derived movement rules (`map.c`) finds a **72-cell
+  region on the right that can reach neither the key (tile 6) nor any deep water (tiles 13/14,
+  the only "death")**. The boundary is sealed by *faithful* rules: you stand **on top of**
+  shallow water (tile 7, grounded since `below>6`, matching CMAP `#4000`), `can_up` needs a
+  ladder (tile 8, `#20000`), and the bottom deep water is walled off from that pocket.
+- So this is a **dead-end in the original level design**, not a data/collision bug, and not a
+  missing jump. Level 3 is still completable (the key is reachable from spawn); the right side
+  is an optional trap.
+**Fix:** added a **restart-level control** — keyboard `R` and an on-screen ⟲ button (`game.c`
+`load_level` on `KEY_R`; `web/shell.html` button injects R). Reloads the current level so the
+player can never be permanently stuck on any level. A deliberate player-friendly deviation
+(like KI-13 design B); the original level data is untouched.

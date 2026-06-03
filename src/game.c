@@ -181,6 +181,12 @@ void game_frame(Game *g, float dt) {
     // Comutare limbă (tasta L) — RU (fidel) <-> RO (versiunea română), i18n.h
     if (IsKeyPressed(KEY_L)) render_toggle_lang();
 
+    // Restart nivel (tasta R) — anti-soft-lock. КЛАД nu are săritură, iar câteva „buzunare"
+    // din design-ul original sunt fundături unde nu poți nici avansa, nici muri (ex. partea
+    // dreaptă a nivelului 3: apa adâncă — singura „moarte" — e izolată de zona aceea). 'R'
+    // reîncarcă nivelul curent (respawn), ca să nu rămâi blocat permanent pe niciun nivel.
+    if (IsKeyPressed(KEY_R) && g->state == GS_PLAYING) load_level(g);
+
     // State machine joc
     switch (g->state) {
         case GS_TITLE:

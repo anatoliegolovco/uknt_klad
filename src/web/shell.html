@@ -27,11 +27,18 @@
   #note{position:fixed;bottom:6px;left:0;right:0;text-align:center;
     font-size:12px;opacity:.55;pointer-events:none;z-index:2;}
   #note a{color:#f0d23c;pointer-events:auto;text-decoration:none;}
+  /* Restart-level button (anti-soft-lock): КЛАД has no jump, so a few dead-end pockets
+     can't be escaped or died-out-of. This reloads the current level. */
+  #restart{position:fixed;top:8px;right:10px;z-index:3;width:40px;height:40px;
+    border-radius:50%;border:1px solid #f0d23c;background:rgba(0,0,30,.55);
+    color:#f0d23c;font-size:22px;line-height:38px;text-align:center;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;user-select:none;}
 </style>
 </head>
 <body>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
-  <div id="note">Tap centre = start / confirm · hold an edge to move (↑ top · ↓ bottom · ←→ sides) ·
+  <div id="restart" title="Restart level (R)">⟲</div>
+  <div id="note">Tap centre = start · hold an edge to move (↑ top · ↓ bottom · ←→ sides) · ⟲ / R = restart ·
     <a href="https://github.com/anatoliegolovco/uknt_klad" target="_blank" rel="noopener">source on GitHub</a></div>
   <script>
     var Module = {
@@ -87,6 +94,8 @@
         else if (!center) releaseEnter();
       }
       function onTouch(e) {
+        // Let the restart button get its own taps (don't swallow them as movement).
+        if (e.target && e.target.id === 'restart') return;
         e.preventDefault();
         e.stopImmediatePropagation();   // keep emscripten from also reading it
         if (e.type === 'touchend' || e.type === 'touchcancel') {
@@ -99,6 +108,21 @@
       ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (t) {
         window.addEventListener(t, onTouch, { capture: true, passive: false });
       });
+
+      // Restart-level button → inject 'R' (KEY_R = 82). Works on touch and mouse.
+      var rb = document.getElementById('restart');
+      function doRestart(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        var ev = { key: 'r', code: 'KeyR', keyCode: 82, which: 82, bubbles: true, cancelable: true };
+        document.dispatchEvent(new KeyboardEvent('keydown', ev));
+        window.dispatchEvent(new KeyboardEvent('keydown', ev));
+        setTimeout(function () {
+          document.dispatchEvent(new KeyboardEvent('keyup', ev));
+          window.dispatchEvent(new KeyboardEvent('keyup', ev));
+        }, 60);
+      }
+      rb.addEventListener('touchstart', doRestart, { passive: false });
+      rb.addEventListener('click', doRestart);
     })();
   </script>
   {{{ SCRIPT }}}
