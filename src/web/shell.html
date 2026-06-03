@@ -15,11 +15,9 @@
     height:auto;max-height:100vh;aspect-ratio:4 / 3;}
 
   /* Portrait phones: the game is wide, so a portrait viewport leaves it a tiny
-     band. Rotate it 90° to landscape and fill the screen. Touch is remapped in
-     JS (below) to match the rotated view. */
+     band. Rotate it 90° to landscape and fill the screen. The D-pad below maps
+     each button to the rotated visual direction. */
   @media (orientation:portrait){
-    /* position:fixed takes the canvas out of flex flow so it can't be shrunk;
-       size it to the rotated viewport (w=100vh, h=100vw) and centre+rotate. */
     canvas{position:fixed;top:50%;left:50%;
       width:100vh;height:100vw;max-height:none;aspect-ratio:auto;
       transform:translate(-50%,-50%) rotate(90deg);transform-origin:center;}
@@ -27,18 +25,37 @@
   #note{position:fixed;bottom:6px;left:0;right:0;text-align:center;
     font-size:12px;opacity:.55;pointer-events:none;z-index:2;}
   #note a{color:#f0d23c;pointer-events:auto;text-decoration:none;}
-  /* Restart-level button (anti-soft-lock): КЛАД has no jump, so a few dead-end pockets
-     can't be escaped or died-out-of. This reloads the current level. */
-  #restart{position:fixed;top:8px;right:10px;z-index:3;width:40px;height:40px;
+  /* Restart-level button (anti-soft-lock): КЛАД has no jump, so a few dead-end
+     pockets can't be escaped or died-out-of. This reloads the current level. */
+  #restart{position:fixed;top:8px;right:10px;z-index:5;width:40px;height:40px;
     border-radius:50%;border:1px solid #f0d23c;background:rgba(0,0,30,.55);
     color:#f0d23c;font-size:22px;line-height:38px;text-align:center;cursor:pointer;
     -webkit-tap-highlight-color:transparent;user-select:none;}
+
+  /* Minecraft-style on-screen D-pad — drawn over the game, bottom-left.
+     Touch devices only (keyboard is used on desktop). */
+  #dpad{position:fixed;left:18px;bottom:20px;z-index:4;width:156px;height:156px;
+    display:none;touch-action:none;user-select:none;}
+  @media (pointer:coarse){ #dpad{display:block} }
+  .dbtn{position:absolute;width:50px;height:50px;border-radius:12px;
+    background:rgba(8,8,36,.40);border:2px solid rgba(240,210,60,.85);color:#f0d23c;
+    font:24px/46px system-ui,sans-serif;text-align:center;
+    -webkit-tap-highlight-color:transparent;user-select:none;}
+  .dbtn.act{background:rgba(240,210,60,.5);color:#101000;}
+  .dbtn.up{left:53px;top:0}      .dbtn.down{left:53px;bottom:0}
+  .dbtn.left{left:0;top:53px}    .dbtn.right{right:0;top:53px}
 </style>
 </head>
 <body>
   <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
   <div id="restart" title="Restart level (R)">⟲</div>
-  <div id="note">Tap centre = start · hold an edge to move (↑ top · ↓ bottom · ←→ sides) · ⟲ / R = restart ·
+  <div id="dpad" aria-hidden="true">
+    <div class="dbtn up"    data-dir="u">▲</div>
+    <div class="dbtn left"  data-dir="l">◀</div>
+    <div class="dbtn right" data-dir="r">▶</div>
+    <div class="dbtn down"  data-dir="d">▼</div>
+  </div>
+  <div id="note">D-pad to move · tap the game to start / confirm · ⟲ / R = restart · keyboard: arrows / WASD ·
     <a href="https://github.com/anatoliegolovco/uknt_klad" target="_blank" rel="noopener">source on GitHub</a></div>
   <script>
     var Module = {
@@ -47,12 +64,11 @@
       printErr: function (t) { console.error(t); },
     };
 
-    // ── Touch controls, rotation-aware ──────────────────────────────────────
-    // CSS rotation breaks raylib's GetTouchPosition() edge mapping, so the shell
-    // owns touch: it suppresses the browser touch from emscripten (capture-phase
-    // stopImmediatePropagation) and dispatches arrow-key events instead. Zones
-    // are computed in screen space and rotated when the portrait media query is
-    // active, so "tap the visual edge" always maps to the right direction.
+    // ── Touch controls ──────────────────────────────────────────────────────
+    // The shell owns touch and dispatches keyboard events (raylib's own touch
+    // mapping breaks under the portrait CSS rotation). An on-screen D-pad drives
+    // movement; a tap on the game area is the action key (Enter) for the title /
+    // speed / game-over screens.
     (function () {
       var KEYCODE = { ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Enter: 13 };
       var held = {};
@@ -62,48 +78,48 @@
         document.dispatchEvent(new KeyboardEvent(type, ev));
         window.dispatchEvent(new KeyboardEvent(type, ev));
       }
-      function apply(active) {
-        ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].forEach(function (code) {
-          if (active[code] && !held[code]) { send('keydown', code); held[code] = true; }
-          else if (!active[code] && held[code]) { send('keyup', code); held[code] = false; }
-        });
-      }
       function portrait() { return matchMedia('(orientation: portrait)').matches; }
-      function zones(x, y) {
-        var nx = x / window.innerWidth, ny = y / window.innerHeight, a = {};
-        if (portrait()) {
-          // canvas rotated 90° CW: screen-down→right, screen-up→left,
-          // screen-left→down, screen-right→up.
-          if (ny > 0.6) a.ArrowRight = 1; else if (ny < 0.4) a.ArrowLeft = 1;
-          if (nx < 0.4) a.ArrowDown  = 1; else if (nx > 0.6) a.ArrowUp   = 1;
-        } else {
-          if (nx < 1 / 3) a.ArrowLeft = 1; else if (nx > 2 / 3) a.ArrowRight = 1;
-          if (ny < 1 / 4) a.ArrowUp   = 1; else if (ny > 3 / 4) a.ArrowDown  = 1;
-        }
-        return a;
-      }
       function releaseEnter() { if (held.Enter) { send('keyup', 'Enter'); held.Enter = false; } }
-      // Touch the EDGES to move (←→ sides, ↑↓ top/bottom); touch the CENTRE for the
-      // action key (Enter) — start the title/speed screens, confirm a speed, restart
-      // after game over. On the speed screen ↑/↓ change the speed, centre confirms.
-      function update(x, y) {
-        var z = zones(x, y);
-        var center = !z.ArrowLeft && !z.ArrowRight && !z.ArrowUp && !z.ArrowDown;
-        apply(z);
-        if (center && !held.Enter) { send('keydown', 'Enter'); held.Enter = true; }
-        else if (!center) releaseEnter();
+
+      // D-pad: each button → the arrow key that moves the player in the VISUAL
+      // direction. In portrait the canvas is rotated 90° CW, so remap accordingly.
+      function dirKey(dir) {
+        var land = { u: 'ArrowUp',   d: 'ArrowDown',  l: 'ArrowLeft', r: 'ArrowRight' };
+        var port = { u: 'ArrowLeft', d: 'ArrowRight', l: 'ArrowDown', r: 'ArrowUp'    };
+        return (portrait() ? port : land)[dir];
       }
+      Array.prototype.forEach.call(document.querySelectorAll('#dpad .dbtn'), function (btn) {
+        var dir = btn.getAttribute('data-dir'), active = null;
+        function down(e) {
+          e.preventDefault(); e.stopPropagation();
+          var k = dirKey(dir);
+          if (active && active !== k) { send('keyup', active); held[active] = false; }
+          if (!held[k]) { send('keydown', k); held[k] = true; }
+          active = k; btn.classList.add('act');
+        }
+        function up(e) {
+          if (e) e.preventDefault();
+          if (active) { send('keyup', active); held[active] = false; active = null; }
+          btn.classList.remove('act');
+        }
+        btn.addEventListener('touchstart', down, { passive: false });
+        btn.addEventListener('touchend',   up,   { passive: false });
+        btn.addEventListener('touchcancel',up,   { passive: false });
+        btn.addEventListener('mousedown',  down);
+        btn.addEventListener('mouseup',    up);
+        btn.addEventListener('mouseleave', up);
+      });
+
+      // Tap the game area = action key (Enter). Skip taps on the D-pad / restart.
       function onTouch(e) {
-        // Let the restart button get its own taps (don't swallow them as movement).
-        if (e.target && e.target.id === 'restart') return;
+        if (e.target && e.target.closest && (e.target.closest('#dpad') || e.target.id === 'restart')) return;
         e.preventDefault();
         e.stopImmediatePropagation();   // keep emscripten from also reading it
         if (e.type === 'touchend' || e.type === 'touchcancel') {
-          if (e.touches.length === 0) { apply({}); releaseEnter(); }
+          if (e.touches.length === 0) releaseEnter();
           return;
         }
-        var t = e.touches[0];
-        update(t.clientX, t.clientY);
+        if (!held.Enter) { send('keydown', 'Enter'); held.Enter = true; }
       }
       ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (t) {
         window.addEventListener(t, onTouch, { capture: true, passive: false });
