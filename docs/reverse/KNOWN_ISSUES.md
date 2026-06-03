@@ -365,3 +365,13 @@ HATCH (`render.c` ENEMY_ART + draw_sprite_art hatch=true). Also blinks during th
 `load_level` on `KEY_R`; `web/shell.html` button injects R). Reloads the current level so the
 player can never be permanently stuck on any level. A deliberate player-friendly deviation
 (like KI-13 design B); the original level data is untouched.
+
+## KI-17 — level 4 not passable: enemy camped the exit (FIXED by relocating spawn)
+**Report:** level 4 couldn't be finished. **Investigation:** the map IS design-B completable —
+key (tile 6) at (col4,row8) is reachable, the door (tile 10, col4 row5) opens on the key, and the
+exit (tile 2, col3 row2) is then reachable (matches the A* router's "1,4,6,9,10 completable").
+The blocker was the **single enemy spawning at (col3,row2) — exactly on the exit tile**: in design
+B, reaching the exit = win, but standing on the enemy's tile = death, so the win was a death. The
+enemy was also stuck there (wall directly below → primitive AI can't descend). Same class as KI-15.
+**Fix:** `enemy_spawn_override` now relocates the level-4 enemy to a reachable central ladder
+(**col 19, row 11**) — off the exit/key/spawn, where it can actually roam. Level 4 is now passable.

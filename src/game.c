@@ -41,6 +41,8 @@ static Input read_input(void) {
 // calculate cu BFS). Restul inamicilor rămân ca în binar. Vezi docs/reverse/AI_PASSABILITY.md.
 static bool enemy_spawn_override(int lvl, int idx, int *col, int *row) {
     switch (lvl) {                                   // lvl 0-indexat; idx 0=enemy1, 1=enemy2
+        case 3: if (idx==0){ *col=19; *row=11; return true; } break;   // L4: e1 era (3,2) FIX pe ieșire
+                                                                       // (wall dedesubt → blocat + bloca victoria); mutat pe scara centrală col19
         case 5: if (idx==0){ *col=28; *row=20; return true; } break;   // L6: e1 era (8,0) lângă exit(7,0)
         case 7: if (idx==0){ *col=29; *row=20; return true; }          // L8: e1 era (15,0) PE exit
                 if (idx==1){ *col=22; *row=10; return true; } break;   // L8: e2 era (16,0) lângă exit
