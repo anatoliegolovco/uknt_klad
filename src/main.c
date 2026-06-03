@@ -11,23 +11,21 @@
 #include <emscripten/html5.h>
 static Game g_game;
 static void web_frame(void) {
-    // raylib fixes the web framebuffer at init and never updates it, so any later display
-    // change (window resize, mobile URL-bar show/hide, orientation flip, our portrait
-    // rotation) leaves a STALE buffer → the scene renders into the wrong-shaped buffer and
-    // looks squashed / clipped / off-centre. Re-sync raylib's size to the canvas's live CSS
-    // box every frame so render_present always centres into the size actually on screen.
-    // Use the canvas LAYOUT box (clientWidth/Height), which ignores CSS transforms — in
-    // portrait we rotate the canvas 90°, and the scene must render into the pre-rotation
-    // box (e.g. 844×390) and then be rotated, NOT into the post-transform 390×844 box.
-    // emscripten mis-sizes the drawing buffer under our rotation, and SetWindowSize alone
-    // doesn't fix the buffer — so force the buffer (canvas.width/height) from JS, then sync
-    // raylib's viewport/screen to match.
-    int w = emscripten_run_script_int("document.getElementById('canvas').clientWidth");
-    int h = emscripten_run_script_int("document.getElementById('canvas').clientHeight");
-    if (w > 0 && h > 0 && (w != GetScreenWidth() || h != GetScreenHeight())) {
-        emscripten_run_script("var c=document.getElementById('canvas');"
-                              "c.width=c.clientWidth;c.height=c.clientHeight;");
-        SetWindowSize(w, h);
+    // Keep the canvas DRAWING BUFFER matched to its CSS layout box (clientWidth/Height —
+    // ignores the portrait rotation transform), and then fire a 'resize' event so raylib's
+    // own emscripten resize handler re-runs: it updates the screen size AND the GL viewport.
+    // (SetWindowSize alone left the viewport stale → render_present drew into the bottom-left
+    // 768×576 corner of a larger buffer; a manual window resize fixed it because it triggers
+    // exactly this handler. We trigger it ourselves on load / orientation / size change.)
+    // Guard on the buffer being out of sync so we don't dispatch every frame.
+    int stale = emscripten_run_script_int(
+        "(function(){var c=document.getElementById('canvas');"
+        "return (c.width!=c.clientWidth||c.height!=c.clientHeight)?1:0;})()");
+    if (stale) {
+        emscripten_run_script(
+            "var c=document.getElementById('canvas');"
+            "c.width=c.clientWidth; c.height=c.clientHeight;"
+            "window.dispatchEvent(new Event('resize'));");
     }
     game_frame(&g_game, GetFrameTime());
 }
